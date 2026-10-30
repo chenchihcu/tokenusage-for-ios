@@ -128,7 +128,7 @@ export default {
         let models: ModelCatalogItem[] = [];
         if (env.KV_CATALOG) {
           const cached = await env.KV_CATALOG.get('catalog:latest', 'json');
-          if (cached && Array.isArray(cached)) {
+          if (cached && Array.isArray(cached) && cached.length >= 7) {
             models = cached as ModelCatalogItem[];
           }
         }
