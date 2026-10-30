@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --color-bg-base: #f5f5f7;
-  --color-bg-card: #ffffff;
-  --color-text-main: #1d1d1f;
-  --color-text-sub: #86868b;
-  --color-accent-blue: #0071e3;
-  --color-border-subtle: #e5e5ea;
+  --color-bg-base: #090A10;
+  --color-bg-card: rgba(18, 24, 38, 0.75);
+  --color-text-main: #F8FAFC;
+  --color-text-sub: #94A3B8;
+  --color-accent-blue: #0A84FF;
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
 }
 
 body {
@@ -17,14 +17,15 @@ body {
   color: var(--color-text-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
-/* 數字等寬防跳動 (Zero CLS) */
+/* 數字等寬 (Zero CLS) */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-/* Apple HIG 行動端動態島與安全區避讓 (Safe Area Insets) */
+/* Apple HIG 橫向動態島與安全邊距 (Safe Area Insets) */
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
 }
@@ -38,7 +39,39 @@ body {
   padding-right: max(1rem, env(safe-area-inset-right, 59px));
 }
 
-/* 阻尼平滑過渡 (Apple Ease) */
+/* 賽博發光與玻璃擬態卡片 */
+.glass-panel {
+  background: rgba(18, 24, 38, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-interactive {
+  background: rgba(18, 24, 38, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.glass-panel-interactive:hover {
+  background: rgba(25, 33, 52, 0.85);
+  border-color: rgba(255, 255, 255, 0.18);
+  transform: translateY(-2px);
+}
+
+/* 流暢過渡 (Apple Ease) */
 .transition-apple {
   transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* 自訂霓虹流光背景 */
+.neon-ambient-glow {
+  background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, rgba(0, 242, 254, 0.05) 35%, transparent 70%);
+}
+
+/* 光子掃描射線 */
+.photon-beam {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
 }

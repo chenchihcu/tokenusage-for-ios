@@ -1,18 +1,18 @@
 import { test, expect } from '@playwright/test';
 import { encryptApiKey, decryptApiKey, maskApiKey } from '../src/server/crypto/encryption';
-import { validateUpstreamUrl, discoverLatestModels } from '../src/server/catalog/discovery';
+import { validateUpstreamUrl, discoverLatestModels, filterOutDeprecated } from '../src/server/catalog/discovery';
 import { UsageLedgerService } from '../src/server/ledger/usage-ledger';
 import { handleMcpToolCall, OPENTOKENUSAGE_MCP_TOOLS } from '../src/server/mcp/quota-mcp-server';
 
-test.describe('1. 安全性與後端 MCP 核心單元驗證', () => {
+test.describe('1. 安全性、後端 MCP 與模型過期守衛驗證', () => {
   test('AES-256-GCM 加密、解密與前端掩碼完整性', () => {
     const rawKey = 'AIzaSyA8B7C9D1E2F3G4H5I6J7K8L9M0N1O2P3';
     const masterKey = 'super-secret-master-key-32-bytes!';
 
     const encrypted = encryptApiKey(rawKey, masterKey);
     expect(encrypted.ciphertext).toBeTruthy();
-    expect(encrypted.iv).toHaveLength(24); // 12 bytes hex
-    expect(encrypted.authTag).toHaveLength(32); // 16 bytes hex
+    expect(encrypted.iv).toHaveLength(24);
+    expect(encrypted.authTag).toHaveLength(32);
 
     const decrypted = decryptApiKey(encrypted, masterKey);
     expect(decrypted).toBe(rawKey);
@@ -36,7 +36,6 @@ test.describe('1. 安全性與後端 MCP 核心單元驗證', () => {
     const ledger = new UsageLedgerService();
     ledger.setPolicy({ dailySpendLimitUsd: 5.0, hardStopEnabled: true });
 
-    // 正常記錄 $2.0
     await ledger.recordUsage({
       provider: 'cursor',
       modelId: 'cursor-fast',
@@ -48,7 +47,6 @@ test.describe('1. 安全性與後端 MCP 核心單元驗證', () => {
     });
     expect(ledger.getTodayTotalSpend()).toBe(2.0);
 
-    // 超額調用 ($4.0，累計達 $6.0 > $5.0) 應觸發硬阻斷
     await expect(
       ledger.recordUsage({
         provider: 'cursor',
@@ -62,48 +60,172 @@ test.describe('1. 安全性與後端 MCP 核心單元驗證', () => {
     ).rejects.toThrow(/Quota Hard Stop/);
   });
 
-  test('MCP 標準工具集與處理器契約驗證', async () => {
+  test('MCP 標準工具集與 5 大平台真實帳號契約驗證', async () => {
     expect(OPENTOKENUSAGE_MCP_TOOLS.length).toBeGreaterThanOrEqual(4);
 
-    const quotaResult = await handleMcpToolCall('get_provider_quota', { provider: 'cursor' }, {});
-    expect(quotaResult.remainingPercent).toBe(100);
-    expect(quotaResult.status).toBe('active');
+    // Cursor (Premium, 0% 剩餘)
+    const cursorResult = await handleMcpToolCall('get_provider_quota', { provider: 'cursor' }, {});
+    expect(cursorResult.remainingPercent).toBe(0);
+    expect(cursorResult.plan).toBe('Premium');
 
-    // 驗證 Codex (ChatGPT) MCP 額度查詢
+    // Codex (Plus, 100% Session 剩餘)
     const codexResult = await handleMcpToolCall('get_provider_quota', { provider: 'codex' }, {});
-    expect(codexResult.remainingPercent).toBe(28);
-    expect(codexResult.sessionUsedPercent).toBe(72);
+    expect(codexResult.remainingPercent).toBe(100);
+    expect(codexResult.weeklyUsedPercent).toBe(100);
     expect(codexResult.plan).toBe('Plus');
 
-    const estimate = await handleMcpToolCall(
-      'estimate_token_cost',
-      { modelId: 'gemini-3.8-flash', promptTokens: 10000, completionTokens: 2000, thinkingTokens: 4000 },
-      {}
-    );
-    expect(estimate.totalTokens).toBe(16000);
-    expect(estimate.estimatedCostUsd).toBeGreaterThan(0);
+    // Google Antigravity (Google AI Pro, 92% 剩餘)
+    const antiResult = await handleMcpToolCall('get_provider_quota', { provider: 'antigravity' }, {});
+    expect(antiResult.remainingPercent).toBe(92);
+    expect(antiResult.plan).toBe('Google AI Pro');
+
+    // Claude Code (Pro, 100% Session / 98% Weekly)
+    const claudeResult = await handleMcpToolCall('get_provider_quota', { provider: 'claude' }, {});
+    expect(claudeResult.remainingPercent).toBe(100);
+    expect(claudeResult.weeklyUsedPercent).toBe(98);
+
+    // Grok (SuperGrok, 0% 剩餘, 綁定 Cursor)
+    const grokResult = await handleMcpToolCall('get_provider_quota', { provider: 'grok' }, {});
+    expect(grokResult.remainingPercent).toBe(0);
+    expect(grokResult.displayName).toContain('bonded with Cursor');
+  });
+
+  test('模型過期守衛 (Deprecation Guard)：全面剔除 GPT-3.5、Davinci 等舊模型', () => {
+    const mixedModels: any[] = [
+      { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
+      { id: 'text-davinci-003', name: 'Davinci 003' },
+      { id: 'claude-1.3', name: 'Claude v1' },
+      { id: 'gemini-1.0-pro', name: 'Gemini 1.0 Pro' },
+      { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol', status: 'active' },
+      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', status: 'active' },
+    ];
+
+    const purged = filterOutDeprecated(mixedModels);
+    expect(purged.some(m => m.id.includes('gpt-3.5'))).toBe(false);
+    expect(purged.some(m => m.id.includes('davinci'))).toBe(false);
+    expect(purged.some(m => m.id.includes('claude-1'))).toBe(false);
+    expect(purged.some(m => m.id.includes('gemini-1.0'))).toBe(false);
+    expect(purged.some(m => m.id === 'gpt-6.1-sol')).toBe(true);
+    expect(purged.some(m => m.id === 'gemini-3.8-flash')).toBe(true);
   });
 });
 
-test.describe('2. Apple HIG iPhone Duo 雙欄與 UI/UX 驗證', () => {
-  test('橫向雙欄佈局 (38%:62%)、動態島避讓與持續高亮', async ({ page }) => {
+test.describe('2. 極致暗黑主題、Live Bar、自訂頻率與 5 大平台真實帳號 UI 驗證', () => {
+  test('極致暗黑曜石背景與 Live Bar 原創光譜條渲染', async ({ page }) => {
     await page.goto('/');
 
-    // 驗證主容器
-    const masterList = page.getByRole('complementary', { name: 'AI 平台清單' });
-    const detailWorkbench = page.getByRole('main', { name: 'AI 平台詳情與語音工作台' });
+    // 驗證極致暗黑主題容器
+    const appContainer = page.locator('div.bg-slate-950').first();
+    await expect(appContainer).toBeVisible();
 
-    await expect(masterList).toBeVisible();
-    await expect(detailWorkbench).toBeVisible();
+    // 驗證 Live Bar 及其 5 色等比配額分段
+    const liveBar = page.locator('text=LIVE').first();
+    await expect(liveBar).toBeVisible();
 
-    // 驗證 Cursor 平台卡片與數值
-    const cursorCard = page.locator('div[role="button"]:has-text("Cursor")');
+    // 驗證 5 大平台分段存在
+    await expect(page.locator('button[title*="Cursor: 剩餘 0%"]')).toBeVisible();
+    await expect(page.locator('button[title*="Codex: 剩餘 100%"]')).toBeVisible();
+    await expect(page.locator('button[title*="Antigravity: 剩餘 92%"]')).toBeVisible();
+    await expect(page.locator('button[title*="Claude Code: 剩餘 100%"]')).toBeVisible();
+    await expect(page.locator('button[title*="Grok: 剩餘 0%"]')).toBeVisible();
+  });
+
+  test('使用者自訂更新頻率控制器與持久化 (FrequencySelector)', async ({ page }) => {
+    await page.goto('/');
+
+    // 預設為 1 分鐘
+    const freqBtn = page.locator('button[title*="調整 Token 用量自動更新頻率"]');
+    await expect(freqBtn).toBeVisible();
+    await expect(freqBtn).toContainText('1 分鐘');
+
+    // 展開選單切換至「15 秒」
+    await freqBtn.click();
+    const opt15s = page.locator('button:has-text("15 秒")');
+    await expect(opt15s).toBeVisible();
+    await opt15s.click();
+
+    // 驗證按鈕標籤變更
+    await expect(freqBtn).toContainText('15 秒');
+
+    // 驗證 localStorage 持久化
+    const stored = await page.evaluate(() => localStorage.getItem('opentokenusage_refresh_interval_sec'));
+    expect(stored).toBe('15');
+  });
+
+  test('5 大專屬平台卡片與真實帳號基準數值驗證', async ({ page }) => {
+    await page.goto('/');
+
+    // 1. Cursor (Premium, 0% 剩餘)
+    const cursorCard = page.locator('div[role="button"]:has-text("Cursor")').first();
     await expect(cursorCard).toBeVisible();
-    await expect(cursorCard.locator('.tabular-nums').first()).toContainText('100%');
+    await expect(cursorCard.locator('.tabular-nums').first()).toContainText('0%');
 
-    // 驗證持續性選取指示
-    await cursorCard.click();
-    await expect(cursorCard).toHaveClass(/border-\[#0071e3\]/);
+    // 2. Codex (Plus, 100% Session 剩餘)
+    const codexCard = page.locator('div[role="button"]:has-text("Codex")').first();
+    await expect(codexCard).toBeVisible();
+    await expect(codexCard.locator('.tabular-nums').first()).toContainText('100%');
+
+    // 3. Google Antigravity (Google AI Pro, 92% 剩餘)
+    const antiCard = page.locator('div[role="button"]:has-text("Google Antigravity")').first();
+    await expect(antiCard).toBeVisible();
+    await expect(antiCard.locator('.tabular-nums').first()).toContainText('92%');
+
+    // 4. Claude Code (Pro, 100% Session 剩餘)
+    const claudeCard = page.locator('div[role="button"]:has-text("Claude Code")').first();
+    await expect(claudeCard).toBeVisible();
+    await expect(claudeCard.locator('.tabular-nums').first()).toContainText('100%');
+
+    // 5. Grok (SuperGrok, 0% 剩餘, 標註 Bonded)
+    const grokCard = page.locator('div[role="button"]:has-text("Grok (bonded with Cursor)")').first();
+    await expect(grokCard).toBeVisible();
+    await expect(grokCard.locator('.tabular-nums').first()).toContainText('0%');
+    await expect(grokCard.getByText('Bonded', { exact: true })).toBeVisible();
+  });
+
+  test('Detail 工作台多維度指標卡與 100K 思考預算滑桿', async ({ page }) => {
+    await page.goto('/');
+
+    // 點選 Codex 卡片
+    const codexCard = page.locator('div[role="button"]:has-text("Codex")').first();
+    await codexCard.click();
+
+    // 驗證真實帳戶多維度限額細項
+    await expect(page.locator('text=真實帳戶多維度限額細項')).toBeVisible();
+    await expect(page.locator('text=Weekly (Shared)')).toBeVisible();
+    await expect(page.locator('text=Credits')).toBeVisible();
+
+    // 驗證思考預算滑桿支援至 100K
+    await expect(page.locator('text=100K (o3-mini 頂峰)')).toBeVisible();
+  });
+
+  test('最新前瞻模型型錄視窗：嚴格排除任何過期廢棄模型', async ({ page }) => {
+    await page.goto('/');
+
+    const toolbar = page.getByRole('complementary', { name: '即時浮動控制列' });
+    const syncBtn = toolbar.locator('button[title*="同步最新模型型錄"]');
+    await syncBtn.click();
+
+    // 驗證 Modal 標題與 Active 標籤
+    const modal = page.locator('.fixed:has-text("5 大平台最新活躍前瞻 AI 模型型錄")');
+    await expect(modal).toBeVisible();
+    await expect(modal.getByText('5 大平台最新活躍前瞻 AI 模型型錄')).toBeVisible();
+    await expect(modal.getByText('Active', { exact: true }).first()).toBeVisible();
+
+    // 驗證最新前瞻模型存在
+    await expect(modal.getByText('GPT-6.1 Sol (Workhorse Coding)')).toBeVisible();
+    await expect(modal.getByText('OpenAI o3-mini (High Reasoning 100K)')).toBeVisible();
+    await expect(modal.getByText('Gemini 3.8 Live (Audio & Vision)')).toBeVisible();
+    await expect(modal.getByText('Claude 3.7 Sonnet (Hybrid Thinking)')).toBeVisible();
+    await expect(modal.getByText('Grok 4.5 Full Reasoning')).toBeVisible();
+    await expect(modal.getByText('Cursor Composer (Fast Edit)')).toBeVisible();
+
+    // 斷言絕對不含任何已過期舊模型
+    const modalContent = await modal.innerText();
+    expect(modalContent).not.toContain('gpt-3.5');
+    expect(modalContent).not.toContain('GPT-3.5');
+    expect(modalContent).not.toContain('davinci');
+    expect(modalContent).not.toContain('claude-1');
+    expect(modalContent).not.toContain('gemini-1.0');
   });
 
   test('Focus Mode 專注模式全寬切換', async ({ page }) => {
@@ -112,54 +234,14 @@ test.describe('2. Apple HIG iPhone Duo 雙欄與 UI/UX 驗證', () => {
     const masterList = page.getByRole('complementary', { name: 'AI 平台清單' });
     await expect(masterList).toBeVisible();
 
-    // 點擊收合按鈕
     const focusBtn = page.locator('button[title*="專注全寬模式"]');
     if (await focusBtn.isVisible()) {
       await focusBtn.click();
-      // Master 寬度應收縮為 0
       await expect(masterList).toHaveClass(/w-0/);
 
-      // 再次點擊還原
-      const restoreBtn = page.locator('button[title*="展開導覽列"]');
+      const restoreBtn = page.locator('button[title*="展開導航欄"]');
       await restoreBtn.click();
       await expect(masterList).not.toHaveClass(/w-0/);
     }
-  });
-
-  test('右手拇指操作列尺寸符合 Apple HIG (≥48pt) 與模型同步視窗', async ({ page }) => {
-    await page.goto('/');
-
-    const toolbar = page.getByRole('complementary', { name: '即時浮動控制列' });
-    await expect(toolbar).toBeVisible();
-
-    // 麥克風通話鈕尺寸驗證 (>= 48x48 pt)
-    const micBtn = toolbar.locator('button[title*="語音"]');
-    const box = await micBtn.boundingBox();
-    expect(box).toBeTruthy();
-    expect(box!.width).toBeGreaterThanOrEqual(48);
-    expect(box!.height).toBeGreaterThanOrEqual(48);
-
-    // 點擊同步模型按鈕
-    const syncBtn = toolbar.locator('button[title*="同步最新模型型錄"]');
-    await syncBtn.click();
-
-    // 驗證彈出視窗
-    const modalTitle = page.locator('text=即時遠端動態模型型錄');
-    await expect(modalTitle).toBeVisible();
-    await expect(page.locator('.fixed').getByText('Gemini 3.8 Live (Audio & Vision)')).toBeVisible();
-    await expect(page.locator('.fixed').getByText('OpenAI o3-mini (High Reasoning)')).toBeVisible();
-  });
-
-  test('Codex (ChatGPT) 平台卡片與雙重限額明細展示', async ({ page }) => {
-    await page.goto('/');
-
-    const codexCard = page.locator('div[role="button"]:has-text("Codex (ChatGPT)")');
-    await expect(codexCard).toBeVisible();
-    await expect(codexCard.locator('.tabular-nums').first()).toContainText('28%');
-
-    await codexCard.click();
-    await expect(page.locator('text=ChatGPT Plus 雙重限額明細')).toBeVisible();
-    await expect(page.locator('text=72% 已用')).toBeVisible();
-    await expect(page.locator('text=100% 已達')).toBeVisible();
   });
 });

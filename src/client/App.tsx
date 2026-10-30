@@ -1,105 +1,157 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SplitViewContainer } from './components/SplitViewContainer';
 import { FloatingActionToolbar } from './components/FloatingActionToolbar';
 import { ModelSyncModal } from './components/ModelSyncModal';
 import { QuotaCardProps } from './components/QuotaCard';
+import { LiveBar, LiveBarSegment } from './components/LiveBar';
+import { FrequencySelector, RefreshIntervalSeconds, STORAGE_KEY_REFRESH_INTERVAL } from './components/FrequencySelector';
+import { Shield, Sparkles } from 'lucide-react';
+
+// 5 大平台專屬真實基準快照 (100% SSOT Default)
+const INITIAL_REAL_QUOTAS: QuotaCardProps[] = [
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    planName: 'Premium',
+    totalQuota: 100,
+    usedQuota: 100,
+    remainingPercent: 0,
+    resetTime: '2026-11-03T12:12:52.768Z',
+    status: 'active',
+    metrics_json: JSON.stringify([
+      { label: 'Total usage', used: 100.0, limit: 100.0, kind: 'percent', isAlert: true },
+      { label: 'Auto usage', used: 100.0, limit: 100.0, kind: 'percent' },
+      { label: 'Grok Bot', used: 100.0, limit: 100.0, kind: 'percent' },
+      { label: 'API usage', used: 0.0, limit: 100.0, kind: 'percent' }
+    ]),
+    fetched_at: '2026-10-30T17:55:18.457747Z'
+  },
+  {
+    id: 'codex',
+    name: 'Codex',
+    planName: 'Plus',
+    totalQuota: 100,
+    usedQuota: 0,
+    remainingPercent: 100,
+    resetTime: '2026-11-04T06:48:16.000Z',
+    status: 'active',
+    metrics_json: JSON.stringify([
+      { label: 'Session', used: 0.0, limit: 100.0, kind: 'percent' },
+      { label: 'Weekly (Shared)', used: 100.0, limit: 100.0, kind: 'percent', isAlert: true },
+      { label: 'Resets', value: '0 available' },
+      { label: 'Credits', value: '$0.00' }
+    ]),
+    fetched_at: '2026-10-30T22:57:15.1249828Z'
+  },
+  {
+    id: 'antigravity',
+    name: 'Google Antigravity',
+    planName: 'Google AI Pro',
+    totalQuota: 100,
+    usedQuota: 8,
+    remainingPercent: 92,
+    resetTime: '2026-10-30T23:29:29Z',
+    status: 'active',
+    metrics_json: JSON.stringify([
+      { label: 'Session', used: 8.0, limit: 100.0, kind: 'percent' },
+      { label: 'Claude Sub-Session', used: 0.0, limit: 100.0, kind: 'percent' },
+      { label: 'Claude Weekly', used: 54.0, limit: 100.0, kind: 'percent' }
+    ]),
+    fetched_at: '2026-10-30T22:57:18.6093812Z'
+  },
+  {
+    id: 'claude',
+    name: 'Claude Code',
+    planName: 'Pro',
+    totalQuota: 100,
+    usedQuota: 0,
+    remainingPercent: 100,
+    resetTime: '2026-11-02T12:59:59.805Z',
+    status: 'active',
+    metrics_json: JSON.stringify([
+      { label: 'Session', used: 0.0, limit: 100.0, kind: 'percent' },
+      { label: 'Weekly (Shared)', used: 98.0, limit: 100.0, kind: 'percent', isAlert: true },
+      { label: 'Resets', value: '0 available' }
+    ]),
+    fetched_at: '2026-10-30T19:12:17.6328982Z'
+  },
+  {
+    id: 'grok',
+    name: 'Grok (bonded with Cursor)',
+    planName: 'SuperGrok',
+    totalQuota: 100,
+    usedQuota: 100,
+    remainingPercent: 0,
+    resetTime: '2026-11-03T12:12:52.768Z',
+    status: 'active',
+    metrics_json: JSON.stringify([
+      { label: 'Weekly limit', used: 100.0, limit: 100.0, kind: 'percent', isAlert: true },
+      { label: 'Pay as you go', value: 'Disabled' },
+      { label: 'Bonded Sync', value: 'Cursor Linked' }
+    ]),
+    fetched_at: '2026-10-30T22:57:15.3476213Z'
+  }
+];
 
 export const App: React.FC = () => {
-  const [quotas, setQuotas] = useState<QuotaCardProps[]>([]);
+  const [quotas, setQuotas] = useState<QuotaCardProps[]>(INITIAL_REAL_QUOTAS);
   const [selectedId, setSelectedId] = useState<string>('cursor');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isVoiceActive, setIsVoiceActive] = useState<boolean>(false);
   const [liveTranscript, setLiveTranscript] = useState<string>('');
   const [isModelModalOpen, setIsModelModalOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [models, setModels] = useState<any[]>([]);
 
+  // 使用者自訂更新頻率 (預設 60 秒，支援 localStorage 持久化)
+  const [refreshInterval, setRefreshInterval] = useState<RefreshIntervalSeconds>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEY_REFRESH_INTERVAL);
+      if (saved !== null) {
+        const parsed = Number(saved);
+        if ([15, 30, 60, 300, 900, 0].includes(parsed)) {
+          return parsed as RefreshIntervalSeconds;
+        }
+      }
+    }
+    return 60;
+  });
+
+  const [countdown, setCountdown] = useState<number>(refreshInterval > 0 ? refreshInterval : 0);
+
   const wsRef = useRef<WebSocket | null>(null);
 
-  // 初始化載入 AI 平台額度
-  useEffect(() => {
-    fetchQuotas();
-    fetchModels();
-  }, []);
-
-  const fetchQuotas = async () => {
+  const fetchQuotas = useCallback(async () => {
     try {
-      setIsLoading(true);
+      setIsSyncing(true);
       const res = await fetch('/api/quotas');
+      if (res.status === 304) {
+        return; // 快取命中
+      }
       const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
         const mapped: QuotaCardProps[] = data.data.map((item: any) => ({
           id: item.provider_id || item.id,
           name: item.name,
           planName: item.plan_name || 'Standard',
           totalQuota: item.total_quota || 100,
           usedQuota: item.used_quota || 0,
-          remainingPercent: item.remaining_percent || 100,
+          remainingPercent: item.remaining_percent || 0,
           resetTime: item.reset_time || '每月重置',
           status: item.status || 'active',
+          metrics_json: item.metrics_json,
+          fetched_at: item.fetched_at,
         }));
         setQuotas(mapped);
       }
     } catch {
-      // 本地展示預設值
-      setQuotas([
-        {
-          id: 'codex',
-          name: 'Codex (ChatGPT)',
-          planName: 'Plus',
-          totalQuota: 100,
-          usedQuota: 72,
-          remainingPercent: 28,
-          resetTime: '今天 5:06 重置',
-          status: 'active',
-        },
-        {
-          id: 'cursor',
-          name: 'Cursor',
-          planName: 'Pro / Business',
-          totalQuota: 500,
-          usedQuota: 0,
-          remainingPercent: 100,
-          resetTime: '每月重置',
-          status: 'active',
-        },
-        {
-          id: 'grok',
-          name: 'Grok',
-          planName: 'SuperGrok',
-          totalQuota: 100,
-          usedQuota: 0,
-          remainingPercent: 100,
-          resetTime: '每週重置',
-          status: 'active',
-        },
-        {
-          id: 'antigravity',
-          name: 'Antigravity (Gemini)',
-          planName: 'Google AI Pro',
-          totalQuota: 100,
-          usedQuota: 34,
-          remainingPercent: 66,
-          resetTime: '今天 2:29 重置',
-          status: 'active',
-        },
-        {
-          id: 'claude',
-          name: 'Claude Code',
-          planName: 'Team Pro',
-          totalQuota: 100,
-          usedQuota: 28,
-          remainingPercent: 72,
-          resetTime: '今天 5:06 重置',
-          status: 'active',
-        },
-      ]);
+      // 離線降級：保留既有真實快照
     } finally {
-      setIsLoading(false);
+      setIsSyncing(false);
     }
-  };
+  }, []);
 
-  const fetchModels = async () => {
+  const fetchModels = useCallback(async () => {
     try {
       const res = await fetch('/api/models/sync', { method: 'POST' });
       const data = await res.json();
@@ -109,85 +161,129 @@ export const App: React.FC = () => {
       }
     } catch {}
 
-    // 本地離線/預覽預設模型清單
+    // 本地預設前瞻活躍模型（嚴格排除過期模型）
     setModels([
-      {
-        id: 'gemini-3.8-live',
-        name: 'Gemini 3.8 Live (Audio & Vision)',
-        provider: 'Google',
-        context_window: 2000000,
-        supports_live: true,
-        supports_thinking: true,
-        thinking_budget_max: 32768,
-        cost_per_m_input: 0.125,
-        cost_per_m_output: 0.5,
-      },
-      {
-        id: 'gemini-3.8-flash',
-        name: 'Gemini 3.8 Flash (High Reasoning)',
-        provider: 'Google',
-        context_window: 1000000,
-        supports_live: false,
-        supports_thinking: true,
-        thinking_budget_max: 65536,
-        cost_per_m_input: 0.075,
-        cost_per_m_output: 0.3,
-      },
-      {
-        id: 'grok-4.5',
-        name: 'Grok 4.5 Full Reasoning',
-        provider: 'xAI',
-        context_window: 128000,
-        supports_live: false,
-        supports_thinking: true,
-        thinking_budget_max: 16384,
-        cost_per_m_input: 0.5,
-        cost_per_m_output: 2.0,
-      },
-      {
-        id: 'claude-3-7-sonnet',
-        name: 'Claude 3.7 Sonnet (Hybrid Thinking)',
-        provider: 'Anthropic',
-        context_window: 200000,
-        supports_live: false,
-        supports_thinking: true,
-        thinking_budget_max: 64000,
-        cost_per_m_input: 3.0,
-        cost_per_m_output: 15.0,
-      },
-      {
-        id: 'o3-mini',
-        name: 'OpenAI o3-mini (High Reasoning)',
-        provider: 'OpenAI',
-        context_window: 128000,
-        supports_live: false,
-        supports_thinking: true,
-        thinking_budget_max: 100000,
-        cost_per_m_input: 1.10,
-        cost_per_m_output: 4.40,
-      },
-      {
-        id: 'gpt-4o-latest',
-        name: 'ChatGPT-4o (Omni Multimodal)',
-        provider: 'OpenAI',
-        context_window: 128000,
-        supports_live: false,
-        supports_thinking: false,
-        cost_per_m_input: 2.50,
-        cost_per_m_output: 10.00,
-      },
-      {
-        id: 'cursor-fast',
-        name: 'Cursor Composer (Fast Edit)',
-        provider: 'Cursor',
-        context_window: 128000,
-        supports_live: false,
-        supports_thinking: false,
-        cost_per_m_input: 0.0,
-        cost_per_m_output: 0.0,
-      },
+      { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol (Workhorse Coding)', provider: 'OpenAI', context_window: 128000, supports_thinking: true, thinking_budget_max: 32768, cost_per_m_input: 1.25, cost_per_m_output: 5.0, status: 'active', verified_date: '2026-10-30' },
+      { id: 'gpt-6-astra', name: 'GPT-6 Astra (Frontier Intelligence)', provider: 'OpenAI', context_window: 200000, supports_thinking: true, thinking_budget_max: 65536, cost_per_m_input: 2.50, cost_per_m_output: 10.0, status: 'active', verified_date: '2026-10-30' },
+      { id: 'o3-mini', name: 'OpenAI o3-mini (High Reasoning 100K)', provider: 'OpenAI', context_window: 128000, supports_thinking: true, thinking_budget_max: 100000, cost_per_m_input: 1.10, cost_per_m_output: 4.40, status: 'active', verified_date: '2026-10-30' },
+      { id: 'gpt-4o-latest', name: 'GPT-4o (Omni Multimodal Flagship)', provider: 'OpenAI', context_window: 128000, supports_thinking: false, cost_per_m_input: 2.50, cost_per_m_output: 10.0, status: 'active', verified_date: '2026-10-30' },
+      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (High Reasoning)', provider: 'Google', context_window: 1000000, supports_thinking: true, thinking_budget_max: 65536, cost_per_m_input: 0.075, cost_per_m_output: 0.30, status: 'active', verified_date: '2026-10-30' },
+      { id: 'gemini-3.8-live', name: 'Gemini 3.8 Live (Audio & Vision)', provider: 'Google', context_window: 2000000, supports_live: true, supports_thinking: true, thinking_budget_max: 32768, cost_per_m_input: 0.125, cost_per_m_output: 0.50, status: 'active', verified_date: '2026-10-30' },
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Deep Code)', provider: 'Google', context_window: 1000000, supports_thinking: true, thinking_budget_max: 32768, cost_per_m_input: 1.25, cost_per_m_output: 5.0, status: 'active', verified_date: '2026-10-30' },
+      { id: 'claude-3-7-sonnet', name: 'Claude 3.7 Sonnet (Hybrid Thinking)', provider: 'Anthropic', context_window: 200000, supports_thinking: true, thinking_budget_max: 64000, cost_per_m_input: 3.0, cost_per_m_output: 15.0, status: 'active', verified_date: '2026-10-30' },
+      { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet (Frontier Coding)', provider: 'Anthropic', context_window: 200000, supports_thinking: false, cost_per_m_input: 3.0, cost_per_m_output: 15.0, status: 'active', verified_date: '2026-10-30' },
+      { id: 'claude-fable-5-1', name: 'Claude Fable 5.1 (Long-Running Agent)', provider: 'Anthropic', context_window: 1000000, supports_thinking: true, thinking_budget_max: 64000, cost_per_m_input: 4.0, cost_per_m_output: 20.0, status: 'active', verified_date: '2026-10-30' },
+      { id: 'grok-4.5', name: 'Grok 4.5 Full Reasoning', provider: 'xAI', context_window: 128000, supports_thinking: true, thinking_budget_max: 32768, cost_per_m_input: 0.50, cost_per_m_output: 2.0, status: 'active', verified_date: '2026-10-30' },
+      { id: 'cursor-fast', name: 'Cursor Composer (Fast Edit)', provider: 'Cursor', context_window: 128000, supports_thinking: false, cost_per_m_input: 0.0, cost_per_m_output: 0.0, status: 'active', verified_date: '2026-10-30' },
+      { id: 'cursor-agent', name: 'Cursor Autonomous Agent', provider: 'Cursor', context_window: 128000, supports_thinking: true, thinking_budget_max: 32768, cost_per_m_input: 0.0, cost_per_m_output: 0.0, status: 'active', verified_date: '2026-10-30' }
     ]);
+  }, []);
+
+  // 初次載入
+  useEffect(() => {
+    fetchQuotas();
+    fetchModels();
+  }, [fetchQuotas, fetchModels]);
+
+  // 更新頻率切換與持久化
+  const handleChangeInterval = (newInterval: RefreshIntervalSeconds) => {
+    setRefreshInterval(newInterval);
+    setCountdown(newInterval);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY_REFRESH_INTERVAL, String(newInterval));
+    }
+    if (newInterval > 0) {
+      fetchQuotas();
+    }
   };
+
+  // 背景輪詢計時器 + Page Visibility API 節能守衛
+  useEffect(() => {
+    if (refreshInterval === 0) {
+      return; // 手動模式不啟動定時器
+    }
+
+    const timer = setInterval(() => {
+      // 若頁面在背景最小化，凍結計時以省電
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          fetchQuotas();
+          return refreshInterval;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // 頁面重新回到前景時立即補償刷新
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && refreshInterval > 0) {
+        fetchQuotas();
+        setCountdown(refreshInterval);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshInterval, fetchQuotas]);
+
+  // 組裝 Live Bar 5 色分段
+  const liveSegments: LiveBarSegment[] = quotas.map((q) => {
+    if (q.id === 'cursor') {
+      return {
+        id: 'cursor',
+        name: 'Cursor',
+        remainingPercent: q.remainingPercent,
+        gradient: 'bg-gradient-to-r from-[#00F2FE] to-[#4FACFE]',
+        glowColor: '0 0 12px rgba(0,242,254,0.4)',
+        isAlert: q.remainingPercent <= 5,
+      };
+    }
+    if (q.id === 'codex') {
+      return {
+        id: 'codex',
+        name: 'Codex',
+        remainingPercent: q.remainingPercent,
+        gradient: 'bg-gradient-to-r from-[#00FF87] to-[#60EFFF]',
+        glowColor: '0 0 12px rgba(0,255,135,0.4)',
+      };
+    }
+    if (q.id === 'antigravity') {
+      return {
+        id: 'antigravity',
+        name: 'Antigravity',
+        remainingPercent: q.remainingPercent,
+        gradient: 'bg-gradient-to-r from-[#4285F4] via-[#A855F7] to-[#EC4899]',
+        glowColor: '0 0 12px rgba(168,85,247,0.4)',
+      };
+    }
+    if (q.id === 'claude') {
+      return {
+        id: 'claude',
+        name: 'Claude Code',
+        remainingPercent: q.remainingPercent,
+        gradient: 'bg-gradient-to-r from-[#FF8A00] to-[#FF4E50]',
+        glowColor: '0 0 12px rgba(255,138,0,0.4)',
+        isAlert: q.remainingPercent <= 5,
+      };
+    }
+    // grok
+    return {
+      id: 'grok',
+      name: 'Grok',
+      remainingPercent: q.remainingPercent,
+      gradient: 'bg-gradient-to-r from-[#FF007A] to-[#7928CA]',
+      glowColor: '0 0 12px rgba(255,0,122,0.45)',
+      isAlert: q.remainingPercent <= 5,
+    };
+  });
 
   const handleSyncModels = async () => {
     setIsSyncing(true);
@@ -201,17 +297,15 @@ export const App: React.FC = () => {
 
   const toggleVoice = () => {
     if (isVoiceActive) {
-      // 關閉語音
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
       setIsVoiceActive(false);
-      setLiveTranscript('通話已結束。連線已休眠。');
+      setLiveTranscript('語音對話已結束。連線已休眠。');
     } else {
-      // 開啟 Gemini 3.8 Live 雙向連線
       setIsVoiceActive(true);
-      setLiveTranscript('正在建立 Cloudflare Durable Object 邊緣長連線...');
+      setLiveTranscript('正在連線至 Cloudflare Durable Object (Gemini 3.8 Live)...');
 
       try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -220,7 +314,7 @@ export const App: React.FC = () => {
         wsRef.current = ws;
 
         ws.onopen = () => {
-          setLiveTranscript('Gemini 3.8 Live API 已就緒。請說話（例如：「查詢 Cursor 目前剩餘額度」）...');
+          setLiveTranscript('Gemini 3.8 Live API 語音連線已建立。請說話（例如：「查詢 Cursor 剩餘配額」）...');
         };
 
         ws.onmessage = (event) => {
@@ -240,7 +334,7 @@ export const App: React.FC = () => {
         };
 
         ws.onerror = () => {
-          setLiveTranscript('連線至 Gemini Live 服務中斷，已啟動自動休眠防護。');
+          setLiveTranscript('連線至 Gemini Live 服務中斷，已啟動自動防護。');
         };
 
         ws.onclose = () => {
@@ -254,16 +348,58 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden">
-      <SplitViewContainer
-        quotas={quotas}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        isLoading={isLoading}
+    <div className="relative w-screen h-screen overflow-hidden bg-slate-950 text-slate-100 flex flex-col font-sans neon-ambient-glow">
+      {/* 頂部導航列 (Cyber Dark Header) */}
+      <header className="w-full bg-slate-950/95 border-b border-slate-800/80 px-4 py-2 sm:px-6 flex items-center justify-between shrink-0 z-30">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-400 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              <Sparkles className="w-4 h-4 text-slate-950 font-black" />
+            </div>
+            <h1 className="font-black text-base sm:text-lg tracking-tight bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
+              OpenTokenUsage
+            </h1>
+          </div>
+          <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400">
+            <Shield className="w-3 h-3 text-cyan-400" />
+            5 Platforms Bonded
+          </span>
+        </div>
+
+        {/* 右側：更新頻率選擇器與手動刷新按鈕 */}
+        <div className="flex items-center gap-2">
+          <FrequencySelector
+            interval={refreshInterval}
+            onChangeInterval={handleChangeInterval}
+            countdownSeconds={countdown}
+          />
+        </div>
+      </header>
+
+      {/* 用戶原創概念：Live Bar 動態狀態光譜條 */}
+      <LiveBar
+        segments={liveSegments}
+        activePlatformId={selectedId}
+        onSelectPlatform={setSelectedId}
+        countdownSeconds={countdown}
+        isSyncing={isSyncing}
+        onTriggerSync={fetchQuotas}
         isVoiceActive={isVoiceActive}
-        liveTranscript={liveTranscript}
       />
 
+      {/* 主工作區：iPhone Duo 雙欄或單欄自適應 */}
+      <div className="flex-1 min-h-0 relative">
+        <SplitViewContainer
+          quotas={quotas}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          isLoading={isLoading}
+          isVoiceActive={isVoiceActive}
+          liveTranscript={liveTranscript}
+        />
+      </div>
+
+      {/* 懸浮工具列 (Gemini 3.8 Live 麥克風與模型型錄入口) */}
       <FloatingActionToolbar
         isVoiceActive={isVoiceActive}
         isSyncing={isSyncing}
@@ -271,6 +407,7 @@ export const App: React.FC = () => {
         onSyncModels={handleSyncModels}
       />
 
+      {/* 最新活躍前瞻模型型錄 Modal */}
       <ModelSyncModal
         isOpen={isModelModalOpen}
         onClose={() => setIsModelModalOpen(false)}

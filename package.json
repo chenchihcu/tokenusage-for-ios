@@ -11,6 +11,7 @@
     "worker:deploy": "wrangler deploy",
     "types": "wrangler types",
     "server": "node dist-server/index.js",
+    "sync:desktop": "python scripts/sync-desktop-accounts.py",
     "test:e2e": "playwright test"
   },
   "dependencies": {

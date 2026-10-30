@@ -64,7 +64,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   // 橫向 iPhone Duo 雙欄自適應佈局 (38% : 62%)
   if (isLandscape) {
     return (
-      <div className="flex h-screen w-screen overflow-hidden bg-[#f5f5f7] pl-safe-island pr-safe-island">
+      <div className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island">
         {/* 左欄 Master List (38% 黃金分割寬度，支援 Focus Mode 收折) */}
         <aside
           aria-label="AI 平台清單"
@@ -83,7 +83,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
         {/* 右欄 Detail Workbench (62% 寬度或 100% 全寬) */}
         <main
           aria-label="AI 平台詳情與語音工作台"
-          className="flex-1 h-full min-w-0 bg-white"
+          className="flex-1 h-full min-w-0 bg-slate-950"
         >
           <DetailWorkbench
             selectedItem={selectedItem}
@@ -99,13 +99,13 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
 
   // 直向行動端單欄切換模式
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-white pt-safe pb-safe">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-slate-950 pt-safe pb-safe">
       {showMobileDetail ? (
         <div className="flex flex-col h-full">
-          <div className="p-3 border-b border-[#e5e5ea] flex items-center">
+          <div className="p-3 border-b border-slate-800 flex items-center bg-slate-950">
             <button
               onClick={() => setShowMobileDetail(false)}
-              className="flex items-center gap-1 text-sm font-semibold text-[#0071e3] active:opacity-70 transition-all"
+              className="flex items-center gap-1 text-sm font-semibold text-cyan-400 active:opacity-70 transition-all min-h-[44px]"
             >
               <ChevronLeft className="w-5 h-5" />
               返回清單
