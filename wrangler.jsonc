@@ -12,13 +12,13 @@
     {
       "binding": "DB",
       "database_name": "opentokenusage-db",
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_id": "c4730902-80f1-45f8-bfdf-af234720ea05"
     }
   ],
   "kv_namespaces": [
     {
       "binding": "KV_CATALOG",
-      "id": "00000000000000000000000000000000"
+      "id": "dde703e1cb314858be3478285c75ea57"
     }
   ],
   "durable_objects": {
