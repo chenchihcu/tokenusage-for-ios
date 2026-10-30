@@ -132,7 +132,7 @@ export class VoiceSessionDO {
                       properties: {
                         provider: {
                           type: 'STRING',
-                          description: 'AI 平台識別碼，例如 cursor, grok, claude, antigravity',
+                          description: 'AI 平台識別碼，例如 cursor, grok, claude, antigravity, codex',
                         },
                       },
                       required: ['provider'],

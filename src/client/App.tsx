@@ -44,6 +44,16 @@ export const App: React.FC = () => {
       // 本地展示預設值
       setQuotas([
         {
+          id: 'codex',
+          name: 'Codex (ChatGPT)',
+          planName: 'Plus',
+          totalQuota: 100,
+          usedQuota: 72,
+          remainingPercent: 28,
+          resetTime: '今天 5:06 重置',
+          status: 'active',
+        },
+        {
           id: 'cursor',
           name: 'Cursor',
           planName: 'Pro / Business',
@@ -144,6 +154,27 @@ export const App: React.FC = () => {
         thinking_budget_max: 64000,
         cost_per_m_input: 3.0,
         cost_per_m_output: 15.0,
+      },
+      {
+        id: 'o3-mini',
+        name: 'OpenAI o3-mini (High Reasoning)',
+        provider: 'OpenAI',
+        context_window: 128000,
+        supports_live: false,
+        supports_thinking: true,
+        thinking_budget_max: 100000,
+        cost_per_m_input: 1.10,
+        cost_per_m_output: 4.40,
+      },
+      {
+        id: 'gpt-4o-latest',
+        name: 'ChatGPT-4o (Omni Multimodal)',
+        provider: 'OpenAI',
+        context_window: 128000,
+        supports_live: false,
+        supports_thinking: false,
+        cost_per_m_input: 2.50,
+        cost_per_m_output: 10.00,
       },
       {
         id: 'cursor-fast',

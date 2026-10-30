@@ -32,6 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_ledger_created ON ai_usage_ledger(created_at);
 -- 預設插入目前支援之模型與平台種子資料
 INSERT OR REPLACE INTO provider_quotas (provider_id, name, plan_name, total_quota, used_quota, remaining_percent, reset_time, status)
 VALUES 
+    ('codex', 'Codex (ChatGPT)', 'Plus', 100, 72, 28, '今天 5:06 重置', 'active'),
     ('cursor', 'Cursor', 'Pro / Business', 500, 0, 100, '每月重置', 'active'),
     ('grok', 'Grok', 'SuperGrok', 100, 0, 100, '每週重置', 'active'),
     ('antigravity', 'Antigravity (Gemini)', 'Google AI Pro', 100, 34, 66, '今天 2:29 重置', 'active'),
