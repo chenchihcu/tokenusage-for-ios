@@ -69,6 +69,12 @@ test.describe('1. 安全性與後端 MCP 核心單元驗證', () => {
     expect(quotaResult.remainingPercent).toBe(100);
     expect(quotaResult.status).toBe('active');
 
+    // 驗證 Codex (ChatGPT) MCP 額度查詢
+    const codexResult = await handleMcpToolCall('get_provider_quota', { provider: 'codex' }, {});
+    expect(codexResult.remainingPercent).toBe(28);
+    expect(codexResult.sessionUsedPercent).toBe(72);
+    expect(codexResult.plan).toBe('Plus');
+
     const estimate = await handleMcpToolCall(
       'estimate_token_cost',
       { modelId: 'gemini-3.8-flash', promptTokens: 10000, completionTokens: 2000, thinkingTokens: 4000 },
@@ -141,5 +147,19 @@ test.describe('2. Apple HIG iPhone Duo 雙欄與 UI/UX 驗證', () => {
     const modalTitle = page.locator('text=即時遠端動態模型型錄');
     await expect(modalTitle).toBeVisible();
     await expect(page.locator('.fixed').getByText('Gemini 3.8 Live (Audio & Vision)')).toBeVisible();
+    await expect(page.locator('.fixed').getByText('OpenAI o3-mini (High Reasoning)')).toBeVisible();
+  });
+
+  test('Codex (ChatGPT) 平台卡片與雙重限額明細展示', async ({ page }) => {
+    await page.goto('/');
+
+    const codexCard = page.locator('div[role="button"]:has-text("Codex (ChatGPT)")');
+    await expect(codexCard).toBeVisible();
+    await expect(codexCard.locator('.tabular-nums').first()).toContainText('28%');
+
+    await codexCard.click();
+    await expect(page.locator('text=ChatGPT Plus 雙重限額明細')).toBeVisible();
+    await expect(page.locator('text=72% 已用')).toBeVisible();
+    await expect(page.locator('text=100% 已達')).toBeVisible();
   });
 });

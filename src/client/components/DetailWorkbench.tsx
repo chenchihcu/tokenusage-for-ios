@@ -98,7 +98,9 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
             <div className="text-2xl font-bold tabular-nums text-[#1d1d1f]">
               {selectedItem.remainingPercent}%
             </div>
-            <div className="text-xs text-emerald-600 font-medium mt-1">充足無阻斷風險</div>
+            <div className={`text-xs font-medium mt-1 ${selectedItem.remainingPercent < 30 ? 'text-amber-600' : 'text-emerald-600'}`}>
+              {selectedItem.remainingPercent < 30 ? '注意：額度偏低接近限額' : '充足無阻斷風險'}
+            </div>
           </div>
 
           <div className="p-4 rounded-xl bg-[#fbfbfd] border border-[#e5e5ea]">
@@ -123,6 +125,42 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
             <div className="text-xs text-[#86868b] mt-1">定時自動刷新</div>
           </div>
         </section>
+
+        {/* Codex (ChatGPT Plus) 專屬雙重限額展示 */}
+        {selectedItem.id === 'codex' && (
+          <section className="p-4 rounded-xl bg-amber-50/70 border border-amber-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-xs text-amber-900 uppercase tracking-wider">
+                ChatGPT Plus 雙重限額明細
+              </span>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                週限額已達 100%
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-2.5 bg-white rounded-lg border border-amber-100">
+                <div className="text-[#86868b]">Session 短視窗</div>
+                <div className="font-bold text-base text-[#1d1d1f] tabular-nums mt-0.5">72% 已用</div>
+                <div className="text-[11px] text-[#86868b]">今天 5:06 重置</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-amber-100">
+                <div className="text-[#86868b]">Weekly 共享池</div>
+                <div className="font-bold text-base text-rose-600 tabular-nums mt-0.5">100% 已達</div>
+                <div className="text-[11px] text-[#86868b]">11月4日 14:48 重置</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-amber-100">
+                <div className="text-[#86868b]">Rate Limit Resets</div>
+                <div className="font-bold text-base text-[#1d1d1f] tabular-nums mt-0.5">0 次可用</div>
+                <div className="text-[11px] text-[#86868b]">每月固定重置</div>
+              </div>
+              <div className="p-2.5 bg-white rounded-lg border border-amber-100">
+                <div className="text-[#86868b]">Credits 帳戶額度</div>
+                <div className="font-bold text-base text-[#1d1d1f] tabular-nums mt-0.5">$0.00</div>
+                <div className="text-[11px] text-[#86868b]">0 credits</div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* 深度思考 (Extended Thinking) 預算控制器 */}
         <section className="p-5 rounded-2xl bg-[#fbfbfd] border border-[#e5e5ea] space-y-4">

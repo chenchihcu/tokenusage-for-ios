@@ -16,13 +16,13 @@ export interface McpToolDefinition {
 export const OPENTOKENUSAGE_MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'get_provider_quota',
-    description: '查詢特定 AI 平台 (Cursor, Grok, Claude, Antigravity) 的即時額度、剩餘百分比與重置時間',
+    description: '查詢特定 AI 平台 (Cursor, Grok, Claude, Antigravity, Codex) 的即時額度、剩餘百分比與重置時間',
     inputSchema: {
       type: 'object',
       properties: {
         provider: {
           type: 'string',
-          enum: ['cursor', 'grok', 'antigravity', 'claude'],
+          enum: ['cursor', 'grok', 'antigravity', 'claude', 'codex'],
           description: '要查詢的 AI 平台標識符',
         },
       },
@@ -72,6 +72,19 @@ export async function handleMcpToolCall(toolName: string, args: Record<string, a
   switch (toolName) {
     case 'get_provider_quota': {
       const provider = args.provider || 'cursor';
+      if (provider === 'codex') {
+        return {
+          provider: 'codex',
+          displayName: 'Codex (ChatGPT)',
+          status: 'active',
+          plan: 'Plus',
+          remainingPercent: 28,
+          sessionUsedPercent: 72,
+          weeklyUsedPercent: 100,
+          resetTime: '今天 5:06 重置',
+          note: 'Session 滑動視窗剩餘 28%，每週共享池已用 100% (11月4日重置)',
+        };
+      }
       return {
         provider,
         status: 'active',
@@ -82,12 +95,14 @@ export async function handleMcpToolCall(toolName: string, args: Record<string, a
     }
     case 'list_active_models': {
       return {
-        count: 5,
+        count: 7,
         models: [
           'gemini-3.8-live',
           'gemini-3.8-flash',
           'grok-4.5',
           'claude-3-7-sonnet',
+          'o3-mini',
+          'gpt-4o-latest',
           'cursor-fast',
         ],
       };

@@ -29,6 +29,16 @@ const server = http.createServer(async (req, res) => {
         success: true,
         data: [
           {
+            provider_id: 'codex',
+            name: 'Codex (ChatGPT)',
+            plan_name: 'Plus',
+            total_quota: 100,
+            used_quota: 72,
+            remaining_percent: 28,
+            reset_time: '今天 5:06 重置',
+            status: 'active',
+          },
+          {
             provider_id: 'cursor',
             name: 'Cursor',
             plan_name: 'Pro / Business',

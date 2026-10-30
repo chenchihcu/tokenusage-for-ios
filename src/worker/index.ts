@@ -58,6 +58,16 @@ export default {
         if (!quotas.length) {
           quotas = [
             {
+              provider_id: 'codex',
+              name: 'Codex (ChatGPT)',
+              plan_name: 'Plus',
+              total_quota: 100,
+              used_quota: 72,
+              remaining_percent: 28,
+              reset_time: '今天 5:06 重置',
+              status: 'active'
+            },
+            {
               provider_id: 'cursor',
               name: 'Cursor',
               plan_name: 'Pro / Business',
@@ -168,6 +178,27 @@ export default {
               thinking_budget_max: 64000,
               cost_per_m_input: 3.00,
               cost_per_m_output: 15.00
+            },
+            {
+              id: 'o3-mini',
+              name: 'OpenAI o3-mini (High Reasoning)',
+              provider: 'OpenAI',
+              context_window: 128000,
+              supports_live: false,
+              supports_thinking: true,
+              thinking_budget_max: 100000,
+              cost_per_m_input: 1.10,
+              cost_per_m_output: 4.40
+            },
+            {
+              id: 'gpt-4o-latest',
+              name: 'ChatGPT-4o (Omni Multimodal)',
+              provider: 'OpenAI',
+              context_window: 128000,
+              supports_live: false,
+              supports_thinking: false,
+              cost_per_m_input: 2.50,
+              cost_per_m_output: 10.00
             },
             {
               id: 'cursor-fast',
