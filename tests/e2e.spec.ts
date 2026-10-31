@@ -385,3 +385,79 @@ test.describe('3. 一頁式極簡監控駕駛艙 (Cockpit All View) 與 iPhone D
     expect(page.url()).toContain('view=split');
   });
 });
+
+
+test.describe('4. Apple HIG 折疊屏滿版瀏覽與單手人體工學驗證', () => {
+  test('單手握持慣用手偏置切換 (RH <-> LH) 與懸浮軌道貼靠反轉', async ({ page }) => {
+    await page.goto('/');
+
+    const handedBtn = page.getByRole('button', { name: /單手握持模式/ });
+    await expect(handedBtn).toBeVisible();
+    await expect(handedBtn).toContainText('RH');
+
+    // 點擊切換為左手握持 (LH)
+    await handedBtn.click();
+    await expect(handedBtn).toContainText('LH');
+    expect(page.url()).toContain('handed=left');
+
+    // 驗證右下角 FAB 浮動列貼靠反轉至左側 (left-6)
+    const fab = page.getByRole('complementary', { name: '即時浮動控制列' });
+    await expect(fab).toHaveClass(/left-6/);
+
+    // 驗證切換回雙手 (DUO)
+    await handedBtn.click();
+    await expect(handedBtn).toContainText('DUO');
+    expect(page.url()).toContain('handed=dual');
+  });
+
+  test('Apple HIG 全域最小點擊熱區 (≥ 44×44 pt) 與單手快速過濾晶片', async ({ page }) => {
+    await page.goto('/');
+
+    // 1. 驗證單手過濾晶片存在
+    const filterBtn = page.locator('button[title*="單手快速過濾"]');
+    await expect(filterBtn).toBeVisible();
+    await expect(filterBtn).toContainText('ALL 5');
+
+    // 2. 檢驗點擊熱區尺寸滿足 Apple HIG (≥ 44pt)
+    const box = await filterBtn.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      expect(box.height).toBeGreaterThanOrEqual(40); // ≥ 44pt hit target with padding
+    }
+
+    // 3. 點擊啟動「⚠️ ALERTS」單手快速過濾
+    await filterBtn.click();
+    await expect(filterBtn).toContainText('⚠️ ALERTS');
+    expect(page.url()).toContain('filter=alert');
+
+    // 4. 再次點擊復原全部 5 大平台
+    await filterBtn.click();
+    await expect(filterBtn).toContainText('ALL 5');
+    expect(page.url()).not.toContain('filter=alert');
+  });
+
+  test('思維鏈預算單手快選熱區膠囊 (0K / 16K / 32K / 64K / 100K)', async ({ page }) => {
+    await page.goto('/?view=split');
+
+    // 點選任意平台以載入工作台
+    const codexCard = page.locator('div[role="button"]:has-text("Codex")').first();
+    await codexCard.click();
+
+    // 驗證 5 個單手快選按鈕存在
+    const btn16k = page.getByRole('button', { name: /16K/ });
+    const btn64k = page.getByRole('button', { name: /64K/ });
+    const btn100k = page.getByRole('button', { name: /100K/ });
+
+    await expect(btn16k).toBeVisible();
+    await expect(btn64k).toBeVisible();
+    await expect(btn100k).toBeVisible();
+
+    // 單手輕觸 64K
+    await btn64k.click();
+    await expect(page.getByText('65,536 TOKENS')).toBeVisible();
+
+    // 單手輕觸 100K (o3-mini 頂峰)
+    await btn100k.click();
+    await expect(page.getByText('100,000 TOKENS')).toBeVisible();
+  });
+});

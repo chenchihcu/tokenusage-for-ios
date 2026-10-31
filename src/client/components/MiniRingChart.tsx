@@ -9,18 +9,24 @@ export interface MiniRingChartProps {
   isCritical?: boolean;
   label?: string;
   showCenterText?: boolean;
+  compact?: boolean; // Apple HIG 單手操作緊湊模式 (56px)
 }
 
 export const MiniRingChart: React.FC<MiniRingChartProps> = ({
   value,
-  size = 68,
-  strokeWidth = 6,
+  size: userSize,
+  strokeWidth: userStrokeWidth,
   gradientId,
   gradientColors,
   isCritical = false,
   label,
   showCenterText = true,
+  compact = false,
 }) => {
+  // Apple HIG 單手模式與標準規格自適應尺寸計算
+  const size = userSize ?? (compact ? 56 : 68);
+  const strokeWidth = userStrokeWidth ?? (compact ? 5 : 6);
+
   const clampedValue = Math.min(100, Math.max(0, value));
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -30,7 +36,7 @@ export const MiniRingChart: React.FC<MiniRingChartProps> = ({
 
   return (
     <div
-      className="relative flex items-center justify-center shrink-0 select-none"
+      className="relative flex items-center justify-center shrink-0 select-none transition-all duration-300"
       style={{ width: size, height: size }}
       role="img"
       aria-label={`${label || '配額'}: 剩餘 ${clampedValue}%`}
@@ -84,7 +90,7 @@ export const MiniRingChart: React.FC<MiniRingChartProps> = ({
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <span
             className={`font-mono font-black tabular-nums tracking-tight leading-none ${
-              size >= 72 ? 'text-lg' : 'text-sm'
+              size >= 72 ? 'text-lg' : size <= 56 ? 'text-xs' : 'text-sm'
             } ${
               isCritical
                 ? 'text-rose-400 animate-pulse'
@@ -96,7 +102,11 @@ export const MiniRingChart: React.FC<MiniRingChartProps> = ({
             {clampedValue}%
           </span>
           {label && (
-            <span className="text-[9px] uppercase font-mono font-bold text-slate-500 mt-0.5 leading-none">
+            <span
+              className={`uppercase font-mono font-bold text-slate-500 mt-0.5 leading-none ${
+                size <= 56 ? 'text-[8px]' : 'text-[9px]'
+              }`}
+            >
               {label}
             </span>
           )}

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MasterList } from './MasterList';
 import { DetailWorkbench } from './DetailWorkbench';
 import { CockpitOverview } from './CockpitOverview';
 import { QuotaCardProps } from './QuotaCard';
 import { ChevronLeft } from 'lucide-react';
-import { DashboardViewMode } from './ViewModeSelector';
+import { DashboardViewMode, HandednessMode } from './ViewModeSelector';
 
 interface SplitViewContainerProps {
   quotas: QuotaCardProps[];
@@ -17,6 +17,9 @@ interface SplitViewContainerProps {
   onChangeViewMode: (mode: DashboardViewMode) => void;
   isOnline: boolean;
   countdownSeconds: number;
+  handedness?: HandednessMode;
+  filterAlertOnly?: boolean;
+  onToggleFilterAlert?: () => void;
 }
 
 export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
@@ -30,27 +33,63 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   onChangeViewMode,
   isOnline,
   countdownSeconds,
+  handedness = 'right',
+  filterAlertOnly = false,
+  onToggleFilterAlert,
 }) => {
   const [isLandscape, setIsLandscape] = useState<boolean>(true);
+  const [isHorizontalDual, setIsHorizontalDual] = useState<boolean>(false);
+  const [isVerticalDual, setIsVerticalDual] = useState<boolean>(false);
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
   const [showMobileDetail, setShowMobileDetail] = useState<boolean>(false);
+  const debounceTimerRef = useRef<any>(null);
 
-  // 監聽螢幕方向與尺寸變化 (Apple HIG 橫向視窗判定)
+  // W3C Viewport Segments API 偵測與 150ms 折疊開合防抖 (Apple HIG Posture Debounce)
   useEffect(() => {
-    const checkOrientation = () => {
+    const evaluatePosture = () => {
+      if (typeof window === 'undefined') return;
+
+      const isH2 =
+        (window.matchMedia &&
+          window.matchMedia('(horizontal-viewport-segments: 2)').matches) ||
+        false;
+      const isV2 =
+        (window.matchMedia &&
+          window.matchMedia('(vertical-viewport-segments: 2)').matches) ||
+        false;
+
       const isWide =
+        isH2 ||
         window.innerWidth >= 768 ||
         (window.innerWidth > window.innerHeight && window.innerWidth >= 640);
+
       setIsLandscape(isWide);
+      setIsHorizontalDual(isH2);
+      setIsVerticalDual(isV2);
     };
 
-    checkOrientation();
-    window.addEventListener('resize', checkOrientation);
-    window.addEventListener('orientationchange', checkOrientation);
+    // 立即初始判定
+    evaluatePosture();
+
+    // 150ms 防抖處理高頻旋轉與開合折疊
+    const handleResizeDebounced = () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        evaluatePosture();
+      }, 150);
+    };
+
+    window.addEventListener('resize', handleResizeDebounced);
+    window.addEventListener('orientationchange', handleResizeDebounced);
 
     return () => {
-      window.removeEventListener('resize', checkOrientation);
-      window.removeEventListener('orientationchange', checkOrientation);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      window.removeEventListener('resize', handleResizeDebounced);
+      window.removeEventListener('orientationchange', handleResizeDebounced);
     };
   }, []);
 
@@ -60,10 +99,16 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
       const url = new URL(window.location.href);
       url.searchParams.set('provider', selectedId);
       url.searchParams.set('view', viewMode);
+      url.searchParams.set('handed', handedness);
+      if (filterAlertOnly) {
+        url.searchParams.set('filter', 'alert');
+      } else {
+        url.searchParams.delete('filter');
+      }
       if (isLandscape) url.searchParams.set('duo', '1');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [selectedId, isLandscape, viewMode]);
+  }, [selectedId, isLandscape, viewMode, handedness, filterAlertOnly]);
 
   const handleItemSelect = (id: string) => {
     onSelect(id);
@@ -82,8 +127,95 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
 
   const selectedItem = quotas.find((q) => q.id === selectedId);
 
+  // =========================================================================
+  // 特殊形態 A：W3C Viewport Segments 雙屏水平展開 (horizontal-viewport-segments: 2)
+  // 左螢幕全景 Cockpit : 右螢幕深入 Detail，中央轉軸安全避讓縫隙 (Hinge Seam Guard)
+  // =========================================================================
+  if (isHorizontalDual) {
+    return (
+      <div className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe">
+        {/* 左屏：CockpitOverview (Segment 0 0) */}
+        <div
+          className="h-full overflow-hidden"
+          style={{ width: 'calc(50% - 8px)' }}
+        >
+          <CockpitOverview
+            quotas={quotas}
+            selectedId={selectedId}
+            onSelectPlatform={onSelect}
+            onOpenDetail={handleOpenDetail}
+            isOnline={isOnline}
+            countdownSeconds={countdownSeconds}
+            filterAlertOnly={filterAlertOnly}
+            onToggleFilterAlert={onToggleFilterAlert}
+            handedness={handedness}
+            compact={true}
+          />
+        </div>
+
+        {/* 硬體轉軸鉸鏈中隔避讓槽 (Hinge Spine Seam - 零數據落於物理折縫) */}
+        <div
+          aria-hidden="true"
+          className="w-4 h-full bg-slate-950 border-x border-slate-900 flex items-center justify-center shrink-0"
+        >
+          <div className="w-[1px] h-1/3 bg-slate-850 rounded-full" />
+        </div>
+
+        {/* 右屏：DetailWorkbench (Segment 1 0) */}
+        <div
+          className="h-full overflow-hidden flex-1 min-w-0"
+          style={{ width: 'calc(50% - 8px)' }}
+        >
+          <DetailWorkbench
+            selectedItem={selectedItem}
+            isFocusMode={false}
+            onToggleFocus={() => {}}
+            isVoiceActive={isVoiceActive}
+            liveTranscript={liveTranscript}
+            handedness={handedness}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // 特殊形態 B：W3C Viewport Segments 垂直折疊筆電態 (vertical-viewport-segments: 2)
+  // 上半屏只讀圖表監控中樞 : 下半屏觸控控制台
+  // =========================================================================
+  if (isVerticalDual) {
+    return (
+      <div className="flex flex-col h-full w-full overflow-hidden bg-slate-950 pt-safe pb-safe">
+        <div className="h-1/2 overflow-hidden border-b border-slate-800">
+          <CockpitOverview
+            quotas={quotas}
+            selectedId={selectedId}
+            onSelectPlatform={onSelect}
+            onOpenDetail={handleOpenDetail}
+            isOnline={isOnline}
+            countdownSeconds={countdownSeconds}
+            filterAlertOnly={filterAlertOnly}
+            onToggleFilterAlert={onToggleFilterAlert}
+            handedness={handedness}
+            compact={true}
+          />
+        </div>
+        <div className="h-1/2 overflow-y-auto">
+          <DetailWorkbench
+            selectedItem={selectedItem}
+            isFocusMode={false}
+            onToggleFocus={() => {}}
+            isVoiceActive={isVoiceActive}
+            liveTranscript={liveTranscript}
+            handedness={handedness}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // ==========================================
-  // 模式 A：一頁式全景矩陣駕駛艙 (Cockpit - Includes All)
+  // 標準模式 A：一頁式全景矩陣駕駛艙 (Cockpit - Includes All)
   // ==========================================
   if (viewMode === 'cockpit') {
     return (
@@ -95,13 +227,16 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
           onOpenDetail={handleOpenDetail}
           isOnline={isOnline}
           countdownSeconds={countdownSeconds}
+          filterAlertOnly={filterAlertOnly}
+          onToggleFilterAlert={onToggleFilterAlert}
+          handedness={handedness}
         />
       </div>
     );
   }
 
   // ==========================================
-  // 模式 B：iPhone Duo 雙欄自適應佈局 (38% : 62%)
+  // 標準模式 B：iPhone Duo 雙欄自適應佈局 (38% : 62%)
   // ==========================================
   if (isLandscape) {
     return (
@@ -134,6 +269,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             onToggleFocus={() => setIsFocusMode(!isFocusMode)}
             isVoiceActive={isVoiceActive}
             liveTranscript={liveTranscript}
+            handedness={handedness}
           />
         </main>
       </div>
@@ -141,7 +277,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   }
 
   // ==========================================
-  // 直向行動端單欄切換模式
+  // 直向行動端單欄切換模式 (支援單手熱區)
   // ==========================================
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-slate-950 pt-safe pb-safe">
@@ -150,7 +286,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
           <div className="p-3 border-b border-slate-800 flex items-center bg-slate-950">
             <button
               onClick={() => setShowMobileDetail(false)}
-              className="flex items-center gap-1 text-sm font-semibold text-cyan-400 active:opacity-70 transition-all min-h-[44px]"
+              className="flex items-center gap-1 text-sm font-semibold text-cyan-400 active:opacity-70 transition-all min-h-[44px] touch-manipulation"
             >
               <ChevronLeft className="w-5 h-5" />
               返回清單
@@ -163,6 +299,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
               onToggleFocus={() => {}}
               isVoiceActive={isVoiceActive}
               liveTranscript={liveTranscript}
+              handedness={handedness}
             />
           </div>
         </div>

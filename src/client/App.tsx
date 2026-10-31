@@ -5,9 +5,11 @@ import { ModelSyncModal } from './components/ModelSyncModal';
 import { QuotaCardProps } from './components/QuotaCard';
 import { LiveBar, LiveBarSegment } from './components/LiveBar';
 import { FrequencySelector, RefreshIntervalSeconds, STORAGE_KEY_REFRESH_INTERVAL } from './components/FrequencySelector';
-import { ViewModeSelector, DashboardViewMode } from './components/ViewModeSelector';
+import { ViewModeSelector, DashboardViewMode, HandednessMode } from './components/ViewModeSelector';
 
 export const STORAGE_KEY_VIEW_MODE = 'opentokenusage_view_mode';
+export const STORAGE_KEY_HANDEDNESS = 'opentokenusage_handedness';
+export const STORAGE_KEY_FILTER_ALERT = 'opentokenusage_filter_alert';
 import { Shield, Sparkles } from 'lucide-react';
 
 // 5 大平台專屬真實基準快照 (100% SSOT Default)
@@ -269,6 +271,60 @@ export const App: React.FC = () => {
       url.searchParams.set('view', mode);
       window.history.replaceState({}, '', url.toString());
     }
+  };
+
+  // 單手握持偏好 (Apple HIG Reachability: right / left / dual)
+  const [handedness, setHandedness] = useState<HandednessMode>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlHanded = urlParams.get('handed');
+      if (urlHanded === 'right' || urlHanded === 'left' || urlHanded === 'dual') {
+        return urlHanded;
+      }
+      const saved = localStorage.getItem(STORAGE_KEY_HANDEDNESS);
+      if (saved === 'right' || saved === 'left' || saved === 'dual') {
+        return saved;
+      }
+    }
+    return 'right';
+  });
+
+  const handleChangeHandedness = (h: HandednessMode) => {
+    setHandedness(h);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY_HANDEDNESS, h);
+      const url = new URL(window.location.href);
+      url.searchParams.set('handed', h);
+      window.history.replaceState({}, '', url.toString());
+    }
+  };
+
+  // 單手快速過濾「僅告警平台」狀態
+  const [filterAlertOnly, setFilterAlertOnly] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('filter') === 'alert') return true;
+      const saved = localStorage.getItem(STORAGE_KEY_FILTER_ALERT);
+      if (saved === '1') return true;
+    }
+    return false;
+  });
+
+  const handleToggleFilterAlert = () => {
+    setFilterAlertOnly((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_FILTER_ALERT, next ? '1' : '0');
+        const url = new URL(window.location.href);
+        if (next) {
+          url.searchParams.set('filter', 'alert');
+        } else {
+          url.searchParams.delete('filter');
+        }
+        window.history.replaceState({}, '', url.toString());
+      }
+      return next;
+    });
   };
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -555,6 +611,8 @@ export const App: React.FC = () => {
             currentMode={viewMode}
             onChangeMode={handleChangeViewMode}
             governingAlertCount={quotas.filter((q) => q.remainingPercent <= 5).length}
+            handedness={handedness}
+            onChangeHandedness={handleChangeHandedness}
           />
           <FrequencySelector
             interval={refreshInterval}
@@ -589,6 +647,9 @@ export const App: React.FC = () => {
           onChangeViewMode={handleChangeViewMode}
           isOnline={isOnline}
           countdownSeconds={countdown}
+          handedness={handedness}
+          filterAlertOnly={filterAlertOnly}
+          onToggleFilterAlert={handleToggleFilterAlert}
         />
       </div>
 
@@ -598,6 +659,7 @@ export const App: React.FC = () => {
         isSyncing={isSyncing}
         onToggleVoice={toggleVoice}
         onSyncModels={handleSyncModels}
+        handedness={handedness}
       />
 
       {/* 最新活躍前瞻模型型錄 Modal */}
