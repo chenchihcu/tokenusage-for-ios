@@ -1,5 +1,6 @@
 import React from 'react';
 import { LayoutGrid, Columns2, Hand } from 'lucide-react';
+import { haptic } from '../services/haptics';
 
 export type DashboardViewMode = 'cockpit' | 'split';
 export type HandednessMode = 'right' | 'left' | 'dual';
@@ -19,21 +20,13 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
   handedness = 'right',
   onChangeHandedness,
 }) => {
-  const triggerHaptic = (ms = 10) => {
-    if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
-      try {
-        navigator.vibrate(ms);
-      } catch {}
-    }
-  };
-
   const handleSelectMode = (mode: DashboardViewMode) => {
-    triggerHaptic(10);
+    haptic.impactMedium();
     onChangeMode(mode);
   };
 
   const handleToggleHandedness = () => {
-    triggerHaptic(15);
+    haptic.impactLight();
     if (!onChangeHandedness) return;
     const nextHandedness: HandednessMode =
       handedness === 'right' ? 'left' : handedness === 'left' ? 'dual' : 'right';

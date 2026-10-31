@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>StringsTable</key>
+	<string>Root</string>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>視圖與人體工學偏好 (View & Ergonomics)</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>預設啟動視圖</string>
+			<key>Key</key>
+			<string>opentokenusage_view_mode</string>
+			<key>DefaultValue</key>
+			<string>cockpit</string>
+			<key>Titles</key>
+			<array>
+				<string>⊞ ALL 一頁式全景駕駛艙</string>
+				<string>▤ DUO 橫向雙欄工作台</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>cockpit</string>
+				<string>split</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>雙手操作握持偏好</string>
+			<key>Key</key>
+			<string>opentokenusage_handedness</string>
+			<key>DefaultValue</key>
+			<string>right</string>
+			<key>Titles</key>
+			<array>
+				<string>右手模式 (RH)</string>
+				<string>左手模式 (LH)</string>
+				<string>雙手平衡 (Dual)</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<string>right</string>
+				<string>left</string>
+				<string>dual</string>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>同步與推算策略 (Sync & Calculation)</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>背景重新整理頻率</string>
+			<key>Key</key>
+			<string>opentokenusage_refresh_interval</string>
+			<key>DefaultValue</key>
+			<integer>60</integer>
+			<key>Titles</key>
+			<array>
+				<string>15 秒 (高頻即時)</string>
+				<string>30 秒 (均衡監控)</string>
+				<string>60 秒 (標準預設 · 推薦)</string>
+				<string>5 分鐘 (極致省電)</string>
+				<string>15 分鐘 (輕量待機)</string>
+				<string>手動刷新 (停用定時器)</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<integer>15</integer>
+				<integer>30</integer>
+				<integer>60</integer>
+				<integer>300</integer>
+				<integer>900</integer>
+				<integer>0</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>智慧到期自動滿血推算</string>
+			<key>Key</key>
+			<string>opentokenusage_smart_autoreset</string>
+			<key>DefaultValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>Taptic Engine 觸覺脈動</string>
+			<key>Key</key>
+			<string>opentokenusage_haptics_enabled</string>
+			<key>DefaultValue</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>伺服端與端點 (Cloudflare Edge Endpoint)</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTextFieldSpecifier</string>
+			<key>Title</key>
+			<string>雲端端點位址</string>
+			<key>Key</key>
+			<string>opentokenusage_api_base_url</string>
+			<key>DefaultValue</key>
+			<string>https://opentokenusage-web.chihfu-chen-tw.workers.dev</string>
+			<key>IsSecure</key>
+			<false/>
+			<key>KeyboardType</key>
+			<string>URL</string>
+			<key>AutocapitalizationType</key>
+			<string>None</string>
+			<key>AutocorrectionType</key>
+			<string>No</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>版本與宣告 (About)</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSTitleValueSpecifier</string>
+			<key>Title</key>
+			<string>應用程式版本</string>
+			<key>Key</key>
+			<string>opentokenusage_app_version</string>
+			<key>DefaultValue</key>
+			<string>v1.2.0 (iPhone Duo Dedicated)</string>
+		</dict>
+	</array>
+</dict>
+</plist>

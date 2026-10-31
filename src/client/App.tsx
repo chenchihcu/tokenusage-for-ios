@@ -6,6 +6,8 @@ import { QuotaCardProps } from './components/QuotaCard';
 import { LiveBar, LiveBarSegment } from './components/LiveBar';
 import { FrequencySelector, RefreshIntervalSeconds, STORAGE_KEY_REFRESH_INTERVAL } from './components/FrequencySelector';
 import { ViewModeSelector, DashboardViewMode, HandednessMode } from './components/ViewModeSelector';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { SecureStorageService } from './services/storage';
 
 export const STORAGE_KEY_VIEW_MODE = 'opentokenusage_view_mode';
 export const STORAGE_KEY_HANDEDNESS = 'opentokenusage_handedness';
@@ -415,11 +417,23 @@ export const App: React.FC = () => {
     };
   }, [fetchQuotas]);
 
-  // 初次載入
+  // 初次載入與 iOS 原生狀態列調校
   useEffect(() => {
+    try {
+      StatusBar.setStyle({ style: Style.Dark });
+      StatusBar.setBackgroundColor({ color: '#020617' });
+    } catch {}
+
     fetchQuotas();
     fetchModels();
   }, [fetchQuotas, fetchModels]);
+
+  // 快照持久化 (供 WidgetKit 與離線推算共享)
+  useEffect(() => {
+    try {
+      SecureStorageService.setItem('opentokenusage_cached_quotas', JSON.stringify(quotas));
+    } catch {}
+  }, [quotas]);
 
   // 更新頻率切換與持久化
   const handleChangeInterval = (newInterval: RefreshIntervalSeconds) => {

@@ -4,6 +4,7 @@ import { AudioVisualizer } from './AudioVisualizer';
 import { MiniRingChart } from './MiniRingChart';
 import { TokenPool } from '../../types/quota';
 import { HandednessMode } from './ViewModeSelector';
+import { haptic } from '../services/haptics';
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -88,16 +89,8 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
     }
   }
 
-  const triggerHaptic = (ms = 10) => {
-    if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
-      try {
-        navigator.vibrate(ms);
-      } catch {}
-    }
-  };
-
   const handleSelectPreset = (tokens: number) => {
-    triggerHaptic(12);
+    haptic.impactMedium();
     setThinkingBudget(tokens);
   };
 
@@ -111,7 +104,10 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
       >
         <div className="flex items-center gap-3">
           <button
-            onClick={onToggleFocus}
+            onClick={() => {
+              haptic.impactLight();
+              onToggleFocus();
+            }}
             title={isFocusMode ? '展開導航欄' : '進入專注全寬模式 (Focus Mode)'}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/60 active:scale-95 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation"
           >

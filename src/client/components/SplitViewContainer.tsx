@@ -5,6 +5,7 @@ import { CockpitOverview } from './CockpitOverview';
 import { QuotaCardProps } from './QuotaCard';
 import { ChevronLeft } from 'lucide-react';
 import { DashboardViewMode, HandednessMode } from './ViewModeSelector';
+import { haptic } from '../services/haptics';
 
 interface SplitViewContainerProps {
   quotas: QuotaCardProps[];
@@ -111,6 +112,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   }, [selectedId, isLandscape, viewMode, handedness, filterAlertOnly]);
 
   const handleItemSelect = (id: string) => {
+    haptic.impactLight();
     onSelect(id);
     if (!isLandscape && viewMode === 'split') {
       setShowMobileDetail(true);
@@ -118,6 +120,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   };
 
   const handleOpenDetail = (id: string) => {
+    haptic.impactMedium();
     onSelect(id);
     onChangeViewMode('split');
     if (!isLandscape) {
