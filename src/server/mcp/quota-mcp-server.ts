@@ -91,11 +91,12 @@ export async function handleMcpToolCall(toolName: string, args: Record<string, a
           displayName: 'Codex',
           status: 'active',
           plan: 'Plus',
-          remainingPercent: 100,
+          remainingPercent: 0,
+          usedQuota: 100,
           sessionUsedPercent: 0,
           weeklyUsedPercent: 100,
           resetTime: '2026-11-04T06:48:16.000Z',
-          note: 'Session 滑動視窗剩餘 100%，每週共享池已用 100% (超標告警)',
+          note: '最嚴格瓶頸優先：每週共享池已用 100% (超標耗盡)，Session 0%',
         };
       }
       if (provider === 'antigravity') {
@@ -118,11 +119,12 @@ export async function handleMcpToolCall(toolName: string, args: Record<string, a
           displayName: 'Claude Code',
           status: 'active',
           plan: 'Pro',
-          remainingPercent: 100,
+          remainingPercent: 2,
+          usedQuota: 98,
           sessionUsedPercent: 0,
           weeklyUsedPercent: 98,
           resetTime: '2026-11-02T12:59:59.805Z',
-          note: 'Weekly 共享池已用 98% (剩餘 2% 告警)',
+          note: '最嚴格瓶頸優先：Weekly 共享池已用 98% (剩餘 2% 告警)，Session 0%',
         };
       }
       if (provider === 'grok') {

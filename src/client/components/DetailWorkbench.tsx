@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { QuotaCardProps } from './QuotaCard';
 import { AudioVisualizer } from './AudioVisualizer';
+import { MiniRingChart } from './MiniRingChart';
+import { TokenPool } from '../../types/quota';
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -11,6 +13,7 @@ import {
   Sparkles,
   AlertTriangle,
   Link2,
+  Layers,
 } from 'lucide-react';
 
 interface DetailWorkbenchProps {
@@ -42,16 +45,26 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
   if (!selectedItem) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center text-slate-500 bg-slate-950">
-        <Activity className="w-12 h-12 text-slate-700 mb-3 animate-pulse" />
-        <h3 className="font-semibold text-base text-slate-200">請選取左側 AI 平台</h3>
-        <p className="text-sm mt-1 max-w-sm text-slate-400">
-          點選左側清單以檢視各平台真實帳號指標、思維預算控制器與 Gemini 3.8 語音通話字幕。
-        </p>
+        <Activity className="w-10 h-10 text-slate-700 mb-2 animate-pulse" />
+        <h3 className="font-bold text-sm text-slate-300 uppercase tracking-wider">SELECT PLATFORM</h3>
       </div>
     );
   }
 
-  // 解析真實帳號多維度指標
+  // 解析真實帳號多配額池 (Token Pools)
+  let parsedPools: TokenPool[] = [];
+  if (selectedItem.token_pools_json) {
+    try {
+      const parsed = JSON.parse(selectedItem.token_pools_json);
+      if (Array.isArray(parsed)) {
+        parsedPools = parsed;
+      }
+    } catch {
+      parsedPools = [];
+    }
+  }
+
+  // 解析真實帳號多維度指標 (作為後備)
   let parsedMetrics: ParsedMetric[] = [];
   if (selectedItem.metrics_json) {
     try {
@@ -117,27 +130,48 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
           <div className="p-4 rounded-2xl glass-panel border border-slate-800/80">
             <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              Gemini 3.8 Live 即時對話字幕
+              LIVE TRANSCRIPT 字幕
             </div>
-            <p className="text-sm leading-relaxed text-slate-200 min-h-[44px]">
-              {liveTranscript || (isVoiceActive ? '正在聆聽語音指令...' : '語音休眠中。點擊右下角麥克風按鈕即可開始對話與查詢即時額度。')}
+            <p className="text-sm leading-relaxed text-slate-200 min-h-[36px] font-mono text-xs">
+              {liveTranscript || (isVoiceActive ? 'LISTENING 正在聆聽語音...' : 'STANDBY 語音休眠中')}
             </p>
           </div>
         </section>
 
-        {/* 核心高保真數據卡片格線 */}
+        {/* 核心高保真數據卡片格線 (Governing Bottleneck) */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-2xl glass-panel border border-slate-800/80">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-              <span>剩餘額度百分比</span>
-              <Activity className="w-4 h-4 text-cyan-400" />
+          <div className="p-4 rounded-2xl glass-panel border border-slate-800/80 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
+                <span className="font-mono text-[10px] uppercase font-bold">REMAINING 有效剩餘</span>
+                <Activity className="w-3.5 h-3.5 text-cyan-400" />
+              </div>
+              <div className={`text-3xl font-black font-mono tabular-nums ${selectedItem.remainingPercent <= 5 ? 'text-rose-400 animate-pulse' : 'text-white'}`}>
+                {selectedItem.remainingPercent}%
+              </div>
+              <div className={`text-[11px] font-medium mt-1 ${selectedItem.remainingPercent <= 5 ? 'text-rose-400' : selectedItem.remainingPercent < 20 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                {selectedItem.remainingPercent <= 5 ? 'CRITICAL EXHAUSTED' : selectedItem.remainingPercent < 20 ? 'LOW WATERMARK' : 'HEALTHY'}
+              </div>
             </div>
-            <div className="text-3xl font-black font-mono tabular-nums text-white">
-              {selectedItem.remainingPercent}%
-            </div>
-            <div className={`text-xs font-medium mt-1 ${selectedItem.remainingPercent < 20 ? 'text-rose-400' : 'text-emerald-400'}`}>
-              {selectedItem.remainingPercent < 20 ? '注意：額度偏低或已達上限' : '充足無阻斷風險'}
-            </div>
+            <MiniRingChart
+              value={selectedItem.remainingPercent}
+              size={56}
+              strokeWidth={5}
+              gradientId={`detail-ring-${selectedItem.id}`}
+              gradientColors={
+                selectedItem.id === 'codex'
+                  ? ['#00FF87', '#60EFFF']
+                  : selectedItem.id === 'antigravity'
+                  ? ['#4285F4', '#A855F7']
+                  : selectedItem.id === 'claude'
+                  ? ['#F59E0B', '#FB923C']
+                  : selectedItem.id === 'grok'
+                  ? ['#FF007A', '#7928CA']
+                  : ['#00F2FE', '#4FACFE']
+              }
+              isCritical={selectedItem.remainingPercent <= 5}
+              showCenterText={false}
+            />
           </div>
 
           <div className="p-4 rounded-2xl glass-panel border border-slate-800/80">
@@ -159,12 +193,113 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
             <div className="text-sm font-bold font-mono text-slate-100 truncate mt-1.5">
               {displayReset}
             </div>
-            <div className="text-xs text-slate-400 mt-1">定時自動刷新</div>
+            <div className="text-xs text-slate-400 mt-1">最緊迫週期重置日</div>
           </div>
         </section>
 
-        {/* 平台專屬多維度真實指標卡片 (Extracted from SSOT Cache) */}
-        {parsedMetrics.length > 0 && (
+        {/* 專屬：多配額池矩陣儀表板 (Multi-Pool Matrix Deck) */}
+        {parsedPools.length > 0 && (
+          <section className="p-5 rounded-2xl glass-panel border border-slate-800/80 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-xs text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                {selectedItem.name} 多配額池 (Token Pools) 獨立儀表板
+              </span>
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/40">
+                {parsedPools.length} 個配額池在線
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {parsedPools.map((pool) => {
+                const isCritical = pool.isCritical || pool.effectiveRemaining <= 5;
+                const isWarning = pool.effectiveRemaining < 20 && !isCritical;
+                return (
+                  <div
+                    key={pool.id}
+                    className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                      isCritical
+                        ? 'bg-rose-950/40 border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.2)] ring-1 ring-rose-500/30'
+                        : isWarning
+                        ? 'bg-amber-950/30 border-amber-500/40'
+                        : 'bg-slate-900/80 border-slate-800/80 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-2">
+                        <h4 className="font-bold text-sm text-slate-200 tracking-tight truncate">
+                          {pool.name}
+                        </h4>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                            isCritical
+                              ? 'bg-rose-950/80 text-rose-300 border-rose-500/50 animate-pulse'
+                              : isWarning
+                              ? 'bg-amber-950/80 text-amber-300 border-amber-500/40'
+                              : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
+                          }`}
+                        >
+                          {isCritical ? '⚠️ 耗盡告警' : isWarning ? '注意水位' : '正常可用'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline gap-1.5 mb-3">
+                        <span
+                          className={`text-2xl font-black font-mono tabular-nums ${
+                            isCritical
+                              ? 'text-rose-400 animate-pulse'
+                              : isWarning
+                              ? 'text-amber-400'
+                              : 'text-cyan-300'
+                          }`}
+                        >
+                          {pool.effectiveRemaining}%
+                        </span>
+                        <span className="text-[10px] text-slate-500 uppercase font-medium">有效剩餘</span>
+                      </div>
+                    </div>
+
+                    {/* 雙週期細項進度條 (5h vs Weekly) */}
+                    <div className="space-y-2.5 pt-2 border-t border-slate-800/80">
+                      {pool.tiers && pool.tiers.map((tier) => {
+                        const tierRemaining = tier.remaining !== undefined ? tier.remaining : Math.max(0, 100 - tier.used);
+                        const isTierAlert = tierRemaining <= 5;
+                        return (
+                          <div key={tier.id} className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px] font-mono">
+                              <span className="text-slate-400">{tier.label}</span>
+                              <span className="text-slate-200">
+                                {tierRemaining}% 剩餘
+                                {tier.resetDurationText && (
+                                  <span className="text-slate-500 text-[10px] ml-1">({tier.resetDurationText})</span>
+                                )}
+                              </span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800/60">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  isTierAlert
+                                    ? 'bg-rose-500 animate-pulse'
+                                    : tierRemaining < 20
+                                    ? 'bg-amber-400'
+                                    : 'bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-400'
+                                }`}
+                                style={{ width: `${Math.min(100, Math.max(2, tierRemaining))}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* 平台專屬多維度真實指標卡片 (後備模式) */}
+        {parsedPools.length === 0 && parsedMetrics.length > 0 && (
           <section className="p-5 rounded-2xl glass-panel border border-slate-800/80 space-y-3">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-xs text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -212,22 +347,18 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
         )}
 
         {/* 深度思考 (Extended Thinking) 預算控制器 (支援最高 100K Tokens) */}
-        <section className="p-5 rounded-2xl glass-panel border border-slate-800/80 space-y-4">
+        <section className="p-4 rounded-2xl glass-panel border border-slate-800/80 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <BrainCircuit className="w-5 h-5 text-cyan-400" />
-              <h3 className="font-semibold text-base text-slate-100">
-                思維鏈 (Thinking Budget) 預算調校
+              <BrainCircuit className="w-4 h-4 text-cyan-400" />
+              <h3 className="font-bold text-xs uppercase tracking-wider text-slate-300 font-mono">
+                THINKING BUDGET 思維鏈預算
               </h3>
             </div>
-            <span className="tabular-nums font-mono text-sm px-2.5 py-1 rounded-lg bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 font-semibold">
-              {thinkingBudget.toLocaleString()} Tokens
+            <span className="tabular-nums font-mono text-xs px-2 py-0.5 rounded-md bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 font-bold">
+              {thinkingBudget.toLocaleString()} TOKENS
             </span>
           </div>
-
-          <p className="text-xs text-slate-400 leading-relaxed">
-            針對 o3-mini (100K)、Gemini 3.8 Flash (65K) 與 Claude 3.7 Sonnet (64K) 調節推理預算上限。更高的預算可強化複雜演算法設計與代碼除錯能力，預算用盡時自動啟動硬阻斷防爆帳單。
-          </p>
 
           <input
             type="range"

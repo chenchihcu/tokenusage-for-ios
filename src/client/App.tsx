@@ -5,6 +5,9 @@ import { ModelSyncModal } from './components/ModelSyncModal';
 import { QuotaCardProps } from './components/QuotaCard';
 import { LiveBar, LiveBarSegment } from './components/LiveBar';
 import { FrequencySelector, RefreshIntervalSeconds, STORAGE_KEY_REFRESH_INTERVAL } from './components/FrequencySelector';
+import { ViewModeSelector, DashboardViewMode } from './components/ViewModeSelector';
+
+export const STORAGE_KEY_VIEW_MODE = 'opentokenusage_view_mode';
 import { Shield, Sparkles } from 'lucide-react';
 
 // 5 大平台專屬真實基準快照 (100% SSOT Default)
@@ -31,8 +34,8 @@ const INITIAL_REAL_QUOTAS: QuotaCardProps[] = [
     name: 'Codex',
     planName: 'Plus',
     totalQuota: 100,
-    usedQuota: 0,
-    remainingPercent: 100,
+    usedQuota: 100,
+    remainingPercent: 0,
     resetTime: '2026-11-04T06:48:16.000Z',
     status: 'active',
     metrics_json: JSON.stringify([
@@ -48,14 +51,52 @@ const INITIAL_REAL_QUOTAS: QuotaCardProps[] = [
     name: 'Google Antigravity',
     planName: 'Google AI Pro',
     totalQuota: 100,
-    usedQuota: 8,
-    remainingPercent: 92,
-    resetTime: '2026-10-30T23:29:29Z',
+    usedQuota: 69,
+    remainingPercent: 31,
+    resetTime: '2026-11-02T16:54:00Z',
     status: 'active',
     metrics_json: JSON.stringify([
-      { label: 'Session', used: 8.0, limit: 100.0, kind: 'percent' },
-      { label: 'Claude Sub-Session', used: 0.0, limit: 100.0, kind: 'percent' },
-      { label: 'Claude Weekly', used: 54.0, limit: 100.0, kind: 'percent' }
+      { label: 'Gemini (5h)', used: 5.0, limit: 100.0, kind: 'percent' },
+      { label: 'Gemini (週)', used: 69.0, limit: 100.0, kind: 'percent' },
+      { label: 'Claude (週)', used: 54.0, limit: 100.0, kind: 'percent' },
+      { label: 'Argon', used: 100.0, limit: 100.0, kind: 'percent', isAlert: true }
+    ]),
+    token_pools_json: JSON.stringify([
+      {
+        id: 'gemini_models',
+        name: 'Gemini Models',
+        effectiveRemaining: 31.0,
+        effectiveUsed: 69.0,
+        primaryResetTime: '2026-11-02T16:54:00Z',
+        isCritical: false,
+        tiers: [
+          { id: 'weekly', label: 'Weekly limit', used: 69.0, limit: 100.0, remaining: 31.0, resetsAt: '2026-11-02T16:54:00Z', resetDurationText: '2d 9h', isGoverning: true },
+          { id: '5h', label: '5h limit', used: 5.0, limit: 100.0, remaining: 95.0, resetsAt: '2026-10-31T12:31:00Z', resetDurationText: '4h 37m', isGoverning: false }
+        ]
+      },
+      {
+        id: 'claude_gpt',
+        name: 'Claude and GPT models',
+        effectiveRemaining: 46.0,
+        effectiveUsed: 54.0,
+        primaryResetTime: '2026-11-02T16:54:00Z',
+        isCritical: false,
+        tiers: [
+          { id: 'weekly', label: 'Weekly limit', used: 54.0, limit: 100.0, remaining: 46.0, resetsAt: '2026-11-02T16:54:00Z', resetDurationText: '2d 9h', isGoverning: true },
+          { id: '5h', label: '5h limit', used: 0.0, limit: 100.0, remaining: 100.0, resetsAt: null, resetDurationText: '100% left', isGoverning: false }
+        ]
+      },
+      {
+        id: 'gemini_4_argon',
+        name: 'Gemini 4 Argon',
+        effectiveRemaining: 0.0,
+        effectiveUsed: 100.0,
+        primaryResetTime: '2026-11-02T15:54:00Z',
+        isCritical: true,
+        tiers: [
+          { id: 'weekly', label: 'Weekly limit', used: 100.0, limit: 100.0, remaining: 0.0, resetsAt: '2026-11-02T15:54:00Z', resetDurationText: '2d 8h', isGoverning: true }
+        ]
+      }
     ]),
     fetched_at: '2026-10-30T22:57:18.6093812Z'
   },
@@ -64,8 +105,8 @@ const INITIAL_REAL_QUOTAS: QuotaCardProps[] = [
     name: 'Claude Code',
     planName: 'Pro',
     totalQuota: 100,
-    usedQuota: 0,
-    remainingPercent: 100,
+    usedQuota: 98,
+    remainingPercent: 2,
     resetTime: '2026-11-02T12:59:59.805Z',
     status: 'active',
     metrics_json: JSON.stringify([
@@ -93,6 +134,84 @@ const INITIAL_REAL_QUOTAS: QuotaCardProps[] = [
   }
 ];
 
+// 智慧到期自動滿血推算 (Smart Quota Auto-Reset Guard)
+// 當當前時間超過重置時間點，前端自動計算為 100% 滿血，離線或未即時同步時不卡舊 0% 狀態
+function applySmartAutoReset(items: QuotaCardProps[]): QuotaCardProps[] {
+  const now = Date.now();
+  return items.map((item) => {
+    let updatedItem = { ...item };
+
+    if (updatedItem.token_pools_json) {
+      try {
+        const pools = JSON.parse(updatedItem.token_pools_json);
+        if (Array.isArray(pools)) {
+          let hasPoolChanged = false;
+          const updatedPools = pools.map((pool: any) => {
+            const poolTiers = pool.tiers || [];
+            let tierChanged = false;
+            const updatedTiers = poolTiers.map((t: any) => {
+              if (t.resetsAt) {
+                const rTime = new Date(t.resetsAt).getTime();
+                if (!isNaN(rTime) && now >= rTime && (t.remaining === 0 || t.used >= 100)) {
+                  tierChanged = true;
+                  return {
+                    ...t,
+                    used: 0,
+                    remaining: 100,
+                    resetDurationText: '已重置 (滿血)',
+                    isGoverning: false,
+                  };
+                }
+              }
+              return t;
+            });
+
+            if (tierChanged) {
+              hasPoolChanged = true;
+              const effRemaining = Math.min(...updatedTiers.map((t: any) => t.remaining ?? 100));
+              const effUsed = Math.max(...updatedTiers.map((t: any) => t.used ?? 0));
+              return {
+                ...pool,
+                effectiveRemaining: effRemaining,
+                effectiveUsed: effUsed,
+                isCritical: effRemaining <= 5,
+                tiers: updatedTiers,
+              };
+            }
+            return pool;
+          });
+
+          if (hasPoolChanged) {
+            updatedItem.token_pools_json = JSON.stringify(updatedPools);
+            if (updatedItem.id === 'antigravity') {
+              const workhorses = updatedPools.filter((p: any) => p.id === 'gemini_models' || p.id === 'claude_gpt');
+              if (workhorses.length > 0) {
+                const minRemaining = Math.min(...workhorses.map((p: any) => p.effectiveRemaining));
+                updatedItem.remainingPercent = minRemaining;
+                updatedItem.usedQuota = 100 - minRemaining;
+              }
+            } else {
+              const minRemaining = Math.min(...updatedPools.map((p: any) => p.effectiveRemaining));
+              updatedItem.remainingPercent = minRemaining;
+              updatedItem.usedQuota = 100 - minRemaining;
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (updatedItem.resetTime && updatedItem.resetTime.includes('T')) {
+      const rTime = new Date(updatedItem.resetTime).getTime();
+      if (!isNaN(rTime) && now >= rTime && updatedItem.remainingPercent === 0) {
+        updatedItem.remainingPercent = 100;
+        updatedItem.usedQuota = 0;
+      }
+    }
+
+    return updatedItem;
+  });
+}
+
 export const App: React.FC = () => {
   const [quotas, setQuotas] = useState<QuotaCardProps[]>(INITIAL_REAL_QUOTAS);
   const [selectedId, setSelectedId] = useState<string>('cursor');
@@ -102,6 +221,13 @@ export const App: React.FC = () => {
   const [isModelModalOpen, setIsModelModalOpen] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [models, setModels] = useState<any[]>([]);
+
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    if (typeof navigator !== 'undefined') {
+      return navigator.onLine;
+    }
+    return true;
+  });
 
   // 使用者自訂更新頻率 (預設 60 秒，支援 localStorage 持久化)
   const [refreshInterval, setRefreshInterval] = useState<RefreshIntervalSeconds>(() => {
@@ -119,13 +245,46 @@ export const App: React.FC = () => {
 
   const [countdown, setCountdown] = useState<number>(refreshInterval > 0 ? refreshInterval : 0);
 
+  // 視圖模式狀態 (預設一頁式全景駕駛艙 cockpit，支援 localStorage 與 URL 同步)
+  const [viewMode, setViewMode] = useState<DashboardViewMode>(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlView = urlParams.get('view');
+      if (urlView === 'cockpit' || urlView === 'split') {
+        return urlView;
+      }
+      const saved = localStorage.getItem(STORAGE_KEY_VIEW_MODE);
+      if (saved === 'cockpit' || saved === 'split') {
+        return saved;
+      }
+    }
+    return 'cockpit';
+  });
+
+  const handleChangeViewMode = (mode: DashboardViewMode) => {
+    setViewMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY_VIEW_MODE, mode);
+      const url = new URL(window.location.href);
+      url.searchParams.set('view', mode);
+      window.history.replaceState({}, '', url.toString());
+    }
+  };
+
   const wsRef = useRef<WebSocket | null>(null);
 
   const fetchQuotas = useCallback(async () => {
+    // 網路連線感知：若離線則僅套用智慧到期推算，不發送無效請求
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setQuotas((prev) => applySmartAutoReset(prev));
+      return;
+    }
+
     try {
       setIsSyncing(true);
       const res = await fetch('/api/quotas');
       if (res.status === 304) {
+        setQuotas((prev) => applySmartAutoReset(prev));
         return; // 快取命中
       }
       const data = await res.json();
@@ -136,16 +295,18 @@ export const App: React.FC = () => {
           planName: item.plan_name || 'Standard',
           totalQuota: item.total_quota || 100,
           usedQuota: item.used_quota || 0,
-          remainingPercent: item.remaining_percent || 0,
+          remainingPercent: item.remaining_percent ?? 0,
           resetTime: item.reset_time || '每月重置',
           status: item.status || 'active',
+          token_pools_json: item.token_pools_json,
           metrics_json: item.metrics_json,
           fetched_at: item.fetched_at,
         }));
-        setQuotas(mapped);
+        setQuotas(applySmartAutoReset(mapped));
       }
     } catch {
-      // 離線降級：保留既有真實快照
+      // 離線降級：保留既有真實快照並套用到期滿血
+      setQuotas((prev) => applySmartAutoReset(prev));
     } finally {
       setIsSyncing(false);
     }
@@ -179,6 +340,25 @@ export const App: React.FC = () => {
     ]);
   }, []);
 
+  // 連線感知監聽器 (Online/Offline Network Detection)
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      fetchQuotas();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [fetchQuotas]);
+
   // 初次載入
   useEffect(() => {
     fetchQuotas();
@@ -197,10 +377,10 @@ export const App: React.FC = () => {
     }
   };
 
-  // 背景輪詢計時器 + Page Visibility API 節能守衛
+  // 背景輪詢計時器 + Page Visibility API 節能守衛 + 離線掛起守衛
   useEffect(() => {
-    if (refreshInterval === 0) {
-      return; // 手動模式不啟動定時器
+    if (refreshInterval === 0 || !isOnline) {
+      return; // 手動模式或離線時不啟動定時器
     }
 
     const timer = setInterval(() => {
@@ -220,7 +400,7 @@ export const App: React.FC = () => {
 
     // 頁面重新回到前景時立即補償刷新
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && refreshInterval > 0) {
+      if (document.visibilityState === 'visible' && refreshInterval > 0 && isOnline) {
         fetchQuotas();
         setCountdown(refreshInterval);
       }
@@ -232,7 +412,7 @@ export const App: React.FC = () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [refreshInterval, fetchQuotas]);
+  }, [refreshInterval, fetchQuotas, isOnline]);
 
   // 組裝 Live Bar 5 色分段
   const liveSegments: LiveBarSegment[] = quotas.map((q) => {
@@ -253,6 +433,7 @@ export const App: React.FC = () => {
         remainingPercent: q.remainingPercent,
         gradient: 'bg-gradient-to-r from-[#00FF87] to-[#60EFFF]',
         glowColor: '0 0 12px rgba(0,255,135,0.4)',
+        isAlert: q.remainingPercent <= 5,
       };
     }
     if (q.id === 'antigravity') {
@@ -262,6 +443,8 @@ export const App: React.FC = () => {
         remainingPercent: q.remainingPercent,
         gradient: 'bg-gradient-to-r from-[#4285F4] via-[#A855F7] to-[#EC4899]',
         glowColor: '0 0 12px rgba(168,85,247,0.4)',
+        isAlert: q.remainingPercent <= 5,
+        label: 'Gemini 31% · Claude 46% · Argon 0% ⚠️',
       };
     }
     if (q.id === 'claude') {
@@ -269,8 +452,8 @@ export const App: React.FC = () => {
         id: 'claude',
         name: 'Claude Code',
         remainingPercent: q.remainingPercent,
-        gradient: 'bg-gradient-to-r from-[#FF8A00] to-[#FF4E50]',
-        glowColor: '0 0 12px rgba(255,138,0,0.4)',
+        gradient: 'bg-gradient-to-r from-amber-400 to-orange-400',
+        glowColor: '0 0 12px rgba(245,158,11,0.4)',
         isAlert: q.remainingPercent <= 5,
       };
     }
@@ -368,6 +551,11 @@ export const App: React.FC = () => {
 
         {/* 右側：更新頻率選擇器與手動刷新按鈕 */}
         <div className="flex items-center gap-2">
+          <ViewModeSelector
+            currentMode={viewMode}
+            onChangeMode={handleChangeViewMode}
+            governingAlertCount={quotas.filter((q) => q.remainingPercent <= 5).length}
+          />
           <FrequencySelector
             interval={refreshInterval}
             onChangeInterval={handleChangeInterval}
@@ -385,6 +573,7 @@ export const App: React.FC = () => {
         isSyncing={isSyncing}
         onTriggerSync={fetchQuotas}
         isVoiceActive={isVoiceActive}
+        isOnline={isOnline}
       />
 
       {/* 主工作區：iPhone Duo 雙欄或單欄自適應 */}
@@ -396,6 +585,10 @@ export const App: React.FC = () => {
           isLoading={isLoading}
           isVoiceActive={isVoiceActive}
           liveTranscript={liveTranscript}
+          viewMode={viewMode}
+          onChangeViewMode={handleChangeViewMode}
+          isOnline={isOnline}
+          countdownSeconds={countdown}
         />
       </div>
 

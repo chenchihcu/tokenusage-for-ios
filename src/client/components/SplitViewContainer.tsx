@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { MasterList } from './MasterList';
 import { DetailWorkbench } from './DetailWorkbench';
+import { CockpitOverview } from './CockpitOverview';
 import { QuotaCardProps } from './QuotaCard';
 import { ChevronLeft } from 'lucide-react';
+import { DashboardViewMode } from './ViewModeSelector';
 
 interface SplitViewContainerProps {
   quotas: QuotaCardProps[];
@@ -11,6 +13,10 @@ interface SplitViewContainerProps {
   isLoading: boolean;
   isVoiceActive: boolean;
   liveTranscript: string;
+  viewMode: DashboardViewMode;
+  onChangeViewMode: (mode: DashboardViewMode) => void;
+  isOnline: boolean;
+  countdownSeconds: number;
 }
 
 export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
@@ -20,6 +26,10 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   isLoading,
   isVoiceActive,
   liveTranscript,
+  viewMode,
+  onChangeViewMode,
+  isOnline,
+  countdownSeconds,
 }) => {
   const [isLandscape, setIsLandscape] = useState<boolean>(true);
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
@@ -28,7 +38,9 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   // 監聽螢幕方向與尺寸變化 (Apple HIG 橫向視窗判定)
   useEffect(() => {
     const checkOrientation = () => {
-      const isWide = window.innerWidth >= 768 || (window.innerWidth > window.innerHeight && window.innerWidth >= 640);
+      const isWide =
+        window.innerWidth >= 768 ||
+        (window.innerWidth > window.innerHeight && window.innerWidth >= 640);
       setIsLandscape(isWide);
     };
 
@@ -42,18 +54,27 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
     };
   }, []);
 
-  // URL 深度連結同步 (State Restoration)
+  // URL 深度連結同步 (State Restoration: 平台選取與視圖模式)
   useEffect(() => {
     if (typeof window !== 'undefined' && selectedId) {
       const url = new URL(window.location.href);
       url.searchParams.set('provider', selectedId);
+      url.searchParams.set('view', viewMode);
       if (isLandscape) url.searchParams.set('duo', '1');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [selectedId, isLandscape]);
+  }, [selectedId, isLandscape, viewMode]);
 
   const handleItemSelect = (id: string) => {
     onSelect(id);
+    if (!isLandscape && viewMode === 'split') {
+      setShowMobileDetail(true);
+    }
+  };
+
+  const handleOpenDetail = (id: string) => {
+    onSelect(id);
+    onChangeViewMode('split');
     if (!isLandscape) {
       setShowMobileDetail(true);
     }
@@ -61,7 +82,27 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
 
   const selectedItem = quotas.find((q) => q.id === selectedId);
 
-  // 橫向 iPhone Duo 雙欄自適應佈局 (38% : 62%)
+  // ==========================================
+  // 模式 A：一頁式全景矩陣駕駛艙 (Cockpit - Includes All)
+  // ==========================================
+  if (viewMode === 'cockpit') {
+    return (
+      <div className="h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe">
+        <CockpitOverview
+          quotas={quotas}
+          selectedId={selectedId}
+          onSelectPlatform={onSelect}
+          onOpenDetail={handleOpenDetail}
+          isOnline={isOnline}
+          countdownSeconds={countdownSeconds}
+        />
+      </div>
+    );
+  }
+
+  // ==========================================
+  // 模式 B：iPhone Duo 雙欄自適應佈局 (38% : 62%)
+  // ==========================================
   if (isLandscape) {
     return (
       <div className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island">
@@ -69,7 +110,9 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
         <aside
           aria-label="AI 平台清單"
           className={`h-full transition-apple overflow-hidden ${
-            isFocusMode ? 'w-0 opacity-0 pointer-events-none' : 'w-[38%] min-w-[280px] max-w-[420px] opacity-100'
+            isFocusMode
+              ? 'w-0 opacity-0 pointer-events-none'
+              : 'w-[38%] min-w-[280px] max-w-[420px] opacity-100'
           }`}
         >
           <MasterList
@@ -97,7 +140,9 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
     );
   }
 
+  // ==========================================
   // 直向行動端單欄切換模式
+  // ==========================================
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-slate-950 pt-safe pb-safe">
       {showMobileDetail ? (

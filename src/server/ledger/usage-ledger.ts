@@ -2,6 +2,7 @@ export interface LedgerEntry {
   id: string;
   provider: string;
   modelId: string;
+  poolId?: string;
   promptTokens: number;
   completionTokens: number;
   thinkingTokens: number;
@@ -19,6 +20,7 @@ export interface QuotaGuardPolicy {
 
 export class UsageLedgerService {
   private inMemoryLedger: LedgerEntry[] = [];
+  private exhaustedPools = new Set<string>();
   private policy: QuotaGuardPolicy = {
     dailySpendLimitUsd: 10.0,
     monthlySpendLimitUsd: 50.0,
@@ -26,9 +28,31 @@ export class UsageLedgerService {
   };
 
   /**
-   * 記錄 Token 與花費，並檢查 Quota Hard Stop
+   * 設定特定模型池狀態 (例如 Argon 剩餘 0% 設為耗盡)
+   */
+  setPoolStatus(poolId: string, remainingPercent: number) {
+    if (remainingPercent <= 0) {
+      this.exhaustedPools.add(poolId);
+    } else {
+      this.exhaustedPools.delete(poolId);
+    }
+  }
+
+  isPoolBlocked(poolId: string): boolean {
+    return this.exhaustedPools.has(poolId);
+  }
+
+  /**
+   * 記錄 Token 與花費，並檢查 Quota Hard Stop (支援日限額與池級阻斷)
    */
   async recordUsage(entry: Omit<LedgerEntry, 'id' | 'createdAt'>): Promise<LedgerEntry> {
+    // 檢查池級配額硬阻斷 (Pool-Level Hard Stop)
+    if (entry.poolId && this.isPoolBlocked(entry.poolId)) {
+      throw new Error(
+        `[Pool Quota Hard Stop] 模型配額池 (${entry.poolId}) 已 100% 耗盡，已啟動池級保護硬阻斷`
+      );
+    }
+
     const totalTokens = entry.promptTokens + entry.completionTokens + (entry.thinkingTokens || 0);
     const newEntry: LedgerEntry = {
       ...entry,

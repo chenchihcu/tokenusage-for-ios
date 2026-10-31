@@ -263,8 +263,8 @@ export const DEFAULT_REAL_QUOTAS: ProviderQuotaRecord[] = [
     name: 'Codex',
     plan_name: 'Plus',
     total_quota: 100,
-    used_quota: 0,
-    remaining_percent: 100,
+    used_quota: 100,
+    remaining_percent: 0,
     reset_time: '2026-11-04T06:48:16.000Z',
     status: 'active',
     metrics_json: JSON.stringify([
@@ -296,8 +296,8 @@ export const DEFAULT_REAL_QUOTAS: ProviderQuotaRecord[] = [
     name: 'Claude Code',
     plan_name: 'Pro',
     total_quota: 100,
-    used_quota: 0,
-    remaining_percent: 100,
+    used_quota: 98,
+    remaining_percent: 2,
     reset_time: '2026-11-02T12:59:59.805Z',
     status: 'active',
     metrics_json: JSON.stringify([
@@ -419,8 +419,8 @@ export default {
           for (const item of items) {
             await env.DB.prepare(`
               INSERT OR REPLACE INTO provider_quotas (
-                provider_id, name, plan_name, total_quota, used_quota, remaining_percent, reset_time, status, metrics_json, fetched_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                provider_id, name, plan_name, total_quota, used_quota, remaining_percent, reset_time, status, metrics_json, token_pools_json, fetched_at, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             `).bind(
               item.provider_id,
               item.name,
@@ -431,6 +431,7 @@ export default {
               item.reset_time,
               item.status || 'active',
               item.metrics_json || null,
+              item.token_pools_json || null,
               item.fetched_at || new Date().toISOString()
             ).run();
           }

@@ -20,6 +20,7 @@ export interface LiveBarProps {
   onTriggerSync: () => void;
   isVoiceActive: boolean;
   audioLevels?: number[];
+  isOnline?: boolean;
 }
 
 export const LiveBar: React.FC<LiveBarProps> = ({
@@ -31,6 +32,7 @@ export const LiveBar: React.FC<LiveBarProps> = ({
   onTriggerSync,
   isVoiceActive,
   audioLevels = [],
+  isOnline = true,
 }) => {
   return (
     <div className="w-full bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-xl relative z-20 overflow-hidden">
@@ -45,21 +47,39 @@ export const LiveBar: React.FC<LiveBarProps> = ({
           <button
             type="button"
             onClick={onTriggerSync}
-            disabled={isSyncing}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-white hover:border-slate-700 transition-all group"
-            title="點擊立即加速更新"
+            disabled={isSyncing || !isOnline}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs transition-all group ${
+              isOnline
+                ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+                : 'bg-amber-950/40 border-amber-600/40 text-amber-300'
+            }`}
+            title={isOnline ? '點擊立即加速更新' : '離線模式：當前使用本機離線快取'}
           >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="font-mono text-[11px] font-bold tracking-wider text-emerald-400 uppercase">
-              LIVE
-            </span>
-            <span className="tabular-nums font-mono text-[11px] text-slate-400 group-hover:text-cyan-300">
-              {countdownSeconds > 0 ? `${countdownSeconds}s` : '手動'}
-            </span>
-            <RefreshCw className={`w-3 h-3 text-slate-400 group-hover:text-cyan-400 transition-transform ${isSyncing ? 'animate-spin' : ''}`} />
+            {isOnline ? (
+              <>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="font-mono text-[11px] font-bold tracking-wider text-emerald-400 uppercase">
+                  LIVE
+                </span>
+                <span className="tabular-nums font-mono text-[11px] text-slate-400 group-hover:text-cyan-300">
+                  {countdownSeconds > 0 ? `${countdownSeconds}s` : '手動'}
+                </span>
+                <RefreshCw className={`w-3 h-3 text-slate-400 group-hover:text-cyan-400 transition-transform ${isSyncing ? 'animate-spin' : ''}`} />
+              </>
+            ) : (
+              <>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+                <span className="font-mono text-[11px] font-bold tracking-wider text-amber-400">
+                  離線快取
+                </span>
+                <span className="text-[10px] text-amber-400/80">
+                  (暫停輪詢)
+                </span>
+              </>
+            )}
           </button>
 
           <span className="text-[11px] font-medium text-slate-400 hidden md:inline-flex items-center gap-1">
@@ -110,7 +130,7 @@ export const LiveBar: React.FC<LiveBarProps> = ({
                         ? 'bg-slate-800/90 ring-1 ring-cyan-500/40 shadow-lg'
                         : 'hover:bg-slate-800/50'
                     }`}
-                    title={`${seg.name}: 剩餘 ${seg.remainingPercent}%`}
+                    title={`${seg.name}: 剩餘 ${seg.remainingPercent}%${seg.label ? ` (${seg.label})` : ''}`}
                   >
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="font-semibold truncate text-slate-300 group-hover:text-white">

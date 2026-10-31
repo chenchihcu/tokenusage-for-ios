@@ -25,6 +25,7 @@ export interface ProviderQuotaRecord {
   remaining_percent: number;
   reset_time: string;
   status: string;
+  token_pools_json?: string;
   metrics_json?: string;
   fetched_at?: string;
   updated_at?: string;
