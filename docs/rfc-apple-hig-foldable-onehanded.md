@@ -1,6 +1,6 @@
 # 技術規格書 RFC：Apple HIG 折疊屏滿版瀏覽與單手人體工學架構 (Apple HIG Foldable Edge-to-Edge & One-Handed Ergonomics)
 
-- **狀態**：RFC Draft (待審查)
+- **狀態**：Implemented & Deployed (已落地合入 main 並於 v1.2.0 正式發布)
 - **領域**：前端 Web 儀表板、Apple HIG 規範落實、W3C Foldable CSS Viewport Segments、單手握持熱區 (Reachability)
 - **相依規格**：[docs/rfc-dashboard-onepage-viewmode.md](file:///C:/Users/user/.gemini/antigravity/scratch/opentokenusage-web/docs/rfc-dashboard-onepage-viewmode.md)、[docs/rfc-multi-token-pools.md](file:///C:/Users/user/.gemini/antigravity/scratch/opentokenusage-web/docs/rfc-multi-token-pools.md)
 - **規範基準**：Apple Human Interface Guidelines (HIG - iOS 17/18) 佈局標準、W3C CSS Viewport Segments Specification、Device Posture API

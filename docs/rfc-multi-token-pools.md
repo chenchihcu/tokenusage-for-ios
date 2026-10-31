@@ -1,5 +1,7 @@
 # RFC-003：支援平台多配額池 (Multi-Token Pools) 與階層式雙層瓶頸架構規格書
 
+- **狀態**：Implemented & Deployed (已落地合入 main 正式發布)
+
 本規格書依據前次工作階段 [[45d77b32](conversation://45d77b32-65e4-44f0-bbdc-906cd61f9dc5)] 之根因定位、用戶提供之 Google Antigravity 實機截圖，以及本次 `/grill-me` 深度架構訪談決策，制定 OpenTokenUsage 全端系統支援「多配額池 (Multi-Token Pools)」之技術藍圖與架構決策。
 
 ---

@@ -1,6 +1,6 @@
 # 技術規格書 RFC：連線感知與自適應頻率資料同步架構 (Network-Aware & Adaptive Cadence Data Sync)
 
-- **狀態**：RFC Draft (待審查)
+- **狀態**：Implemented & Deployed (已落地合入 main 正式發布)
 - **領域**：前端 Web 儀表板、邊緣 Edge Worker、桌面端同步守護進程 (Sync Daemon)
 - **相依規格**：[docs/rfc-multi-token-pools.md](file:///C:/Users/user/.gemini/antigravity/scratch/opentokenusage-web/docs/rfc-multi-token-pools.md)
 

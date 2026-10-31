@@ -1,6 +1,6 @@
 # 技術規格書 RFC：一頁式極簡監控儀表板與 iPhone Duo 全覽視圖模式架構 (One-Page High-Density Cockpit & iPhone Duo ViewMode)
 
-- **狀態**：RFC Draft (待審查)
+- **狀態**：Implemented & Deployed (已落地合入 main 並於 v1.1.0 / v1.2.0 正式發布)
 - **領域**：前端 Web 儀表板、視覺資料流、Apple HIG 行動人體工學、多平台額度監控
 - **相依規格**：[docs/rfc-multi-token-pools.md](file:///C:/Users/user/.gemini/antigravity/scratch/opentokenusage-web/docs/rfc-multi-token-pools.md)、[docs/rfc-adaptive-network-sync.md](file:///C:/Users/user/.gemini/antigravity/scratch/opentokenusage-web/docs/rfc-adaptive-network-sync.md)
 
