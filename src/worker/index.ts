@@ -1,4 +1,5 @@
 import { Env, ProviderQuotaRecord, ModelCatalogItem } from './env';
+import { securityHeaders as allowlistedHeaders } from '../shared/cors';
 export { VoiceSessionDO } from './durable-objects/VoiceSessionDO';
 
 const ALLOWED_SSRF_HOSTS = [
@@ -329,14 +330,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // 1. 安全標頭中介層 (Security Headers)
+    // 1. 安全標頭。只反射允許的 App / 開發 origin，不使用 *。
     const securityHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, If-None-Match',
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'strict-origin-when-cross-origin'
+      ...allowlistedHeaders(request.headers.get('Origin')),
+      'X-Request-Id': crypto.randomUUID(),
     };
 
     if (request.method === 'OPTIONS') {

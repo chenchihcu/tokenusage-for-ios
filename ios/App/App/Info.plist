@@ -49,7 +49,6 @@
 	<string>OpenTokenUsage 需要麥克風權限以進行 Gemini 3.8 Live API 實時雙向語音對話與配額查詢</string>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
 		<string>audio</string>
 	</array>
 	<key>NSAppTransportSecurity</key>

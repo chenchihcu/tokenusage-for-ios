@@ -53,7 +53,7 @@ export const MasterList: React.FC<MasterListProps> = ({
             placeholder="搜尋平台 (Cursor, Codex, Grok...)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm bg-slate-900 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all min-h-[44px]"
+            className="w-full pl-9 pr-4 py-2 text-base bg-slate-900 border border-slate-800 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all min-h-[44px]"
           />
         </div>
       </div>

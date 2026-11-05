@@ -47,7 +47,7 @@ export const LiveBar: React.FC<LiveBarProps> = ({
           <button
             type="button"
             onClick={onTriggerSync}
-            disabled={isSyncing || !isOnline}
+            disabled={isSyncing}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs transition-all group ${
               isOnline
                 ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'

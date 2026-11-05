@@ -81,6 +81,12 @@
 ### 7. 自適應桌面帳號同步守護程式
 - `scripts/sync-desktop-accounts.py` 與 `scripts/sync-desktop-daemon.py`。
 - 本機桌面快取自適應增量推送，具備指數退避重試與邊緣安全 User-Agent 標頭防護。
+- 桌面守護程式直接 POST 公開 HTTPS Worker。手機不參與這條推送，也不需要 Tailscale。
+
+### 8. iPhone 安裝版直連公開 Internet
+- 安裝版 UI 在本機 WebView，API 使用 `https://opentokenusage-web.chihfu-chen-tw.workers.dev`。路徑由 iOS 選擇（Wi-Fi 或行動數據），App 不指定 SIM、5G 或 VPN。
+- `CapacitorHttp` 維持關閉。連線狀態拆成路徑、API、登入與資料，不再用單一 `navigator.onLine`。
+- 前景才輪詢。寫入沒有冪等契約時，逾時保留「結果待確認」，不自動重送。
 
 ---
 

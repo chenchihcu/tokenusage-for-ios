@@ -8,6 +8,8 @@ import { FrequencySelector, RefreshIntervalSeconds, STORAGE_KEY_REFRESH_INTERVAL
 import { ViewModeSelector, DashboardViewMode, HandednessMode } from './components/ViewModeSelector';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SecureStorageService } from './services/storage';
+import { ConnectionStatus } from './components/ConnectionStatus';
+import { useDirectInternet } from './hooks/useDirectInternet';
 
 export const STORAGE_KEY_VIEW_MODE = 'opentokenusage_view_mode';
 export const STORAGE_KEY_HANDEDNESS = 'opentokenusage_handedness';
@@ -226,13 +228,6 @@ export const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [models, setModels] = useState<any[]>([]);
 
-  const [isOnline, setIsOnline] = useState<boolean>(() => {
-    if (typeof navigator !== 'undefined') {
-      return navigator.onLine;
-    }
-    return true;
-  });
-
   // 使用者自訂更新頻率 (預設 60 秒，支援 localStorage 持久化)
   const [refreshInterval, setRefreshInterval] = useState<RefreshIntervalSeconds>(() => {
     if (typeof window !== 'undefined') {
@@ -247,7 +242,10 @@ export const App: React.FC = () => {
     return 60;
   });
 
-  const [countdown, setCountdown] = useState<number>(refreshInterval > 0 ? refreshInterval : 0);
+  const net = useDirectInternet({
+    refreshInterval,
+    onQuotas: (items) => setQuotas(applySmartAutoReset(items)),
+  });
 
   // 視圖模式狀態 (預設一頁式全景駕駛艙 cockpit，支援 localStorage 與 URL 同步)
   const [viewMode, setViewMode] = useState<DashboardViewMode>(() => {
@@ -331,56 +329,14 @@ export const App: React.FC = () => {
 
   const wsRef = useRef<WebSocket | null>(null);
 
-  const fetchQuotas = useCallback(async () => {
-    // 網路連線感知：若離線則僅套用智慧到期推算，不發送無效請求
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setQuotas((prev) => applySmartAutoReset(prev));
+  const fetchModels = useCallback(async () => {
+    const result = await net.syncModels();
+    if (result.outcome === 'confirmed' && result.models) {
+      setModels(result.models);
       return;
     }
 
-    try {
-      setIsSyncing(true);
-      const res = await fetch('/api/quotas');
-      if (res.status === 304) {
-        setQuotas((prev) => applySmartAutoReset(prev));
-        return; // 快取命中
-      }
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        const mapped: QuotaCardProps[] = data.data.map((item: any) => ({
-          id: item.provider_id || item.id,
-          name: item.name,
-          planName: item.plan_name || 'Standard',
-          totalQuota: item.total_quota || 100,
-          usedQuota: item.used_quota || 0,
-          remainingPercent: item.remaining_percent ?? 0,
-          resetTime: item.reset_time || '每月重置',
-          status: item.status || 'active',
-          token_pools_json: item.token_pools_json,
-          metrics_json: item.metrics_json,
-          fetched_at: item.fetched_at,
-        }));
-        setQuotas(applySmartAutoReset(mapped));
-      }
-    } catch {
-      // 離線降級：保留既有真實快照並套用到期滿血
-      setQuotas((prev) => applySmartAutoReset(prev));
-    } finally {
-      setIsSyncing(false);
-    }
-  }, []);
-
-  const fetchModels = useCallback(async () => {
-    try {
-      const res = await fetch('/api/models/sync', { method: 'POST' });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.models)) {
-        setModels(data.models);
-        return;
-      }
-    } catch {}
-
-    // 本地預設前瞻活躍模型（嚴格排除過期模型）
+    // 本地預設前瞻活躍模型（嚴格排除過期模型）。這不是伺服器同步成功。
     setModels([
       { id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol (Workhorse Coding)', provider: 'OpenAI', context_window: 128000, supports_thinking: true, thinking_budget_max: 32768, cost_per_m_input: 1.25, cost_per_m_output: 5.0, status: 'active', verified_date: '2026-10-30' },
       { id: 'gpt-6-astra', name: 'GPT-6 Astra (Frontier Intelligence)', provider: 'OpenAI', context_window: 200000, supports_thinking: true, thinking_budget_max: 65536, cost_per_m_input: 2.50, cost_per_m_output: 10.0, status: 'active', verified_date: '2026-10-30' },
@@ -396,37 +352,15 @@ export const App: React.FC = () => {
       { id: 'cursor-fast', name: 'Cursor Composer (Fast Edit)', provider: 'Cursor', context_window: 128000, supports_thinking: false, cost_per_m_input: 0.0, cost_per_m_output: 0.0, status: 'active', verified_date: '2026-10-30' },
       { id: 'cursor-agent', name: 'Cursor Autonomous Agent', provider: 'Cursor', context_window: 128000, supports_thinking: true, thinking_budget_max: 32768, cost_per_m_input: 0.0, cost_per_m_output: 0.0, status: 'active', verified_date: '2026-10-30' }
     ]);
-  }, []);
+  }, [net]);
 
-  // 連線感知監聽器 (Online/Offline Network Detection)
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      fetchQuotas();
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [fetchQuotas]);
-
-  // 初次載入與 iOS 原生狀態列調校
+  // 初次載入與 iOS 原生狀態列調校。額度讀取由直連 Internet 的工作階段負責。
   useEffect(() => {
     try {
       StatusBar.setStyle({ style: Style.Dark });
       StatusBar.setBackgroundColor({ color: '#020617' });
     } catch {}
-
-    fetchQuotas();
-    fetchModels();
-  }, [fetchQuotas, fetchModels]);
+  }, []);
 
   // 快照持久化 (供 WidgetKit 與離線推算共享)
   useEffect(() => {
@@ -438,51 +372,11 @@ export const App: React.FC = () => {
   // 更新頻率切換與持久化
   const handleChangeInterval = (newInterval: RefreshIntervalSeconds) => {
     setRefreshInterval(newInterval);
-    setCountdown(newInterval);
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY_REFRESH_INTERVAL, String(newInterval));
     }
-    if (newInterval > 0) {
-      fetchQuotas();
-    }
+    if (newInterval > 0) net.refresh();
   };
-
-  // 背景輪詢計時器 + Page Visibility API 節能守衛 + 離線掛起守衛
-  useEffect(() => {
-    if (refreshInterval === 0 || !isOnline) {
-      return; // 手動模式或離線時不啟動定時器
-    }
-
-    const timer = setInterval(() => {
-      // 若頁面在背景最小化，凍結計時以省電
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-        return;
-      }
-
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          fetchQuotas();
-          return refreshInterval;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    // 頁面重新回到前景時立即補償刷新
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && refreshInterval > 0 && isOnline) {
-        fetchQuotas();
-        setCountdown(refreshInterval);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [refreshInterval, fetchQuotas, isOnline]);
 
   // 組裝 Live Bar 5 色分段
   const liveSegments: LiveBarSegment[] = quotas.map((q) => {
@@ -561,8 +455,7 @@ export const App: React.FC = () => {
       setLiveTranscript('正在連線至 Cloudflare Durable Object (Gemini 3.8 Live)...');
 
       try {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws/live?sessionId=user_session_${Date.now()}`;
+        const wsUrl = net.socketUrl(`/ws/live?sessionId=user_session_${Date.now()}`);
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
@@ -601,7 +494,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-slate-950 text-slate-100 flex flex-col font-sans neon-ambient-glow">
+    <div className="app-viewport relative w-full overflow-hidden bg-slate-950 text-slate-100 flex flex-col font-sans neon-ambient-glow">
       {/* 頂部導航列 (Cyber Dark Header) */}
       <header className="w-full bg-slate-950/95 border-b border-slate-800/80 px-4 py-2 sm:px-6 flex items-center justify-between shrink-0 z-30">
         <div className="flex items-center gap-3">
@@ -631,25 +524,33 @@ export const App: React.FC = () => {
           <FrequencySelector
             interval={refreshInterval}
             onChangeInterval={handleChangeInterval}
-            countdownSeconds={countdown}
+            countdownSeconds={net.countdown}
           />
         </div>
       </header>
 
       {/* 用戶原創概念：Live Bar 動態狀態光譜條 */}
+      <ConnectionStatus
+        status={net.status}
+        busy={net.busy}
+        dataSaver={net.dataSaver}
+        onRetry={net.refresh}
+        onToggleDataSaver={net.toggleDataSaver}
+      />
+
       <LiveBar
         segments={liveSegments}
         activePlatformId={selectedId}
         onSelectPlatform={setSelectedId}
-        countdownSeconds={countdown}
-        isSyncing={isSyncing}
-        onTriggerSync={fetchQuotas}
+        countdownSeconds={net.countdown}
+        isSyncing={net.busy || isSyncing}
+        onTriggerSync={net.refresh}
         isVoiceActive={isVoiceActive}
-        isOnline={isOnline}
+        isOnline={net.pathAvailable}
       />
 
       {/* 主工作區：iPhone Duo 雙欄或單欄自適應 */}
-      <div className="flex-1 min-h-0 relative">
+      <div id="app-content" className="flex-1 min-h-0 relative">
         <SplitViewContainer
           quotas={quotas}
           selectedId={selectedId}
@@ -659,8 +560,10 @@ export const App: React.FC = () => {
           liveTranscript={liveTranscript}
           viewMode={viewMode}
           onChangeViewMode={handleChangeViewMode}
-          isOnline={isOnline}
-          countdownSeconds={countdown}
+          isOnline={net.linkLabel === '已同步'}
+          linkLabel={net.linkLabel}
+          textScale={net.textScale}
+          countdownSeconds={net.countdown}
           handedness={handedness}
           filterAlertOnly={filterAlertOnly}
           onToggleFilterAlert={handleToggleFilterAlert}

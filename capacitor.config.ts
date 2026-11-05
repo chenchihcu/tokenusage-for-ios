@@ -16,6 +16,11 @@ const config: CapacitorConfig = {
     backgroundColor: '#020617',
     preferredContentMode: 'mobile',
   },
+  plugins: {
+    CapacitorHttp: {
+      enabled: false,
+    },
+  },
 };
 
 export default config;
