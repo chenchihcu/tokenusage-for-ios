@@ -18,6 +18,7 @@ interface CockpitOverviewProps {
   onSelectPlatform: (id: string) => void;
   onOpenDetail: (id: string) => void;
   isOnline: boolean;
+  linkLabel?: string;
   countdownSeconds: number;
   filterAlertOnly?: boolean;
   onToggleFilterAlert?: () => void;
@@ -97,6 +98,7 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
   onSelectPlatform,
   onOpenDetail,
   isOnline,
+  linkLabel,
   countdownSeconds,
   filterAlertOnly = false,
   onToggleFilterAlert,
@@ -251,7 +253,7 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
             <span className="font-bold text-[10px] uppercase">
-              {isOnline ? 'ONLINE' : 'CACHED'}
+              {linkLabel ?? (isOnline ? 'ONLINE' : 'CACHED')}
             </span>
           </div>
         </div>

@@ -18,10 +18,13 @@
     "build:ios": "npm run build && npx cap sync ios"
   },
   "dependencies": {
+    "@capacitor/app": "7.1.2",
     "@capacitor/core": "^7.0.0",
     "@capacitor/haptics": "^7.0.0",
+    "@capacitor/network": "7.0.4",
     "@capacitor/preferences": "^7.0.0",
     "@capacitor/status-bar": "^7.0.0",
+    "@capacitor/text-zoom": "7.0.4",
     "lucide-react": "^1.16.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { MasterList } from './MasterList';
 import { DetailWorkbench } from './DetailWorkbench';
 import { CockpitOverview } from './CockpitOverview';
@@ -6,6 +6,7 @@ import { QuotaCardProps } from './QuotaCard';
 import { ChevronLeft } from 'lucide-react';
 import { DashboardViewMode, HandednessMode } from './ViewModeSelector';
 import { haptic } from '../services/haptics';
+import { decideColumns, type ColumnMode } from '../network/layout';
 
 interface SplitViewContainerProps {
   quotas: QuotaCardProps[];
@@ -17,6 +18,8 @@ interface SplitViewContainerProps {
   viewMode: DashboardViewMode;
   onChangeViewMode: (mode: DashboardViewMode) => void;
   isOnline: boolean;
+  linkLabel?: string;
+  textScale?: number;
   countdownSeconds: number;
   handedness?: HandednessMode;
   filterAlertOnly?: boolean;
@@ -33,64 +36,62 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   viewMode,
   onChangeViewMode,
   isOnline,
+  linkLabel,
+  textScale = 1,
   countdownSeconds,
   handedness = 'right',
   filterAlertOnly = false,
   onToggleFilterAlert,
 }) => {
-  const [isLandscape, setIsLandscape] = useState<boolean>(true);
+  const [columns, setColumns] = useState<ColumnMode>(() =>
+    typeof window === 'undefined' ? 'single' : decideColumns(window.innerWidth, 1),
+  );
   const [isHorizontalDual, setIsHorizontalDual] = useState<boolean>(false);
   const [isVerticalDual, setIsVerticalDual] = useState<boolean>(false);
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
   const [showMobileDetail, setShowMobileDetail] = useState<boolean>(false);
-  const debounceTimerRef = useRef<any>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const wide = columns === 'dual';
 
-  // W3C Viewport Segments API 偵測與 150ms 折疊開合防抖 (Apple HIG Posture Debounce)
+  // 欄數只看內容寬度與文字縮放。折疊媒體查詢有支援時才啟用，窄空間仍退回單欄。
+  useLayoutEffect(() => {
+    const target = document.getElementById('app-content') ?? document.documentElement;
+    const apply = (width: number) => setColumns(decideColumns(width, textScale));
+    apply(target.clientWidth || window.innerWidth);
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? target.clientWidth;
+      apply(width);
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [textScale]);
+
   useEffect(() => {
-    const evaluatePosture = () => {
-      if (typeof window === 'undefined') return;
-
-      const isH2 =
-        (window.matchMedia &&
-          window.matchMedia('(horizontal-viewport-segments: 2)').matches) ||
-        false;
-      const isV2 =
-        (window.matchMedia &&
-          window.matchMedia('(vertical-viewport-segments: 2)').matches) ||
-        false;
-
-      const isWide =
-        isH2 ||
-        window.innerWidth >= 768 ||
-        (window.innerWidth > window.innerHeight && window.innerWidth >= 640);
-
-      setIsLandscape(isWide);
+    const evaluateSegments = () => {
+      const isH2 = window.matchMedia?.('(horizontal-viewport-segments: 2)').matches ?? false;
+      const isV2 = window.matchMedia?.('(vertical-viewport-segments: 2)').matches ?? false;
       setIsHorizontalDual(isH2);
       setIsVerticalDual(isV2);
     };
+    evaluateSegments();
+    window.addEventListener('resize', evaluateSegments);
+    return () => window.removeEventListener('resize', evaluateSegments);
+  }, []);
 
-    // 立即初始判定
-    evaluatePosture();
-
-    // 150ms 防抖處理高頻旋轉與開合折疊
-    const handleResizeDebounced = () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      debounceTimerRef.current = setTimeout(() => {
-        evaluatePosture();
-      }, 150);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const applyInset = () => {
+      const overlap = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      document.documentElement.style.setProperty('--keyboard-inset', `${overlap}px`);
     };
-
-    window.addEventListener('resize', handleResizeDebounced);
-    window.addEventListener('orientationchange', handleResizeDebounced);
-
+    viewport.addEventListener('resize', applyInset);
+    viewport.addEventListener('scroll', applyInset);
+    applyInset();
     return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      window.removeEventListener('resize', handleResizeDebounced);
-      window.removeEventListener('orientationchange', handleResizeDebounced);
+      viewport.removeEventListener('resize', applyInset);
+      viewport.removeEventListener('scroll', applyInset);
     };
   }, []);
 
@@ -106,26 +107,38 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
       } else {
         url.searchParams.delete('filter');
       }
-      if (isLandscape) url.searchParams.set('duo', '1');
+      if (wide) url.searchParams.set('duo', '1');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [selectedId, isLandscape, viewMode, handedness, filterAlertOnly]);
+  }, [selectedId, wide, viewMode, handedness, filterAlertOnly]);
+
+  useEffect(() => {
+    if (!showMobileDetail || wide) return;
+    document.getElementById('detail-title')?.focus();
+  }, [showMobileDetail, wide]);
 
   const handleItemSelect = (id: string) => {
     haptic.impactLight();
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     onSelect(id);
-    if (!isLandscape && viewMode === 'split') {
+    if (!wide && viewMode === 'split') {
       setShowMobileDetail(true);
     }
   };
 
   const handleOpenDetail = (id: string) => {
     haptic.impactMedium();
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     onSelect(id);
     onChangeViewMode('split');
-    if (!isLandscape) {
+    if (!wide) {
       setShowMobileDetail(true);
     }
+  };
+
+  const handleBack = () => {
+    setShowMobileDetail(false);
+    openerRef.current?.focus();
   };
 
   const selectedItem = quotas.find((q) => q.id === selectedId);
@@ -134,7 +147,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   // 特殊形態 A：W3C Viewport Segments 雙屏水平展開 (horizontal-viewport-segments: 2)
   // 左螢幕全景 Cockpit : 右螢幕深入 Detail，中央轉軸安全避讓縫隙 (Hinge Seam Guard)
   // =========================================================================
-  if (isHorizontalDual) {
+  if (isHorizontalDual && wide) {
     return (
       <div className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe">
         {/* 左屏：CockpitOverview (Segment 0 0) */}
@@ -148,6 +161,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             onSelectPlatform={onSelect}
             onOpenDetail={handleOpenDetail}
             isOnline={isOnline}
+            linkLabel={linkLabel}
             countdownSeconds={countdownSeconds}
             filterAlertOnly={filterAlertOnly}
             onToggleFilterAlert={onToggleFilterAlert}
@@ -176,6 +190,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             isVoiceActive={isVoiceActive}
             liveTranscript={liveTranscript}
             handedness={handedness}
+            connectionLabel={linkLabel}
           />
         </div>
       </div>
@@ -196,6 +211,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             onSelectPlatform={onSelect}
             onOpenDetail={handleOpenDetail}
             isOnline={isOnline}
+            linkLabel={linkLabel}
             countdownSeconds={countdownSeconds}
             filterAlertOnly={filterAlertOnly}
             onToggleFilterAlert={onToggleFilterAlert}
@@ -211,6 +227,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             isVoiceActive={isVoiceActive}
             liveTranscript={liveTranscript}
             handedness={handedness}
+            connectionLabel={linkLabel}
           />
         </div>
       </div>
@@ -229,6 +246,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
           onSelectPlatform={onSelect}
           onOpenDetail={handleOpenDetail}
           isOnline={isOnline}
+          linkLabel={linkLabel}
           countdownSeconds={countdownSeconds}
           filterAlertOnly={filterAlertOnly}
           onToggleFilterAlert={onToggleFilterAlert}
@@ -241,7 +259,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   // ==========================================
   // 標準模式 B：iPhone Duo 雙欄自適應佈局 (38% : 62%)
   // ==========================================
-  if (isLandscape) {
+  if (wide) {
     return (
       <div className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island">
         {/* 左欄 Master List (38% 黃金分割寬度，支援 Focus Mode 收折) */}
@@ -273,6 +291,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             isVoiceActive={isVoiceActive}
             liveTranscript={liveTranscript}
             handedness={handedness}
+            connectionLabel={linkLabel}
           />
         </main>
       </div>
@@ -288,7 +307,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
         <div className="flex flex-col h-full">
           <div className="p-3 border-b border-slate-800 flex items-center bg-slate-950">
             <button
-              onClick={() => setShowMobileDetail(false)}
+              onClick={handleBack}
               className="flex items-center gap-1 text-sm font-semibold text-cyan-400 active:opacity-70 transition-all min-h-[44px] touch-manipulation"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -303,6 +322,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
               isVoiceActive={isVoiceActive}
               liveTranscript={liveTranscript}
               handedness={handedness}
+              connectionLabel={linkLabel}
             />
           </div>
         </div>

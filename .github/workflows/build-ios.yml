@@ -3,7 +3,7 @@ name: Build iOS IPA (Cloud Mac)
 on:
   workflow_dispatch:
   push:
-    branches: [ main, "work/**" ]
+    branches: [ main, "work/**", "cursor/**" ]
 
 jobs:
   build-ios:

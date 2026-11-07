@@ -25,6 +25,7 @@ interface DetailWorkbenchProps {
   isVoiceActive: boolean;
   liveTranscript: string;
   handedness?: HandednessMode;
+  connectionLabel?: string;
 }
 
 interface ParsedMetric {
@@ -43,6 +44,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
   isVoiceActive,
   liveTranscript,
   handedness = 'right',
+  connectionLabel = '待確認',
 }) => {
   const [thinkingBudget, setThinkingBudget] = useState<number>(32768);
 
@@ -114,7 +116,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
             {isFocusMode ? <PanelLeftOpen className="w-5 h-5 text-cyan-400" /> : <PanelLeftClose className="w-5 h-5" />}
           </button>
           <div>
-            <h2 className="font-bold text-lg text-white tracking-tight flex items-center gap-2">
+            <h2 id="detail-title" tabIndex={-1} className="font-bold text-lg text-white tracking-tight flex items-center gap-2 outline-none">
               {selectedItem.name}
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/40">
                 {selectedItem.planName}
@@ -132,7 +134,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-500/40 min-h-[36px]">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            100% 真實數據連線
+            {connectionLabel}
           </span>
         </div>
       </div>

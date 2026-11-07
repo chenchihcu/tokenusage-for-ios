@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
+import { securityHeaders } from '../shared/cors';
 import { defaultLedger } from './ledger/usage-ledger';
 import { discoverLatestModels, validateUpstreamUrl } from './catalog/discovery';
 import { OPENTOKENUSAGE_MCP_TOOLS, handleMcpToolCall } from './mcp/quota-mcp-server';
@@ -92,11 +93,11 @@ let memoryQuotas = [
 ];
 
 const server = http.createServer(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, If-None-Match');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  const headers = securityHeaders(typeof req.headers.origin === 'string' ? req.headers.origin : null);
+  headers['X-Request-Id'] = crypto.randomUUID();
+  for (const [key, value] of Object.entries(headers)) {
+    res.setHeader(key, value);
+  }
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);

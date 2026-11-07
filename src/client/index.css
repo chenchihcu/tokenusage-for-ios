@@ -25,18 +25,34 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Apple HIG 橫向動態島與安全邊距 (Safe Area Insets) */
+.app-viewport {
+  height: 100vh;
+  height: 100dvh;
+  padding-bottom: var(--keyboard-inset, 0px);
+}
+
+/* Safe area comes from the system inset. Do not substitute a device-specific guess. */
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
 }
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 21px);
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
 }
 .pl-safe-island {
-  padding-left: max(1rem, env(safe-area-inset-left, 59px));
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
 }
 .pr-safe-island {
-  padding-right: max(1rem, env(safe-area-inset-right, 59px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-ping,
+  .animate-pulse,
+  .animate-spin,
+  .animate-photon-sweep,
+  .photon-beam {
+    animation: none !important;
+  }
 }
 
 /* 賽博發光與玻璃擬態卡片 */
