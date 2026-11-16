@@ -44,15 +44,16 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
       <button
         type="button"
         onClick={() => handleSelectMode('cockpit')}
+        aria-label="ALL 全景"
         aria-pressed={currentMode === 'cockpit'}
-        className={`relative flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] active:scale-95 touch-manipulation ${
+        className={`relative flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all min-h-[44px] active:scale-95 touch-manipulation ${
           currentMode === 'cockpit'
             ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
             : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
         }`}
       >
         <LayoutGrid className="w-4 h-4" />
-        <span className="tracking-wide">ALL 全景</span>
+        <span className="tracking-wide">ALL<span className="hidden md:inline"> 全景</span></span>
         {governingAlertCount > 0 && (
           <span
             className="flex h-2 w-2 relative ml-0.5"
@@ -68,15 +69,16 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
       <button
         type="button"
         onClick={() => handleSelectMode('split')}
+        aria-label="DUO 雙欄"
         aria-pressed={currentMode === 'split'}
-        className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] active:scale-95 touch-manipulation ${
+        className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all min-h-[44px] active:scale-95 touch-manipulation ${
           currentMode === 'split'
             ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
             : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
         }`}
       >
         <Columns2 className="w-4 h-4" />
-        <span className="tracking-wide">DUO 雙欄</span>
+        <span className="tracking-wide">DUO<span className="hidden md:inline"> 雙欄</span></span>
       </button>
 
       {/* 單手握持慣用手切換按鈕 (Apple HIG Reachability Handedness Toggle) */}
@@ -87,7 +89,7 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
           title={`單手握持模式: 當前為【${
             handedness === 'right' ? '右手握持' : handedness === 'left' ? '左手握持' : '雙手握持'
           }】，點擊切換`}
-          className="flex items-center justify-center px-2 py-2 ml-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 rounded-lg transition-all min-h-[44px] min-w-[44px] active:scale-95 touch-manipulation"
+          className="flex items-center justify-center whitespace-nowrap px-2 py-2 ml-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 rounded-lg transition-all min-h-[44px] min-w-[44px] active:scale-95 touch-manipulation"
           aria-label={`單手握持模式: ${handedness}`}
         >
           <Hand className="w-3.5 h-3.5" />

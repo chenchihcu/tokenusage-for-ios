@@ -60,7 +60,7 @@ export const FrequencySelector: React.FC<FrequencySelectorProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-200 text-xs font-medium transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 min-h-[44px] sm:min-h-[36px]"
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-200 text-xs font-medium whitespace-nowrap transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 min-h-[44px]"
         title="調整 Token 用量自動更新頻率"
       >
         <Clock className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />

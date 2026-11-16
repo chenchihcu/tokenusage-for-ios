@@ -157,7 +157,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
         </section>
 
         {/* 核心高保真數據卡片格線 (Governing Bottleneck) */}
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <section className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3 sm:gap-4">
           <div className="p-4 rounded-2xl glass-panel border border-slate-800/80 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
@@ -209,7 +209,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
               <span className="font-mono text-[10px] uppercase font-bold">RESET TIME 週期重置</span>
               <Clock className="w-4 h-4 text-purple-400" />
             </div>
-            <div className="text-sm font-bold font-mono text-slate-100 truncate mt-1.5">
+            <div className="text-sm font-bold font-mono text-slate-100 break-words mt-1.5">
               {displayReset}
             </div>
             <div className="text-xs text-slate-400 mt-1 font-mono">最緊迫週期重置日</div>
@@ -229,7 +229,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3">
               {parsedPools.map((pool) => {
                 const isCritical = pool.isCritical || pool.effectiveRemaining <= 5;
                 const isWarning = pool.effectiveRemaining < 20 && !isCritical;
@@ -338,7 +338,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2.5 text-xs">
               {parsedMetrics.map((m, idx) => {
                 const isAlert = m.isAlert || (m.used !== undefined && m.used >= 95);
                 return (

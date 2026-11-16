@@ -502,7 +502,7 @@ export const App: React.FC = () => {
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-400 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <Sparkles className="w-4 h-4 text-slate-950 font-black" />
             </div>
-            <h1 className="font-black text-base sm:text-lg tracking-tight bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
+            <h1 className="sr-only sm:not-sr-only font-black text-base sm:text-lg tracking-tight whitespace-nowrap bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
               OpenTokenUsage
             </h1>
           </div>

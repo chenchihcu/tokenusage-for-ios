@@ -415,6 +415,42 @@ test.describe('3. 一頁式極簡監控駕駛艙 (Cockpit All View) 與 iPhone D
     expect(lastSection).not.toBeNull();
     if (fab && lastSection) expect(lastSection.y + lastSection.height).toBeLessThanOrEqual(fab.y);
   });
+
+  // iPhone Duo 折疊機：Apple 未公布點數，以下為第三方估算的內外螢幕尺寸
+  for (const [label, width, height, twoColumns] of [
+    ['外螢幕直向', 466, 678, false],
+    ['外螢幕橫向', 678, 466, true],
+    ['內螢幕直向', 669, 951, true],
+    ['內螢幕直向 (626pt 估算)', 626, 890, true],
+    ['內螢幕橫向', 951, 669, true],
+  ] as const) {
+    test(`iPhone Duo 折疊機 ${label} (${width}x${height})：頂列單行不溢出，欄數正確`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await page.goto('/?view=split');
+
+      await expect(page.getByRole('textbox', { name: '搜尋平台' })).toBeVisible();
+      const detail = page.getByRole('main', { name: 'AI 平台詳情與語音工作台' });
+      if (twoColumns) await expect(detail).toBeVisible();
+      else await expect(detail).toHaveCount(0);
+
+      // 頂列按鈕：全部在畫面內、不換行（單行高度）、熱區 ≥ 44pt
+      const headerButtons = page.locator('header button');
+      const count = await headerButtons.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        const box = await headerButtons.nth(i).boundingBox();
+        expect(box).not.toBeNull();
+        if (!box) continue;
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+        expect(box.height).toBeLessThanOrEqual(45);
+      }
+
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(scrollWidth).toBeLessThanOrEqual(width);
+    });
+  }
 });
 
 
