@@ -232,6 +232,35 @@ enum QuotaParser {
     }
 }
 
+/// Reads several tokens pasted at once, in the labelled text the Mac helper writes:
+/// a label line ("Claude…", "Codex…", "Cursor…" / "Workos…") followed by the value line.
+/// Also accepts a bare `WorkosCursorSessionToken=` line. Placeholder lines in
+/// parentheses are skipped.
+enum TokenImport {
+    static func parse(_ text: String) -> [DirectProvider: String] {
+        var found: [DirectProvider: String] = [:]
+        var pending: DirectProvider?
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+            let lower = line.lowercased()
+            if lower.hasPrefix("workoscursorsessiontoken=") {
+                found[.cursor] = String(line.dropFirst("WorkosCursorSessionToken=".count))
+                pending = nil
+            } else if line.hasSuffix(":") {
+                if lower.hasPrefix("claude") { pending = .claude }
+                else if lower.hasPrefix("codex") { pending = .codex }
+                else if lower.hasPrefix("cursor") || lower.hasPrefix("workos") { pending = .cursor }
+                else { pending = nil }
+            } else if let provider = pending {
+                if !line.hasPrefix("("), !line.contains(" ") { found[provider] = line }
+                pending = nil
+            }
+        }
+        return found
+    }
+}
+
 /// Bundled figures for checking layouts without any account (Settings → 示範資料).
 enum SampleData {
     static func items(now: Date = Date()) -> [ProviderQuota] {

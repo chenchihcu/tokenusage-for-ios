@@ -127,4 +127,23 @@ final class QuotaModelTests: XCTestCase {
         let levels = Set(SampleData.items().map(\.level))
         XCTAssertEqual(levels, [.exhausted, .low, .healthy])
     }
+
+    func testImportsLabelledTokensAndSkipsPlaceholders() {
+        let text = """
+        Claude Code access token:
+        sk-ant-oat01-abc
+
+        Codex access token:
+        eyJhbGci.payload.sig
+
+        Cursor WorkosCursorSessionToken:
+        (not stored readably on this Mac — copy it from cursor.com)
+        """
+        let found = TokenImport.parse(text)
+        XCTAssertEqual(found[.claude], "sk-ant-oat01-abc")
+        XCTAssertEqual(found[.codex], "eyJhbGci.payload.sig")
+        XCTAssertNil(found[.cursor])
+        XCTAssertEqual(TokenImport.parse("WorkosCursorSessionToken=user_1%3A%3Ajwt")[.cursor], "user_1%3A%3Ajwt")
+        XCTAssertTrue(TokenImport.parse("hello world").isEmpty)
+    }
 }

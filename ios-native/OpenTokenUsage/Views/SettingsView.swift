@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -7,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.haptics) private var haptics = true
     @AppStorage(SettingsKey.sampleData) private var sampleData = false
     @State private var tokens: [DirectProvider: String] = [:]
+    @State private var importMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -24,6 +26,12 @@ struct SettingsView: View {
                 Section {
                     Toggle("重置時間到了就顯示為已補滿", isOn: $smartAutoReset)
                     Toggle("觸覺回饋", isOn: $haptics)
+                }
+
+                Section {
+                    Button("從剪貼簿匯入權杖", systemImage: "doc.on.clipboard") { importFromClipboard() }
+                } footer: {
+                    Text(importMessage ?? "在電腦上複製整份權杖文字，再按這裡一次存好全部。")
                 }
 
                 ForEach(DirectProvider.allCases) { provider in
@@ -63,6 +71,21 @@ struct SettingsView: View {
 }
 
 private extension SettingsView {
+    func importFromClipboard() {
+        let found = TokenImport.parse(UIPasteboard.general.string ?? "")
+        guard !found.isEmpty else {
+            importMessage = "剪貼簿裡沒有找到權杖。"
+            return
+        }
+        for (provider, value) in found {
+            Keychain.set(value, for: provider.keychainKey)
+            tokens[provider] = value
+        }
+        UIPasteboard.general.string = ""
+        let names = DirectProvider.allCases.filter { found[$0] != nil }.map(\.name)
+        importMessage = "已匯入：\(names.joined(separator: "、"))。剪貼簿已清空。"
+    }
+
     /// Saves to the Keychain as the person types or pastes.
     func tokenBinding(_ provider: DirectProvider) -> Binding<String> {
         Binding {
