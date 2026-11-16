@@ -496,7 +496,7 @@ export const App: React.FC = () => {
   return (
     <div className="app-viewport relative w-full overflow-hidden bg-slate-950 text-slate-100 flex flex-col font-sans neon-ambient-glow">
       {/* 頂部導航列 (Cyber Dark Header) */}
-      <header className="w-full bg-slate-950/95 border-b border-slate-800/80 px-4 py-2 sm:px-6 flex items-center justify-between shrink-0 z-30">
+      <header className="w-full bg-slate-950/95 border-b border-slate-800/80 px-4 py-2 sm:px-6 pl-safe-island pr-safe-island phoneland:py-1 flex items-center justify-between shrink-0 z-30">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-400 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
@@ -506,7 +506,7 @@ export const App: React.FC = () => {
               OpenTokenUsage
             </h1>
           </div>
-          <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400">
+          <span className="hidden md:inline-flex phoneland:hidden items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400">
             <Shield className="w-3 h-3 text-cyan-400" />
             5 Platforms Bonded
           </span>
@@ -538,6 +538,8 @@ export const App: React.FC = () => {
         onToggleDataSaver={net.toggleDataSaver}
       />
 
+      {/* Duo 橫向：高度有限，左欄清單已列出 5 平台，故隱藏光譜條 */}
+      <div className={viewMode === 'split' ? 'phoneland:hidden' : undefined}>
       <LiveBar
         segments={liveSegments}
         activePlatformId={selectedId}
@@ -548,6 +550,7 @@ export const App: React.FC = () => {
         isVoiceActive={isVoiceActive}
         isOnline={net.pathAvailable}
       />
+      </div>
 
       {/* 主工作區：iPhone Duo 雙欄或單欄自適應 */}
       <div id="app-content" className="flex-1 min-h-0 relative">

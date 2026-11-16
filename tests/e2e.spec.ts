@@ -384,6 +384,37 @@ test.describe('3. 一頁式極簡監控駕駛艙 (Cockpit All View) 與 iPhone D
     // 驗證切換為雙欄工作台
     expect(page.url()).toContain('view=split');
   });
+
+  test('iPhone Duo 橫向 (852x393) DUO 雙欄：精簡頂部區域，讓清單與工作台取得可用高度', async ({ page }) => {
+    await page.setViewportSize({ width: 852, height: 393 });
+    await page.goto('/?view=split');
+
+    const masterList = page.getByRole('complementary', { name: 'AI 平台清單' });
+    await expect(masterList).toBeVisible();
+
+    // 頂部導航 + 連線狀態合計不超過 120pt（原本 190pt，只剩 203pt 給內容）
+    const content = await page.locator('#app-content').boundingBox();
+    expect(content).not.toBeNull();
+    if (content) {
+      expect(content.y).toBeLessThanOrEqual(120);
+      expect(content.height).toBeGreaterThanOrEqual(270);
+    }
+
+    // 至少一張平台卡片完整可見
+    const cards = masterList.locator('[role="button"]');
+    const first = await cards.first().boundingBox();
+    expect(first).not.toBeNull();
+    if (first) expect(first.y + first.height).toBeLessThanOrEqual(393);
+
+    // 工作台捲到底時，最後的內容不被懸浮工具列遮住
+    const workbench = page.getByRole('main', { name: 'AI 平台詳情與語音工作台' }).locator('> div').first();
+    await workbench.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+    const fab = await page.getByRole('complementary', { name: '即時浮動控制列' }).boundingBox();
+    const lastSection = await workbench.locator('section').last().boundingBox();
+    expect(fab).not.toBeNull();
+    expect(lastSection).not.toBeNull();
+    if (fab && lastSection) expect(lastSection.y + lastSection.height).toBeLessThanOrEqual(fab.y);
+  });
 });
 
 

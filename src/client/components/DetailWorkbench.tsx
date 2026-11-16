@@ -97,10 +97,10 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 overflow-y-auto text-slate-100 select-none">
+    <div className="flex flex-col h-full bg-slate-950 overflow-y-auto text-slate-100 select-none pb-24">
       {/* 頂部工具列 (Apple HIG ≥ 44pt 觸控熱區) */}
       <div
-        className={`flex items-center justify-between p-3 sm:p-4 border-b border-slate-800/80 sticky top-0 bg-slate-950/90 backdrop-blur-xl z-10 ${
+        className={`flex items-center justify-between p-3 sm:p-4 phoneland:p-2 border-b border-slate-800/80 sticky top-0 bg-slate-950/90 backdrop-blur-xl z-10 ${
           handedness === 'left' ? 'flex-row-reverse' : ''
         }`}
       >
@@ -139,7 +139,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
         </div>
       </div>
 
-      <div className="p-4 sm:p-6 space-y-5 max-w-4xl mx-auto w-full">
+      <div className="p-4 sm:p-6 phoneland:p-3 space-y-5 phoneland:space-y-3 max-w-4xl mx-auto w-full">
         {/* 即時語音互動與波形面板 */}
         <section className="space-y-3">
           <AudioVisualizer isActive={isVoiceActive} volume={isVoiceActive ? 0.75 : 0} />
