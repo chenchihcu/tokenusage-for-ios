@@ -9,6 +9,7 @@ import { ViewModeSelector, DashboardViewMode, HandednessMode } from './component
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SecureStorageService } from './services/storage';
 import { ConnectionStatus } from './components/ConnectionStatus';
+import { ResetMonitorBar } from './components/ResetMonitorBar';
 import { useDirectInternet } from './hooks/useDirectInternet';
 
 export const STORAGE_KEY_VIEW_MODE = 'opentokenusage_view_mode';
@@ -49,6 +50,20 @@ const INITIAL_REAL_QUOTAS: QuotaCardProps[] = [
       { label: 'Weekly (Shared)', used: 100.0, limit: 100.0, kind: 'percent', isAlert: true },
       { label: 'Resets', value: '0 available' },
       { label: 'Credits', value: '$0.00' }
+    ]),
+    token_pools_json: JSON.stringify([
+      {
+        id: 'codex_shared',
+        name: 'Codex CLI & Cloud',
+        effectiveRemaining: 0.0,
+        effectiveUsed: 100.0,
+        primaryResetTime: '2026-11-04T06:48:16.000Z',
+        isCritical: true,
+        tiers: [
+          { id: 'weekly', label: 'Weekly limit', used: 100.0, limit: 100.0, remaining: 0.0, resetsAt: '2026-11-04T06:48:16.000Z', resetDurationText: '4d 1h', isGoverning: true },
+          { id: '5h', label: '5h Session', used: 0.0, limit: 100.0, remaining: 100.0, resetsAt: null, resetDurationText: '100% left', isGoverning: false }
+        ]
+      }
     ]),
     fetched_at: '2026-10-30T22:57:15.1249828Z'
   },
@@ -119,6 +134,20 @@ const INITIAL_REAL_QUOTAS: QuotaCardProps[] = [
       { label: 'Session', used: 0.0, limit: 100.0, kind: 'percent' },
       { label: 'Weekly (Shared)', used: 98.0, limit: 100.0, kind: 'percent', isAlert: true },
       { label: 'Resets', value: '0 available' }
+    ]),
+    token_pools_json: JSON.stringify([
+      {
+        id: 'claude_code_shared',
+        name: 'Claude Code & Web',
+        effectiveRemaining: 2.0,
+        effectiveUsed: 98.0,
+        primaryResetTime: '2026-11-02T12:59:59.805Z',
+        isCritical: true,
+        tiers: [
+          { id: 'weekly', label: 'Weekly (Shared)', used: 98.0, limit: 100.0, remaining: 2.0, resetsAt: '2026-11-02T12:59:59.805Z', resetDurationText: '2d 5h', isGoverning: true },
+          { id: '5h', label: '5h Session', used: 0.0, limit: 100.0, remaining: 100.0, resetsAt: null, resetDurationText: '100% left', isGoverning: false }
+        ]
+      }
     ]),
     fetched_at: '2026-10-30T19:12:17.6328982Z'
   },
@@ -536,6 +565,13 @@ export const App: React.FC = () => {
         dataSaver={net.dataSaver}
         onRetry={net.refresh}
         onToggleDataSaver={net.toggleDataSaver}
+      />
+
+      {/* Antigravity · Codex · Claude Code 週期重置與免費釋放窗口監控列 */}
+      <ResetMonitorBar
+        quotas={quotas}
+        activePlatformId={selectedId}
+        onSelectPlatform={setSelectedId}
       />
 
       {/* Duo 橫向：高度有限，左欄清單已列出 5 平台，故隱藏光譜條 */}

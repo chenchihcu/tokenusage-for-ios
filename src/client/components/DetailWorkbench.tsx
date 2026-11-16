@@ -5,6 +5,8 @@ import { MiniRingChart } from './MiniRingChart';
 import { TokenPool } from '../../types/quota';
 import { HandednessMode } from './ViewModeSelector';
 import { haptic } from '../services/haptics';
+import { PlatformIcon } from './PlatformIcon';
+import { extractResetWindowSummary } from '../utils/resetMonitor';
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -117,6 +119,9 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
           </button>
           <div>
             <h2 id="detail-title" tabIndex={-1} className="font-bold text-lg text-white tracking-tight flex items-center gap-2 outline-none">
+              <span className="p-1.5 rounded-lg bg-slate-900 border border-slate-700/80 text-cyan-300 shrink-0">
+                <PlatformIcon id={selectedItem.id} className="w-4 h-4" />
+              </span>
               {selectedItem.name}
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/40">
                 {selectedItem.planName}
@@ -209,10 +214,31 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
               <span className="font-mono text-[10px] uppercase font-bold">RESET TIME 週期重置</span>
               <Clock className="w-4 h-4 text-purple-400" />
             </div>
-            <div className="text-sm font-bold font-mono text-slate-100 truncate mt-1.5">
-              {displayReset}
-            </div>
-            <div className="text-xs text-slate-400 mt-1 font-mono">最緊迫週期重置日</div>
+            {(() => {
+              const win = extractResetWindowSummary(selectedItem);
+              return (
+                <>
+                  <div className="text-sm font-bold font-mono text-slate-100 truncate mt-1.5">
+                    {displayReset}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px] font-mono">
+                    {win.sessionText !== '--' && (
+                      <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">
+                        5h: <strong className="text-cyan-300">{win.sessionText}</strong>
+                      </span>
+                    )}
+                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">
+                      Wk: <strong className="text-purple-300">{win.weeklyText}</strong>
+                    </span>
+                    {win.isFreeResetReady && (
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-bold">
+                        FREE RESET
+                      </span>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </section>
 

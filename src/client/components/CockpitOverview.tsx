@@ -3,6 +3,8 @@ import { QuotaCardProps } from './QuotaCard';
 import { MiniRingChart } from './MiniRingChart';
 import { TokenPool } from '../../types/quota';
 import { HandednessMode } from './ViewModeSelector';
+import { PlatformIcon } from './PlatformIcon';
+import { extractResetWindowSummary } from '../utils/resetMonitor';
 import {
   Activity,
   AlertTriangle,
@@ -327,6 +329,9 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`p-1 rounded-md border shrink-0 ${theme.badgeBg} ${theme.badgeText} ${theme.badgeBorder}`}>
+                        <PlatformIcon id={item.id} className="w-3.5 h-3.5" />
+                      </span>
                       <h3 className="font-bold text-sm text-slate-100 tracking-tight truncate">
                         {item.name}
                       </h3>
@@ -396,9 +401,21 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
                         <span className="text-[9px] text-slate-500 uppercase font-bold block leading-none">
                           RESET TIME
                         </span>
-                        <span className="text-[10px] font-semibold text-slate-300 tabular-nums truncate max-w-[100px] block leading-none mt-0.5">
-                          {shortReset}
-                        </span>
+                        {(() => {
+                          const win = extractResetWindowSummary(item);
+                          return (
+                            <>
+                              <span className="text-[10px] font-semibold text-slate-300 tabular-nums truncate max-w-[110px] block leading-none mt-0.5">
+                                {shortReset}
+                              </span>
+                              {win.sessionText !== '--' && (
+                                <span className="text-[9px] font-mono text-cyan-300 block leading-none mt-0.5">
+                                  5h {win.sessionText} · Wk {win.weeklyText}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>

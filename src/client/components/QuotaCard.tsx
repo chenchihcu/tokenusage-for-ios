@@ -1,5 +1,7 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, Link2 } from 'lucide-react';
+import { AlertTriangle, Link2, Sparkles } from 'lucide-react';
+import { PlatformIcon } from './PlatformIcon';
+import { extractResetWindowSummary } from '../utils/resetMonitor';
 
 export interface QuotaCardProps {
   id: string;
@@ -153,15 +155,18 @@ export const QuotaCard: React.FC<QuotaCardProps> = ({
       <div className={`absolute top-0 left-4 right-4 h-[2px] rounded-full opacity-60 group-hover:opacity-100 transition-opacity ${pStyle.gradient}`} />
 
       <div className="flex items-center justify-between mb-2.5">
-        <div className="flex items-center gap-2">
-          <h3 className="font-bold text-base text-slate-100 tracking-tight group-hover:text-white transition-colors">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`p-1.5 rounded-lg border ${pStyle.badgeBg} ${pStyle.badgeText} ${pStyle.badgeBorder} shrink-0`}>
+            <PlatformIcon id={id} className="w-3.5 h-3.5" />
+          </span>
+          <h3 className="font-bold text-base text-slate-100 tracking-tight group-hover:text-white transition-colors truncate">
             {name}
           </h3>
-          <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border ${pStyle.badgeBg} ${pStyle.badgeText} ${pStyle.badgeBorder}`}>
+          <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border shrink-0 ${pStyle.badgeBg} ${pStyle.badgeText} ${pStyle.badgeBorder}`}>
             {planName}
           </span>
           {id === 'grok' && (
-            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] text-slate-400" title="週期連動綁定 Cursor">
+            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] text-slate-400 shrink-0" title="週期連動綁定 Cursor">
               <Link2 className="w-2.5 h-2.5 text-cyan-400" />
               Bonded
             </span>
@@ -259,8 +264,35 @@ export const QuotaCard: React.FC<QuotaCardProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 text-[11px]">
-          <span className={`w-1.5 h-1.5 rounded-full ${isHealthy ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
-          <span className="text-slate-400 font-mono">{displayReset}</span>
+          {(() => {
+            const win = extractResetWindowSummary({
+              id,
+              name,
+              planName,
+              remainingPercent,
+              usedQuota,
+              totalQuota,
+              resetTime,
+              status,
+              token_pools_json,
+              metrics_json,
+            });
+            return (
+              <>
+                <span className={`w-1.5 h-1.5 rounded-full ${isHealthy || win.isFreeResetReady ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
+                <span className="text-slate-400 font-mono">
+                  {win.sessionText !== '--' ? `5h ${win.sessionText} · ` : ''}
+                  {displayReset}
+                </span>
+                {win.isFreeResetReady && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 text-[9px] font-mono font-bold">
+                    <Sparkles className="w-2.5 h-2.5" />
+                    FREE
+                  </span>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
