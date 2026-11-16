@@ -261,7 +261,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   // ==========================================
   if (wide) {
     return (
-      <div className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island">
+      <div className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe">
         {/* 左欄 Master List (38% 黃金分割寬度，支援 Focus Mode 收折) */}
         <aside
           aria-label="AI 平台清單"

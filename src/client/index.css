@@ -45,6 +45,22 @@ body {
   padding-right: max(1rem, env(safe-area-inset-right, 0px));
 }
 
+/* Floating toolbar: stay clear of the island/notch side and the home indicator. */
+.fab-safe-bottom {
+  bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+}
+.fab-safe-right {
+  right: max(1.5rem, env(safe-area-inset-right, 0px));
+}
+.fab-safe-left {
+  left: max(1.5rem, env(safe-area-inset-left, 0px));
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .fab-safe-bottom {
+    bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-ping,
   .animate-pulse,

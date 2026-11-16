@@ -143,7 +143,7 @@ export const QuotaCard: React.FC<QuotaCardProps> = ({
       onClick={onClick}
       role="button"
       tabIndex={0}
-      className={`group relative p-4 rounded-2xl transition-all cursor-pointer border text-left backdrop-blur-xl ${
+      className={`group relative p-4 phoneland:p-3 rounded-2xl transition-all cursor-pointer border text-left backdrop-blur-xl ${
         isSelected
           ? `bg-slate-900/90 ${pStyle.borderSelect} ${pStyle.glowSelect} ring-1 ring-white/10`
           : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900/80 hover:border-slate-700/80'

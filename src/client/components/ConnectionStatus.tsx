@@ -26,11 +26,11 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   const Icon = status.checkHint ? CloudOff : status.pathLabel ? Smartphone : Wifi;
 
   return (
-    <div className="w-full border-b border-slate-800/80 bg-slate-950/95 px-4 py-1.5 sm:px-6">
-      <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-2">
-        <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-slate-100 min-h-[44px]">
+    <div className="w-full border-b border-slate-800/80 bg-slate-950/95 px-4 py-1.5 sm:px-6 pl-safe-island pr-safe-island phoneland:py-0">
+      <div className="max-w-7xl mx-auto flex flex-wrap phoneland:flex-nowrap items-center gap-2">
+        <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-slate-100 min-h-[44px] min-w-0 phoneland:flex-1">
           <Icon className="w-4 h-4 shrink-0 text-cyan-300" aria-hidden="true" />
-          <span>{spoken}</span>
+          <span className="phoneland:truncate">{spoken}</span>
           {status.showProgress && busy ? <span className="text-xs text-slate-400">請稍候</span> : null}
         </p>
         {status.pathLabel ? (

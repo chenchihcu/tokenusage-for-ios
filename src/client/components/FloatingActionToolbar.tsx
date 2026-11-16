@@ -38,8 +38,8 @@ export const FloatingActionToolbar: React.FC<FloatingActionToolbarProps> = ({
   return (
     <aside
       aria-label="即時浮動控制列"
-      className={`fixed bottom-6 z-50 flex items-center gap-3 p-2 bg-slate-900/90 backdrop-blur-2xl rounded-2xl border border-slate-700/80 shadow-2xl transition-all duration-300 ${
-        handedness === 'left' ? 'left-6 flex-row-reverse' : 'right-6'
+      className={`fixed bottom-6 fab-safe-bottom z-50 flex items-center gap-3 p-2 bg-slate-900/90 backdrop-blur-2xl rounded-2xl border border-slate-700/80 shadow-2xl transition-all duration-300 ${
+        handedness === 'left' ? 'left-6 fab-safe-left flex-row-reverse' : 'right-6 fab-safe-right'
       }`}
     >
       {/* 動態同步模型按鈕 (熱區 48x48 pt) */}

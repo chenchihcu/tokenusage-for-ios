@@ -7,6 +7,10 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      screens: {
+        // iPhone held landscape (Duo split): plenty of width, very little height.
+        phoneland: { raw: '(orientation: landscape) and (max-height: 500px)' },
+      },
       fontFamily: {
         sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', '"PingFang TC"', '"Noto Sans TC"', 'sans-serif'],
         mono: ['"SF Mono"', 'Menlo', 'Monaco', 'Consolas', '"Courier New"', 'monospace'],

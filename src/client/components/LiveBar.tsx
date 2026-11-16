@@ -41,7 +41,7 @@ export const LiveBar: React.FC<LiveBarProps> = ({
         <div className={`h-full w-1/3 photon-beam ${isSyncing ? 'animate-photon-sweep' : 'opacity-40 animate-pulse'}`} />
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-2 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="max-w-7xl mx-auto px-4 pl-safe-island pr-safe-island py-2 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         {/* 左側：LIVE 心跳徽章與倒數 */}
         <div className="flex items-center gap-3">
           <button
