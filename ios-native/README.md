@@ -1,7 +1,9 @@
 # OpenTokenUsage — native iPhone app
 
-SwiftUI app with no web view. It reads the same API as the website
-(`GET /api/quotas` on the Cloudflare Worker) and is built for the iPhone Duo.
+SwiftUI app with no web view. It asks each provider (Claude, Codex,
+Cursor) for usage directly from the phone, using account tokens kept in the
+Keychain, with no relay server. Built for the iPhone Duo. Launch with
+`-opentokenusage_sample_data YES` (or Settings → 示範資料) to see bundled figures.
 
 | Screen | Layout |
 |---|---|

@@ -5,7 +5,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
     @AppStorage(SettingsKey.smartAutoReset) private var smartAutoReset = true
     @AppStorage(SettingsKey.haptics) private var haptics = true
-    @AppStorage(SettingsKey.apiBaseURL) private var apiBaseURL = AppSettings.defaultBaseURL
+    @AppStorage(SettingsKey.sampleData) private var sampleData = false
+    @State private var tokens: [DirectProvider: String] = [:]
 
     var body: some View {
         NavigationStack {
@@ -25,24 +26,30 @@ struct SettingsView: View {
                     Toggle("觸覺回饋", isOn: $haptics)
                 }
 
-                Section {
-                    TextField("伺服器位址", text: $apiBaseURL)
-                        .keyboardType(.URL)
-                        .textContentType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    if apiBaseURL != AppSettings.defaultBaseURL {
-                        Button("還原預設位址") { apiBaseURL = AppSettings.defaultBaseURL }
+                ForEach(DirectProvider.allCases) { provider in
+                    Section {
+                        SecureField(provider.tokenTitle, text: tokenBinding(provider))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } header: {
+                        Text(provider.name)
+                    } footer: {
+                        Text(provider.tokenHelp)
                     }
-                } header: {
-                    Text("伺服器")
+                }
+
+                Section {
+                    Toggle("示範資料", isOn: $sampleData)
                 } footer: {
-                    Text("必須是 https 位址；格式不正確時會改用預設位址。")
+                    Text("權杖只存在這支手機的鑰匙圈，App 直接向各平台查詢用量，不經過任何中繼伺服器。開啟示範資料時不會連線。")
                 }
 
                 Section {
                     LabeledContent("版本", value: Bundle.main.appVersion)
                 }
+            }
+            .onAppear {
+                for provider in DirectProvider.allCases { tokens[provider] = provider.token ?? "" }
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
@@ -51,6 +58,18 @@ struct SettingsView: View {
                     Button("完成") { dismiss() }
                 }
             }
+        }
+    }
+}
+
+private extension SettingsView {
+    /// Saves to the Keychain as the person types or pastes.
+    func tokenBinding(_ provider: DirectProvider) -> Binding<String> {
+        Binding {
+            tokens[provider] ?? ""
+        } set: { value in
+            tokens[provider] = value
+            Keychain.set(value, for: provider.keychainKey)
         }
     }
 }

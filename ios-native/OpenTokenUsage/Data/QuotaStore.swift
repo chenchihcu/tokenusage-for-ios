@@ -65,12 +65,12 @@ final class QuotaStore {
         guard state != .loading else { return }
         state = .loading
         do {
-            let fresh = try await client.fetchQuotas(baseURL: AppSettings.baseURL)
-            items = fresh
+            let result = try await client.fetchQuotas(previous: items)
+            items = result.items
             lastUpdated = Date()
-            state = .idle
+            state = result.firstError.map { .failed($0) } ?? .idle
             refreshCount += 1
-            QuotaCache.save(fresh)
+            QuotaCache.save(result.items)
         } catch let error as QuotaClientError {
             state = .failed(error)
         } catch {

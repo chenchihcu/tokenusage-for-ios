@@ -69,4 +69,62 @@ final class QuotaModelTests: XCTestCase {
         XCTAssertEqual(QuotaLevel(remaining: 30), .healthy)
         XCTAssertLessThan(QuotaLevel.exhausted, QuotaLevel.healthy)
     }
+
+    // MARK: - Direct provider parsing
+
+    private func json(_ text: String) throws -> Data { Data(text.utf8) }
+
+    func testParsesClaudeUsage() throws {
+        let data = try json(#"{"five_hour":{"utilization":42.0,"resets_at":"2026-11-17T03:00:00Z"},"seven_day":{"utilization":81,"resets_at":"2026-11-20T00:00:00Z"},"seven_day_opus":null}"#)
+        let quota = try XCTUnwrap(DirectProvider.claude.parse(data))
+        XCTAssertEqual(quota.providerId, "claude")
+        XCTAssertEqual(quota.remainingPercent, 19, accuracy: 0.001)
+        XCTAssertEqual(quota.resetTime, "2026-11-20T00:00:00Z")
+        let tiers = try XCTUnwrap(quota.pools.first).tiers
+        XCTAssertEqual(tiers.map(\.id), ["5h", "weekly"])
+        XCTAssertEqual(tiers.first { $0.isGoverning == true }?.id, "weekly")
+    }
+
+    func testParsesCodexUsage() throws {
+        let data = try json(#"{"plan_type":"plus","rate_limit":{"primary_window":{"used_percent":27,"limit_window_seconds":18000,"reset_at":1794873600},"secondary_window":{"used_percent":100,"limit_window_seconds":604800,"reset_after_seconds":3600}},"credits":{"balance":"0"}}"#)
+        let now = Date(timeIntervalSince1970: 1_794_800_000)
+        let quota = try XCTUnwrap(DirectProvider.codex.parse(data, now: now))
+        XCTAssertEqual(quota.planName, "Plus")
+        XCTAssertEqual(quota.remainingPercent, 0)
+        XCTAssertEqual(quota.level, .exhausted)
+        let tiers = try XCTUnwrap(quota.pools.first).tiers
+        XCTAssertEqual(tiers.map(\.label), ["5 小時", "每週"])
+        XCTAssertEqual(tiers[0].resetDate, Date(timeIntervalSince1970: 1_794_873_600))
+        XCTAssertEqual(tiers[1].resetDate, now.addingTimeInterval(3600))
+        XCTAssertEqual(quota.metrics.first?.value, "0")
+    }
+
+    func testParsesCursorUsage() throws {
+        let data = try json(#"{"membershipType":"pro","billingCycleEnd":"2026-12-01T00:00:00.000Z","individualUsage":{"plan":{"used":1500,"limit":2000,"autoPercentUsed":60.5}}}"#)
+        let quota = try XCTUnwrap(DirectProvider.cursor.parse(data))
+        XCTAssertEqual(quota.remainingPercent, 25, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(quota.pools.first).tiers.map(\.id), ["total", "auto"])
+        XCTAssertNotNil(quota.resetDate)
+    }
+
+    func testUnrecognisedPayloadsAreRejected() throws {
+        for provider in DirectProvider.allCases {
+            XCTAssertNil(provider.parse(try json(#"{"error":"nope"}"#)))
+            XCTAssertNil(provider.parse(try json("not json")))
+        }
+    }
+
+    func testReadsChatGPTAccountFromToken() {
+        let claims = #"{"https://api.openai.com/auth":{"chatgpt_account_id":"acct-123"}}"#
+        let payload = Data(claims.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        XCTAssertEqual(QuotaParser.chatGPTAccountID(fromJWT: "h.\(payload).s"), "acct-123")
+        XCTAssertNil(QuotaParser.chatGPTAccountID(fromJWT: "opaque-token"))
+    }
+
+    func testSampleDataCoversEveryLevel() {
+        let levels = Set(SampleData.items().map(\.level))
+        XCTAssertEqual(levels, [.exhausted, .low, .healthy])
+    }
 }

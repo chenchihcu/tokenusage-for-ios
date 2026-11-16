@@ -35,7 +35,7 @@ struct QuotaListView: View {
                     emptyState
                 }
             }
-            .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showSettings, onDismiss: { Task { await store.refresh() } }) { SettingsView() }
             .sensoryFeedback(.selection, trigger: store.selectedID) { _, _ in hapticsOn && style == .select }
             .sensoryFeedback(.success, trigger: store.refreshCount) { _, _ in hapticsOn }
     }
@@ -129,7 +129,7 @@ struct ProblemBanner: View {
                 .foregroundStyle(error == .offline ? Color.secondary : Color.orange)
             VStack(alignment: .leading, spacing: 2) {
                 Text(error.localizedDescription).font(.subheadline.weight(.semibold))
-                Text(hasData ? "目前顯示的是上次成功取得的資料。" : "請稍後再試。")
+                Text(hasData && error.hint == "請稍後再試。" ? "目前顯示的是上次成功取得的資料。" : error.hint)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

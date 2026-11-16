@@ -5,27 +5,18 @@ enum SettingsKey {
     static let refreshInterval = "opentokenusage_refresh_interval"
     static let smartAutoReset = "opentokenusage_smart_autoreset"
     static let haptics = "opentokenusage_haptics_enabled"
-    static let apiBaseURL = "opentokenusage_api_base_url"
+    static let sampleData = "opentokenusage_sample_data"
 }
 
 enum AppSettings {
-    static let defaultBaseURL = "https://opentokenusage-web.chihfu-chen-tw.workers.dev"
-
     /// Settings.bundle defaults are not applied until registered.
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
             SettingsKey.refreshInterval: 60,
             SettingsKey.smartAutoReset: true,
             SettingsKey.haptics: true,
-            SettingsKey.apiBaseURL: defaultBaseURL,
+            SettingsKey.sampleData: false,
         ])
-    }
-
-    static var baseURL: URL {
-        let raw = UserDefaults.standard.string(forKey: SettingsKey.apiBaseURL)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if let url = URL(string: raw), url.scheme == "https", url.host() != nil { return url }
-        return URL(string: defaultBaseURL)!
     }
 
     struct IntervalOption: Identifiable, Hashable {

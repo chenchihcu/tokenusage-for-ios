@@ -62,30 +62,6 @@
 			<key>DefaultValue</key>
 			<true/>
 		</dict>
-		<dict>
-			<key>Type</key>
-			<string>PSGroupSpecifier</string>
-			<key>Title</key>
-			<string>伺服器</string>
-			<key>FooterText</key>
-			<string>必須是 https 位址；格式不正確時會改用預設位址。</string>
-		</dict>
-		<dict>
-			<key>Type</key>
-			<string>PSTextFieldSpecifier</string>
-			<key>Title</key>
-			<string>位址</string>
-			<key>Key</key>
-			<string>opentokenusage_api_base_url</string>
-			<key>DefaultValue</key>
-			<string>https://opentokenusage-web.chihfu-chen-tw.workers.dev</string>
-			<key>KeyboardType</key>
-			<string>URL</string>
-			<key>AutocapitalizationType</key>
-			<string>None</string>
-			<key>AutocorrectionType</key>
-			<string>No</string>
-		</dict>
 	</array>
 </dict>
 </plist>
