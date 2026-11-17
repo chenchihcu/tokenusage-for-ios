@@ -12,10 +12,11 @@ Governs: `Institution/ios/IOS_SPEC.md` (SwiftUI, iOS 27.1 SDK, Gates G0–G5), `
 | D2 | **Native SwiftUI rewrite** (iOS 27.1 SDK, Swift 6.4). Capacitor shell is retired at the end. |
 | D3 | **Dual review = Claude + Codex.** Claude implements + self-reviews against IOS_SPEC; Codex reviews each PR before merge. |
 | D4 | **Sign in inside the app** (vendor page in a system browser sheet), never via PC. Per-vendor method decided in P1 (spec FR-21a). |
+| D5 | **All voice functions removed** (decided 2026-11-17): no Gemini Live, no microphone button, no voice commands, no microphone permission. VoiceOver accessibility is kept (it is not a voice-command feature). |
 
 Assumptions (stated, change if wrong):
 - A1. Four agents only: **Codex, Claude Code, Cursor, Antigravity**. Grok is removed.
-- A2. Gemini Live voice and model catalog are **not** carried into v3 (not requested). → Confirm, or they become Phase 7.
+- A2. Model catalog is **not** carried into v3 (not requested). → Confirm.
 - A3. Deployment target iOS 27.1 (IOS_SPEC §1 default).
 
 ## 1. Verified problems in the current build (from `/verify`, 669f04d)
@@ -31,7 +32,7 @@ Assumptions (stated, change if wrong):
 | B7 | 9–10 tap targets < 44 pt; 76–80 text nodes < 12 px; 46 forbidden font weights; dark-only theme. | DOM audit vs HIG / 06-ui-ux. |
 | B8 | Widget likely never receives data: Capacitor `Preferences.configure({group})` is a key prefix, not an App Group. | INFERENCE — verify on device. |
 | B9 | iOS target 14.0, Swift 5.0, CI `macos-14` → not built with iOS 27.1 SDK. | `project.pbxproj`, `Podfile`, `build-ios.yml`. |
-| B10 | Grok shown (user tracks 4 agents); no 3–4 icon right-hand fast path (only refresh + mic). | UI capture. |
+| B10 | Grok shown (user tracks 4 agents); no 3–4 icon right-hand fast path (only refresh + voice mic, which D5 removes). | UI capture. |
 
 ## 2. Target architecture
 
@@ -63,6 +64,7 @@ Each phase = one PR on a `claude/*` / `work/*` branch → Claude self-review →
 
 ### P0 — Hotfix current Capacitor app (small, so you have a working app meanwhile)
 - Fix B1 (bind fetch), B2 (status race), B5 header overflow.
+- **Remove voice from the current app:** mic button, `AudioVisualizer`, Gemini Live WebSocket (`/ws/live`), `VoiceSessionDO` + its Durable Object binding, voice text in `LiveBar`/`DetailWorkbench`/`SplitViewContainer`, `NSMicrophoneUsageDescription` in `Info.plist`, voice sections in README. Durable Object removal needs a `deleted_classes` migration on deploy (user-approved deploy only).
 - DoD: at Duo outer/inner sizes, status shows 「已同步」, `/api/quotas` cadence = setting (15 s/60 s/manual) — verified in browser.
 - Still PC-fed (B3) until P3 ships.
 
@@ -100,7 +102,7 @@ Each phase = one PR on a `claude/*` / `work/*` branch → Claude self-review →
 
 ### P6 — Retire old stack
 - Remove Capacitor/React/Worker quota path and PC daemon from the build (kept in git history). README updated.
-- Optional: keep Worker only if A2 changes.
+- Worker retired entirely (voice was its only other use).
 
 ## 4. Verification & dual review per PR
 
@@ -120,7 +122,7 @@ Claude reports the highest Gate actually reached; never "verified" below G2.
 1. **Mac build path**: confirm the repo may use the `xcode-27` GitHub runner (billing), or provide a cloud Mac. Without it, nothing above G1 can be verified.
 2. **Tokens for P1 spikes** — one per vendor, entered via the session credential form or on-device, never pasted in chat.
 3. **Signing / TestFlight** stays with you (IOS_SPEC §8).
-4. Confirm A1 (drop Grok) and A2 (drop voice + model catalog).
+4. Confirm A1 (drop Grok) and A2 (drop model catalog). Voice is already removed (D5).
 
 ## 6. Risks
 

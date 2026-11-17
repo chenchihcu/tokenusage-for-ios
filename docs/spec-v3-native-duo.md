@@ -25,7 +25,8 @@ Tags: untagged = stated by user or verified; `[ASSUMPTION]` = author default, co
 
 **Out of scope**
 - `[ASSUMPTION]` Grok (user tracks four agents).
-- `[ASSUMPTION]` Gemini Live voice, model catalog, MCP tools, cost estimator.
+- **All voice functions** (decided 2026-11-17): Gemini Live, voice commands, microphone button, audio visualiser, microphone permission. VoiceOver accessibility is *not* affected and stays required.
+- `[ASSUMPTION]` Model catalog, MCP tools, cost estimator.
 - PC daemon, Cloudflare Worker data path, D1 (retired from the app's data path).
 - App Store public release. `[ASSUMPTION]` Distribution is personal (TestFlight / own device only).
 - Android, iPad-specific layouts, macOS, Apple Watch.
@@ -182,7 +183,7 @@ Duo layout & continuity (US-7)
 - **Compatibility.** iOS 27.1+ deployment target, Xcode 27.1+, Swift 6.4 with strict concurrency; iPhone Duo primary, other iPhones must still work (IOS_SPEC §1).
 - **Performance.** Cold launch to first cached render ≤ 1 s on device; a refresh round finishes ≤ 10 s p95 on LTE; per-request timeout 15 s.
 - **Network/data.** Each round is ≤ 4 requests; payload per round `[ASSUMPTION]` ≤ 50 KB.
-- **Security & privacy.** Tokens only in Keychain; never in UserDefaults, logs, screenshots, crash reports or git. HTTPS only (ATS default). No third-party SDKs. `PrivacyInfo.xcprivacy` present. No analytics.
+- **Security & privacy.** No microphone, camera, location or contacts access; `Info.plist` contains no `NSMicrophoneUsageDescription`. Tokens only in Keychain; never in UserDefaults, logs, screenshots, crash reports or git. HTTPS only (ATS default). No third-party SDKs. `PrivacyInfo.xcprivacy` present. No analytics.
 - **Accessibility.** All targets ≥ 44×44 pt; Dynamic Type up to AX5 without truncation; contrast ≥ 4.5:1; status never by colour alone; Reduce Motion / Reduce Transparency supported; full VoiceOver labels.
 - **HIG / Duo.** Forbidden-API audit (IOS_SPEC §4.3) = 0 hits; system containers (`NavigationSplitView`, `.toolbar`, `.sheet`); Liquid Glass only on controls; posture matrix P01–P13 × C1–C6 passes.
 - **Localisation.** All strings in `Localizable.xcstrings` (zh-Hant, en); dates/percent via formatters.
@@ -213,7 +214,7 @@ Duo layout & continuity (US-7)
 - **Q1.** **Resolved 2026-11-17:** sign in inside the app, not via PC (FR-21…FR-24). Remaining: which method works per vendor (FR-21a) — owner: P1 spike.
 - **Q2.** `[OPEN_QUESTION]` Should the app send a local notification when a free-reset credit appears or a weekly window resets? Default: **no** in v3 (badge only). Owner: user.
 - **Q3.** `[OPEN_QUESTION]` Do Cursor and Antigravity also grant free resets? Default: not shown. Owner: P1 spike.
-- **Q4.** `[ASSUMPTION]` Drop Grok, voice, model catalog. Owner: user (yes/no).
+- **Q4.** `[ASSUMPTION]` Drop Grok and model catalog. Owner: user (yes/no). (Voice: resolved — removed.)
 - **Q5.** `[OPEN_QUESTION]` Approve `xcode-27` runner billing or provide a cloud Mac. Owner: user.
 - **Q6.** `[ASSUMPTION]` Personal distribution only (TestFlight), not public App Store. Owner: user.
 - **Q7.** `[ASSUMPTION]` App name stays "OpenTokenUsage"; bundle ID unchanged from current project (IOS_SPEC forbids changing it without confirmation).
@@ -222,3 +223,40 @@ Duo layout & continuity (US-7)
 
 - **Leading:** all four agents show data with PC off on cellular (G5 checklist); 15 s / 1 min / manual cadence verified by UI test; posture matrix 13/13 pass; forbidden-API audit 0.
 - **Lagging:** over the first 2 weeks of use, the owner no longer runs the PC daemon; no session where the app showed a stale number without a stale marker; owner reports catching ≥ 1 free reset via the badge.
+
+## 12. Flows (screen by screen)
+
+Basis: Apple HIG conventions + this project. `[ASSUMPTION]` Not compared against real apps (UXKIN library not connected in this session).
+App facts that shape the flows: no app account of its own (nothing to delete under App Review 5.1.1(v); per-vendor 登出 instead), no system permissions (no microphone, notifications off per Q2), no purchases.
+
+### F1 — First launch (goal: first agent showing real numbers in under 1 minute)
+1. **Dashboard, nothing signed in.** Shows the 4 agent rows as 「未設定」 with a one-line explanation 「登入各服務後，這裡會顯示剩餘額度與重置時間」 and one primary button 「登入第一個服務」. No splash carousel, no fake numbers. Way out: none needed (it is the home screen).
+2. → **Sign-in list (F2 step 1).** After the first success, return straight to the dashboard with that agent filled; the other rows keep 「登入」 shortcuts.
+- States: offline → banner 「離線，無法登入」 and the button disabled.
+
+### F2 — Sign in to a vendor (from F1, Settings, or an agent's 「登入」)
+1. **Vendor list** (Settings › 帳號): 4 rows, each 「已登入 · name」 / 「登入」 / 「此服務暫不支援手機登入」 (disabled, FR-21a). Back: standard nav back.
+2. **Short "why" sheet** for that vendor: 「將開啟 <Vendor> 官方登入頁。App 不會看到你的密碼，只保存登入憑證於本機鑰匙圈。」 Primary 「繼續」, secondary 「取消」.
+3. **System browser sheet** (`ASWebAuthenticationSession`) on the vendor's page. Cancel = system Cancel → back to step 1 with 「已取消登入」 (non-blocking).
+   - Device-code vendors instead: step 3 shows the code + 「複製並開啟登入頁」; the app polls until approved or 10 min expiry → 「代碼已過期，請重試」.
+4. **Result:** spinner 「正在確認…」 → 「連線成功」 and return to where F2 started; or a specific error with 「再試一次」 (network / denied / unsupported).
+
+### F3 — Daily glance (main loop)
+1. **Dashboard** (outer: single column; inner: list | detail). Pull-to-refresh, fast-path icon 1, and the timer all trigger the same refresh round.
+2. Tap an agent → **Detail**: every window, reset countdowns, free-reset credits (Codex/Claude), last updated, error line if any. Back: nav back (outer) / selection change (inner).
+- States: loading (first round: skeleton rows, never fake numbers), stale marker, per-agent error, offline banner with last-updated time.
+
+### F4 — Check free resets (fast-path icon 2)
+1. **Resets sheet:** Codex and Claude Code — credits available, 5h/weekly countdowns; Cursor/Antigravity show next reset only. Close: 「完成」. Empty: 「目前沒有可用的免費重置」.
+
+### F5 — Change refresh interval (fast-path icon 4 or Settings)
+1. **Menu** (system `Menu`/picker): 15 秒 · 30 秒 · 1 分鐘 · 5 分鐘 · 15 分鐘 · 手動, with the note 「背景更新時間由 iOS 決定」. Selecting applies immediately and persists; no confirm step.
+
+### F6 — Session expired
+1. Agent row shows 「需要重新登入」 + 「重新登入」 → F2 step 2 directly (skips the list). Other agents keep refreshing.
+
+### F7 — Sign out of a vendor
+1. Settings › 帳號 › vendor → 「登出」 (destructive, red) → system confirmation dialog 「登出 <Vendor>？此裝置會刪除登入憑證。」 「登出」 / 「取消」 → row returns to 「登入」. As easy to find as sign-in (same screen).
+
+### F8 — Handedness (Settings › 操作)
+1. Toggle 右手 / 左手; preview of the fast-path cluster position updates live.
