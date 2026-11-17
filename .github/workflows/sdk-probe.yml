@@ -1,0 +1,22 @@
+name: iOS SDK probe (P1)
+
+# Runs once when this file or the probe script changes, plus manual runs.
+# Read-only; ~3 macOS minutes. Plan D7: no other macOS job runs on push.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/sdk-probe.yml
+      - scripts/sdk-probe.sh
+
+jobs:
+  probe:
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [xcode-27, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/sdk-probe.sh
