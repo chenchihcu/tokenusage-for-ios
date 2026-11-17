@@ -39,7 +39,7 @@ Tags: untagged = stated by user or verified; `[ASSUMPTION]` = author default, co
 - **US-2.** As the owner, I want usage to refresh over my phone's own Wi-Fi or cellular at the interval I choose, so that I don't depend on my PC.
 - **US-3.** As the owner, I want to see Codex and Claude Code free-reset credits and next reset times, so that I can use a free reset when the vendor grants one.
 - **US-4.** As the owner, I want 4 fast-path icons in my right thumb's reach, so that I can act one-handed.
-- **US-5.** As the owner, I want to add, replace and remove each vendor's token safely on the phone, so that refresh works without a PC.
+- **US-5.** As the owner, I want to sign in to each vendor inside the app (no PC involved), stay signed in, and sign out, so that refresh works without a PC.
 - **US-6.** As the owner, I want a Home Screen widget with the same key numbers, so that I see them without opening the app.
 - **US-7.** As the owner, I want the layout to keep my place when I fold, unfold or rotate the Duo, so that nothing jumps or breaks.
 
@@ -73,11 +73,15 @@ Fast path (US-4)
 - **FR-19.** Handedness setting (right default / left) mirrors the outer-screen cluster to bottom-leading.
 - **FR-20.** "Alerts only" filters to agents with ≤ 5 % remaining; shows an empty state when none.
 
-Tokens (US-5)
-- **FR-21.** Settings lets the user add / replace / delete one token per vendor; stored in Keychain (`kSecAttrAccessibleAfterFirstUnlock`), shared with the widget via a Keychain access group.
-- **FR-22.** A saved token is never displayed in full (masked to last 4 characters) and never logged.
-- **FR-23.** After saving, the app runs a test fetch and shows success or the specific failure (invalid token / expired / network).
-- **FR-24.** HTTP 401/403 marks that vendor "需要重新登入" and stops auto-refresh for that vendor until the token is replaced.
+Sign-in (US-5) — decided 2026-11-17: **sign in inside the app, never via PC**
+- **FR-21.** Each vendor row in Settings has 「登入」. It opens the vendor's own sign-in page in the system browser sheet (`ASWebAuthenticationSession`; never an embedded web view that can read the password). The app never sees or stores the password.
+- **FR-21a.** `[OPEN_QUESTION]` Per-vendor sign-in method, chosen in plan P1 from what the vendor actually allows: (a) OAuth with redirect back to the app, (b) device-code flow (app shows a code; user approves on the vendor page on the same phone), (c) vendor web session in the browser sheet. A vendor with no workable phone sign-in shows 「此服務暫不支援手機登入」 — no PC fallback.
+- **FR-21b.** Resulting access + refresh tokens are stored in Keychain (`kSecAttrAccessibleAfterFirstUnlock`), shared with the widget via a Keychain access group.
+- **FR-21c.** Before access expiry the app renews the token on the phone using the refresh token; the user is not asked to sign in again while renewal succeeds.
+- **FR-22.** Tokens are never displayed, logged, or included in diagnostics; Settings shows only "已登入 · <account email or name if the vendor returns it>".
+- **FR-23.** After sign-in, the app runs a test fetch and shows 「連線成功」 or the specific failure (sign-in cancelled / denied / network).
+- **FR-23a.** 「登出」 deletes that vendor's Keychain items and, where the vendor supports it, revokes the token.
+- **FR-24.** HTTP 401/403 after a failed renewal marks that vendor 「需要重新登入」 with a one-tap 「重新登入」, and stops auto-refresh for that vendor until signed in again.
 
 Widget (US-6)
 - **FR-25.** Small widget: governing remaining % for 4 agents. Medium: plus next reset and Codex/Claude free-reset credits.
@@ -137,10 +141,14 @@ Duo layout & continuity (US-7)
 ### FR-20
 - **Given** no agent ≤ 5 % **When** "Alerts only" is on **Then** an empty state "目前沒有告警" is shown with a button to turn the filter off.
 
-### FR-21 / FR-22 / FR-23
-- **Given** a valid Claude token is pasted **When** Save is tapped **Then** a test fetch runs and shows "連線成功", and the field shows `••••abcd`.
-- **Given** an invalid token **When** Save is tapped **Then** "權杖無效" is shown and the old token (if any) stays active.
-- **Given** a saved token **When** Delete is confirmed **Then** the vendor shows "未設定" and the Keychain item is gone.
+### FR-21 / FR-22 / FR-23 / FR-23a
+- **Given** Claude Code not signed in, PC off **When** the user taps 登入 and completes the vendor page on the phone **Then** the app returns to Settings showing 「已登入」 and 「連線成功」, and the dashboard shows Claude Code numbers.
+- **Given** the sign-in sheet is open **When** the user taps Cancel **Then** the app shows 「已取消登入」 and nothing is stored.
+- **Given** signed in **When** 登出 is confirmed **Then** the vendor shows 「未設定」 and its Keychain items are gone.
+- **Given** a vendor with no phone sign-in method (FR-21a) **When** Settings opens **Then** its 登入 button is disabled with 「此服務暫不支援手機登入」.
+
+### FR-21c
+- **Given** an access token that expires in 2 minutes and a valid refresh token **When** the next refresh round runs **Then** the token is renewed silently and data updates with no sign-in prompt.
 
 ### FR-24
 - **Given** Cursor returns 401 **When** refreshed **Then** Cursor shows "需要重新登入" and no further Cursor requests are sent until the token is replaced.
@@ -193,8 +201,8 @@ Duo layout & continuity (US-7)
 ## 9. Risks and Mitigations
 
 - **Risk:** Vendors' usage endpoints are undocumented and may change or block third-party clients. **Mitigation:** per-provider parser with schema check, clear error state, fixtures for fast fixes; never fake numbers.
-- **Risk:** Getting a token onto the phone without a PC is hard (Codex/Claude tokens are created by desktop CLIs). **Mitigation:** resolve in Open Question Q1; fallback = one-time copy via iCloud Keychain/AirDrop text, then OAuth refresh on the phone.
-- **Risk:** OAuth access tokens expire (hours) → frequent re-entry. **Mitigation:** store refresh token and refresh on the phone if the vendor permits; otherwise FR-24 prompt.
+- **Risk (highest):** Vendors may not allow a third-party iPhone app to sign in. Codex and Claude Code sign-in is built for their desktop CLIs (localhost redirect), and Google commonly blocks sign-in from non-official clients for Antigravity. **Mitigation:** P1 spike tries each method in FR-21a per vendor before any UI is built; a vendor that fails is shown as unsupported (FR-21a), and the user decides whether to keep it in v3.
+- **Risk:** Access tokens expire (hours). **Mitigation:** on-phone renewal (FR-21c); otherwise FR-24 one-tap re-sign-in.
 - **Risk:** Vendor ToS may forbid automated polling. **Mitigation:** minimum interval 15 s, per-vendor backoff; user accepts ToS risk (personal use).
 - **Risk:** Background refresh cadence controlled by iOS. **Mitigation:** stated in UI (FR-11); foreground guarantee only.
 - **Risk:** Duo simulator can't run most extensions. **Mitigation:** widget verified on device (G5).
@@ -202,7 +210,7 @@ Duo layout & continuity (US-7)
 
 ## 10. Open Questions
 
-- **Q1.** `[OPEN_QUESTION]` How does each token get onto the iPhone without a PC — in-app vendor login (OAuth via `ASWebAuthenticationSession`, only if the vendor allows it), or one-time paste? Default: paste once, then refresh on-device where possible. Owner: user + P1 spike.
+- **Q1.** **Resolved 2026-11-17:** sign in inside the app, not via PC (FR-21…FR-24). Remaining: which method works per vendor (FR-21a) — owner: P1 spike.
 - **Q2.** `[OPEN_QUESTION]` Should the app send a local notification when a free-reset credit appears or a weekly window resets? Default: **no** in v3 (badge only). Owner: user.
 - **Q3.** `[OPEN_QUESTION]` Do Cursor and Antigravity also grant free resets? Default: not shown. Owner: P1 spike.
 - **Q4.** `[ASSUMPTION]` Drop Grok, voice, model catalog. Owner: user (yes/no).

@@ -11,6 +11,7 @@ Governs: `Institution/ios/IOS_SPEC.md` (SwiftUI, iOS 27.1 SDK, Gates G0–G5), `
 | D1 | Vendor tokens live in the **iPhone Keychain**. The phone calls each vendor directly over Wi-Fi/cellular. No PC sync in the data path. |
 | D2 | **Native SwiftUI rewrite** (iOS 27.1 SDK, Swift 6.4). Capacitor shell is retired at the end. |
 | D3 | **Dual review = Claude + Codex.** Claude implements + self-reviews against IOS_SPEC; Codex reviews each PR before merge. |
+| D4 | **Sign in inside the app** (vendor page in a system browser sheet), never via PC. Per-vendor method decided in P1 (spec FR-21a). |
 
 Assumptions (stated, change if wrong):
 - A1. Four agents only: **Codex, Claude Code, Cursor, Antigravity**. Grok is removed.
