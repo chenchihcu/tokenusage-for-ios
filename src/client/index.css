@@ -61,6 +61,24 @@ body {
   }
 }
 
+/* Scroll content reserves room for the fast-path cluster so nothing sits under it (V2).
+   !important: it must win over the containers' own responsive p-* utilities. */
+.fab-clearance {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)) !important;
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  /* Short landscape: the cluster is a vertical column on the thumb side. */
+  .fab-clearance {
+    padding-bottom: 0.75rem !important;
+  }
+  [data-hand='right'] .fab-clearance {
+    padding-right: 5.5rem !important;
+  }
+  [data-hand='left'] .fab-clearance {
+    padding-left: 5.5rem !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-ping,
   .animate-pulse,

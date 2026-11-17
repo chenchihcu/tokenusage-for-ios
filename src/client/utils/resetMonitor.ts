@@ -1,6 +1,8 @@
 import { QuotaCardProps } from '../components/QuotaCard';
 import { TokenPool } from '../../types/quota';
 
+export const WINDOW_PASSED_TEXT = '已到重置時間';
+
 export interface ResetWindowSummary {
   platformId: string;
   platformName: string;
@@ -9,8 +11,11 @@ export interface ResetWindowSummary {
   weeklyText: string;
   weeklyResetAt: string | null;
   sessionResetAt: string | null;
-  isFreeResetReady: boolean;
+  /** The weekly reset time has passed but no newer data has arrived yet. Not a free reset. */
+  isWindowPassed: boolean;
   isResettingSoon: boolean;
+  /** Vendor-granted free resets ("Resets: N available"). null = the vendor did not report it. */
+  resetCredits: number | null;
 }
 
 export function formatResetCountdown(isoOrText: string | null | undefined, nowMs: number = Date.now()): string {
@@ -21,9 +26,7 @@ export function formatResetCountdown(isoOrText: string | null | undefined, nowMs
   if (Number.isNaN(targetMs)) return isoOrText;
 
   const diffMs = targetMs - nowMs;
-  if (diffMs <= 0) {
-    return '已重置 (FREE)';
-  }
+  if (diffMs <= 0) return WINDOW_PASSED_TEXT;
 
   const totalMinutes = Math.floor(diffMs / 60_000);
   const days = Math.floor(totalMinutes / (60 * 24));
@@ -33,6 +36,24 @@ export function formatResetCountdown(isoOrText: string | null | undefined, nowMs
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${Math.max(1, minutes)}m`;
+}
+
+/** Reads the vendor's free-reset count from metrics such as `{ label: 'Resets', value: '2 available' }`. */
+export function parseResetCredits(item: Pick<QuotaCardProps, 'metrics_json'>): number | null {
+  if (!item.metrics_json) return null;
+  try {
+    const metrics = JSON.parse(item.metrics_json);
+    if (!Array.isArray(metrics)) return null;
+    const entry = metrics.find(
+      (m: { label?: unknown }) => typeof m?.label === 'string' && /^resets?\b/i.test(m.label.trim()),
+    );
+    if (!entry) return null;
+    const raw = typeof entry.value === 'string' || typeof entry.value === 'number' ? String(entry.value) : '';
+    const match = raw.match(/\d+/);
+    return match ? Number(match[0]) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function extractResetWindowSummary(item: QuotaCardProps, nowMs: number = Date.now()): ResetWindowSummary {
@@ -68,14 +89,10 @@ export function extractResetWindowSummary(item: QuotaCardProps, nowMs: number = 
   }
 
   const weeklyTargetMs = weeklyResetAt && weeklyResetAt.includes('T') ? new Date(weeklyResetAt).getTime() : NaN;
-  const isFreeResetReady =
-    (!Number.isNaN(weeklyTargetMs) && nowMs >= weeklyTargetMs) ||
-    item.remainingPercent === 100 ||
-    weeklyText.includes('已重置');
+  const isWindowPassed = !Number.isNaN(weeklyTargetMs) && nowMs >= weeklyTargetMs;
   const isResettingSoon =
-    !isFreeResetReady &&
+    !isWindowPassed &&
     !Number.isNaN(weeklyTargetMs) &&
-    weeklyTargetMs - nowMs > 0 &&
     weeklyTargetMs - nowMs <= 24 * 60 * 60 * 1000;
 
   return {
@@ -86,7 +103,8 @@ export function extractResetWindowSummary(item: QuotaCardProps, nowMs: number = 
     weeklyText,
     weeklyResetAt,
     sessionResetAt,
-    isFreeResetReady,
+    isWindowPassed,
     isResettingSoon,
+    resetCredits: parseResetCredits(item),
   };
 }

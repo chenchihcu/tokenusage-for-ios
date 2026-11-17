@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Link2, Sparkles } from 'lucide-react';
+import { AlertTriangle, Sparkles } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { extractResetWindowSummary } from '../utils/resetMonitor';
 
@@ -64,15 +64,6 @@ const PLATFORM_STYLES: Record<string, {
     badgeBorder: 'border-amber-500/40',
     gradient: 'bg-gradient-to-r from-amber-400 to-orange-400',
     accentText: 'text-amber-400',
-  },
-  grok: {
-    borderSelect: 'border-pink-500',
-    glowSelect: 'shadow-[0_0_25px_rgba(255,0,122,0.35)]',
-    badgeBg: 'bg-pink-950/60',
-    badgeText: 'text-pink-300',
-    badgeBorder: 'border-pink-500/40',
-    gradient: 'bg-gradient-to-r from-[#FF007A] to-[#7928CA]',
-    accentText: 'text-pink-400',
   },
 };
 
@@ -165,12 +156,6 @@ export const QuotaCard: React.FC<QuotaCardProps> = ({
           <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border shrink-0 ${pStyle.badgeBg} ${pStyle.badgeText} ${pStyle.badgeBorder}`}>
             {planName}
           </span>
-          {id === 'grok' && (
-            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] text-slate-400 shrink-0" title="週期連動綁定 Cursor">
-              <Link2 className="w-2.5 h-2.5 text-cyan-400" />
-              Bonded
-            </span>
-          )}
         </div>
 
         {/* 剩餘百分比 */}
@@ -279,15 +264,15 @@ export const QuotaCard: React.FC<QuotaCardProps> = ({
             });
             return (
               <>
-                <span className={`w-1.5 h-1.5 rounded-full ${isHealthy || win.isFreeResetReady ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${isHealthy || (win.resetCredits ?? 0) > 0 ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
                 <span className="text-slate-400 font-mono">
                   {win.sessionText !== '--' ? `5h ${win.sessionText} · ` : ''}
                   {displayReset}
                 </span>
-                {win.isFreeResetReady && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 text-[9px] font-mono font-bold">
-                    <Sparkles className="w-2.5 h-2.5" />
-                    FREE
+                {(win.resetCredits ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 text-xs font-bold">
+                    <Sparkles className="w-3 h-3" aria-hidden="true" />
+                    免費重置 {win.resetCredits} 次
                   </span>
                 )}
               </>

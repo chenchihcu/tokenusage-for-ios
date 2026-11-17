@@ -81,7 +81,8 @@ export class ApiClient {
   private readonly flights = new Map<string, Promise<ApiResult<unknown>>>();
 
   constructor(deps: ApiClientDeps = {}) {
-    this.fetchImpl = deps.fetchImpl ?? fetch;
+    // Calling the global fetch as a method (this.fetchImpl(...)) throws "Illegal invocation" in WebKit and Chromium.
+    this.fetchImpl = deps.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
     this.now = deps.now ?? (() => Date.now());
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.random = deps.random ?? Math.random;

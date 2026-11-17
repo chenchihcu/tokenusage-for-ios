@@ -27,7 +27,12 @@ export function reduceNet(state: NetState = initialNetState(), action: NetAction
   if (action.type === 'snapshot') {
     if (action.generation <= state.requestGeneration) return state;
     const path = mapPath(action.connected, action.connectionType);
-    const pathChanged = path !== state.path || action.connected !== (state.connectedHint === true);
+    // The first snapshot only resolves 'unknown' → known; it is not a network change.
+    // Treating it as one reset a just-confirmed API state and left the UI on 「正在確認連線…」.
+    const firstHint = state.connectedHint === 'unknown';
+    const pathChanged = firstHint
+      ? state.path !== 'unknown' && path !== state.path
+      : path !== state.path || action.connected !== (state.connectedHint === true);
     const next: NetState = {
       ...state,
       path,

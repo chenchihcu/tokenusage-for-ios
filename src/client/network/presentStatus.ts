@@ -41,7 +41,7 @@ export function presentStatus(state: NetState, updatedLabel: string | null): Sta
     return { live: '無法連接服務，請稍後重試', pathLabel, checkHint: null, showProgress: false };
   }
   if (state.announce === 'synced') {
-    return { live: '已同步', pathLabel, checkHint: null, showProgress: false };
+    return { live: updatedLabel ? `已同步 · 資料時間 ${updatedLabel}` : '已同步', pathLabel, checkHint: null, showProgress: false };
   }
   if (state.announce === 'recovered') {
     return { live: '連線已恢復', pathLabel, checkHint: null, showProgress: false };
@@ -51,6 +51,9 @@ export function presentStatus(state: NetState, updatedLabel: string | null): Sta
   }
   if (state.api === 'unknown') {
     return { live: '正在確認連線…', pathLabel, checkHint: null, showProgress: true };
+  }
+  if (state.api === 'reachable' && state.errorKind === 'none') {
+    return { live: updatedLabel ? `已同步 · 資料時間 ${updatedLabel}` : '已同步', pathLabel, checkHint: null, showProgress: false };
   }
   return { live: null, pathLabel, checkHint: null, showProgress: state.api === 'checking' };
 }

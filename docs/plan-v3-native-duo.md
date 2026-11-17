@@ -13,10 +13,13 @@ Governs: `Institution/ios/IOS_SPEC.md` (SwiftUI, iOS 27.1 SDK, Gates G0–G5), `
 | D3 | **Dual review = Claude + Codex.** Claude implements + self-reviews against IOS_SPEC; Codex reviews each PR before merge. |
 | D4 | **Sign in inside the app** (vendor page in a system browser sheet), never via PC. Per-vendor method decided in P1 (spec FR-21a). |
 | D5 | **All voice functions removed** (decided 2026-11-17): no Gemini Live, no microphone button, no voice commands, no microphone permission. VoiceOver accessibility is kept (it is not a voice-command feature). |
+| D6 | **Free resets: badge + local phone notification** (decided 2026-11-17). See spec FR-30…FR-33. |
+| D7 | **Build path without paid accounts** (decided 2026-11-17, Claude's call): GitHub-hosted macOS runner on the free plan (private repo ≈ 2,000 min/month at 10× macOS multiplier ≈ 200 macOS min). macOS jobs run **manually (`workflow_dispatch`) only**, never on every push. Simulator build/test needs no Apple account. |
+| D8 | **Order: P0 first, then P1→P6.** |
 
 Assumptions (stated, change if wrong):
-- A1. Four agents only: **Codex, Claude Code, Cursor, Antigravity**. Grok is removed.
-- A2. Model catalog is **not** carried into v3 (not requested). → Confirm.
+- A1. **Confirmed 2026-11-17:** four agents only — Codex, Claude Code, Cursor, Antigravity. Grok removed.
+- A2. **Confirmed 2026-11-17:** model catalog removed.
 - A3. Deployment target iOS 27.1 (IOS_SPEC §1 default).
 
 ## 1. Verified problems in the current build (from `/verify`, 669f04d)
@@ -119,10 +122,10 @@ Claude reports the highest Gate actually reached; never "verified" below G2.
 
 ## 5. Blockers / what I need from you
 
-1. **Mac build path**: confirm the repo may use the `xcode-27` GitHub runner (billing), or provide a cloud Mac. Without it, nothing above G1 can be verified.
+1. **Mac build path** — resolved by D7. Remaining limit: **installing on your iPhone Duo.** Without the paid Apple Developer Program (US$99/yr) there is no TestFlight; a free Apple ID can install from Xcode on a Mac you can reach, but the app expires after 7 days and must be re-installed. G5 needs one of the two.
 2. **Tokens for P1 spikes** — one per vendor, entered via the session credential form or on-device, never pasted in chat.
 3. **Signing / TestFlight** stays with you (IOS_SPEC §8).
-4. Confirm A1 (drop Grok) and A2 (drop model catalog). Voice is already removed (D5).
+4. ~~A1/A2~~ confirmed.
 
 ## 6. Risks
 
@@ -146,3 +149,10 @@ Rendered: ALL 全景 / DUO 雙欄 × outer portrait 375×812, outer landscape 81
 | V8 | DUO, outer portrait | 「DUO 雙欄」 selected but shows one column — the label promises something the screen can't do. | P0: hide the ALL/DUO switch on narrow widths. P4: layout follows size class automatically (FR-27); no manual switch. |
 | V9 | DUO list | Search field for 5 items; 「SSOT 有效」/「5 Platforms Bonded」 badges claim status the app hasn't verified. | P0: remove the search field and both badges. |
 | V10 | All | Refresh-interval menu and handedness control off-screen on outer portrait; reset chips cut off with no scroll hint. | P0: move interval + handedness into a Settings sheet reachable from the fast-path cluster; wrap reset chips. |
+
+## 8. P0 status (2026-11-17) — implemented, browser-verified, awaiting Codex review
+
+Fixed: B1 (fetch binding), B2 (first network snapshot reset API state), B4 (free-reset credits shown; passed reset ≠ "FREE"), B5/V10, B6/V2, V1, V3–V9; voice, Grok, model catalog and hard-coded sample data removed; Worker returns an empty list instead of sample rows; macOS CI manual-only (D7); v1.3.0.
+Evidence (local Worker + Chromium at Duo-approximate sizes): status 「已同步」; 15 s setting → requests at 0.1 / 15.1 / 30.1 s, manual → 1; a pushed credit change 0 → 2 appeared on the next refresh; 16/16 view × hand combinations scroll clear of the cluster with 0 off-screen controls and 0 targets < 44 pt; Playwright 58/58.
+Not done in P0 (by plan): B3 phone-direct data (P3), B7 light theme / small text (P4), B8 widget App Group (P5), B9 iOS 27.1 target (P2). Highest gate: G1-equivalent (web); no Duo simulator or device run.
+Deploy pending (needs user OK): Worker removal of `VoiceSessionDO` via migration `v2`.

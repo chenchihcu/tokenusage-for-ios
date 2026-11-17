@@ -1,9 +1,9 @@
 name: Build iOS IPA (Cloud Mac)
 
+# Manual only (plan D7): the repo is private on a free plan, and macOS minutes
+# count 10x against the monthly allowance. Run it from the Actions tab when needed.
 on:
   workflow_dispatch:
-  push:
-    branches: [ main, "work/**", "cursor/**" ]
 
 jobs:
   build-ios:

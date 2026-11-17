@@ -88,6 +88,12 @@ Widget (US-6)
 - **FR-25.** Small widget: governing remaining % for 4 agents. Medium: plus next reset and Codex/Claude free-reset credits.
 - **FR-26.** Widget shows the snapshot timestamp; it fetches directly using Keychain tokens when its timeline reloads.
 
+Notifications (US-3) — decided 2026-11-17
+- **FR-30.** The app asks for notification permission only when the user first turns on 「免費重置通知」 (Settings or the Resets sheet), after a one-line why; denial keeps the badge working and shows how to enable it in iOS Settings.
+- **FR-31.** A local notification fires when Codex or Claude Code free-reset credits go from 0 to ≥ 1, or increase, as seen by a refresh (foreground, background task or widget reload).
+- **FR-32.** At most one notification per vendor per credit change; no repeat for the same count.
+- **FR-33.** Tapping the notification opens the Resets sheet (F4). No remote push server; detection depends on iOS background refresh timing (FR-11).
+
 Duo layout & continuity (US-7)
 - **FR-27.** Layout branches only on horizontal size class: compact → single column; regular → `NavigationSplitView` (agent list | detail).
 - **FR-28.** No interactive control overlaps a `.division` reserved region (crease) in partially folded postures.
@@ -157,6 +163,13 @@ Duo layout & continuity (US-7)
 ### FR-25 / FR-26
 - **Given** a medium widget on the Home Screen **When** its timeline reloads **Then** it shows 4 percentages, next reset and the Codex/Claude credits, with the snapshot time.
 
+### FR-30 / FR-31 / FR-32 / FR-33
+- **Given** notifications never requested **When** the app launches **Then** no permission prompt appears.
+- **Given** the user turns on 「免費重置通知」 and allows **When** a refresh sees Claude Code credits change 0 → 1 **Then** one notification 「Claude Code 有 1 次免費重置可用」 is delivered.
+- **Given** the same count 1 is seen on the next refresh **When** it completes **Then** no new notification fires.
+- **Given** permission denied **When** credits change **Then** only the badge updates, and Settings shows 「通知已關閉，可到 iOS 設定開啟」.
+- **Given** a delivered notification **When** tapped **Then** the app opens the Resets sheet.
+
 ### FR-27 / FR-28 / FR-29
 - **Given** the Duo is unfolded (regular width) **When** the app runs **Then** an agent list and a detail pane are visible side by side.
 - **Given** book-style partial fold **When** the app is shown **Then** no button intersects the crease frame (screenshot P05).
@@ -212,10 +225,10 @@ Duo layout & continuity (US-7)
 ## 10. Open Questions
 
 - **Q1.** **Resolved 2026-11-17:** sign in inside the app, not via PC (FR-21…FR-24). Remaining: which method works per vendor (FR-21a) — owner: P1 spike.
-- **Q2.** `[OPEN_QUESTION]` Should the app send a local notification when a free-reset credit appears or a weekly window resets? Default: **no** in v3 (badge only). Owner: user.
+- **Q2.** **Resolved 2026-11-17:** badge **and** local phone notification (FR-30…FR-33).
 - **Q3.** `[OPEN_QUESTION]` Do Cursor and Antigravity also grant free resets? Default: not shown. Owner: P1 spike.
-- **Q4.** `[ASSUMPTION]` Drop Grok and model catalog. Owner: user (yes/no). (Voice: resolved — removed.)
-- **Q5.** `[OPEN_QUESTION]` Approve `xcode-27` runner billing or provide a cloud Mac. Owner: user.
+- **Q4.** **Resolved 2026-11-17:** Grok, model catalog and voice removed.
+- **Q5.** **Resolved:** free-plan GitHub macOS runner, manual runs only (plan D7). Device install limit noted in plan §5.
 - **Q6.** `[ASSUMPTION]` Personal distribution only (TestFlight), not public App Store. Owner: user.
 - **Q7.** `[ASSUMPTION]` App name stays "OpenTokenUsage"; bundle ID unchanged from current project (IOS_SPEC forbids changing it without confirmation).
 
@@ -227,7 +240,7 @@ Duo layout & continuity (US-7)
 ## 12. Flows (screen by screen)
 
 Basis: Apple HIG conventions + this project. `[ASSUMPTION]` Not compared against real apps (UXKIN library not connected in this session).
-App facts that shape the flows: no app account of its own (nothing to delete under App Review 5.1.1(v); per-vendor 登出 instead), no system permissions (no microphone, notifications off per Q2), no purchases.
+App facts that shape the flows: no app account of its own (nothing to delete under App Review 5.1.1(v); per-vendor 登出 instead), one system permission only — notifications, asked in context (FR-30); no microphone; no purchases.
 
 ### F1 — First launch (goal: first agent showing real numbers in under 1 minute)
 1. **Dashboard, nothing signed in.** Shows the 4 agent rows as 「未設定」 with a one-line explanation 「登入各服務後，這裡會顯示剩餘額度與重置時間」 and one primary button 「登入第一個服務」. No splash carousel, no fake numbers. Way out: none needed (it is the home screen).
