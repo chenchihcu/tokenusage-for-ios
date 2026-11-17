@@ -161,3 +161,9 @@ Deploy pending (needs user OK): Worker removal of `VoiceSessionDO` via migration
 ## 9. P1 status (2026-11-17)
 
 Vendor research done — `docs/p1-findings.md`. Live sign-in tests move to the first device build. **Blocked:** macOS runners do not start on this private free-plan repo (P1 SDK probe and PR #4 runs), so P2+ cannot be compiled. P2 will build on PR #4's `ios-native/`.
+
+## 10. P2 start (2026-11-17)
+
+- User chose: make the repo public (free macOS runners). History scan: 37 commits / 5 branches, no keys, tokens or signing files; 9 commits carry the owner's Gmail as author. **Visibility must be flipped by the owner in GitHub Settings — no tool in the agent session can do it.**
+- `ios-native/` and `ios-simulator-screenshots.yml` imported from PR #4 unchanged (workflow set to manual). Never compiled. Known gaps vs spec: iOS 17 / Swift 5.10 target (→ 27.1 / 6.4 after SDK probe), pasted tokens (→ in-app sign-in), auto-reset rule (remove), Antigravity, free-reset credits, fast path, per-vendor floors, notifications, widget.
+- Next, in order, once runners start: SDK probe → first compile + unit tests of imported app → P2 changes.

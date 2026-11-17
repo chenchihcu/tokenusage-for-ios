@@ -1,0 +1,88 @@
+name: iOS Simulator Tests and Screenshots
+
+# Runs the native app's unit tests in the iOS Simulator, then captures
+# portrait and landscape screenshots. Prefers an iPhone Duo simulator when the
+# runner's Xcode has one, otherwise the first available iPhone.
+# Manual only until the repo is public (plan D7); then Claude starts it per change.
+on:
+  workflow_dispatch:
+
+jobs:
+  simulator:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: |
+          xcodebuild -version
+          brew install xcodegen
+          cd ios-native && xcodegen generate
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          xcrun simctl list devices available
+          LIST=$(xcrun simctl list devices available)
+          UDID=$(echo "$LIST" | grep -E 'iPhone Duo' | head -n 1 | grep -oE '[0-9A-F-]{36}' || true)
+          [ -z "$UDID" ] && UDID=$(echo "$LIST" | grep -E 'iPhone 1[5-9] Pro \(' | head -n 1 | grep -oE '[0-9A-F-]{36}' || true)
+          [ -z "$UDID" ] && UDID=$(echo "$LIST" | grep -E 'iPhone' | head -n 1 | grep -oE '[0-9A-F-]{36}')
+          echo "$LIST" | grep "$UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Unit tests
+        run: |
+          cd ios-native
+          xcodebuild test -project OpenTokenUsage.xcodeproj \
+            -scheme OpenTokenUsage \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO | tail -n 60
+
+      - name: Screenshots
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          set -e
+          APP=ios-native/build/DerivedData/Build/Products/Debug-iphonesimulator/OpenTokenUsage.app
+          BUNDLE=com.chihfu.opentokenusage
+          mkdir -p screenshots
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 || true
+
+          shoot () {
+            local app="$1" name="$2" appearance="$3"
+            xcrun simctl ui "$UDID" appearance "$appearance"
+            xcrun simctl terminate "$UDID" "$BUNDLE" || true
+            xcrun simctl uninstall "$UDID" "$BUNDLE" || true
+            xcrun simctl install "$UDID" "$app"
+            xcrun simctl launch "$UDID" "$BUNDLE"
+            sleep 12
+            xcrun simctl io "$UDID" screenshot "screenshots/$name.png"
+          }
+
+          only_orientation () {
+            local src="$1" dst="$2" orientation="$3"
+            rm -rf "$dst"; mkdir -p "$(dirname "$dst")"; cp -R "$src" "$dst"
+            /usr/libexec/PlistBuddy -c "Delete :UISupportedInterfaceOrientations" "$dst/Info.plist" || true
+            /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations array" "$dst/Info.plist"
+            /usr/libexec/PlistBuddy -c "Add :UISupportedInterfaceOrientations:0 string $orientation" "$dst/Info.plist"
+            codesign --force --deep -s - "$dst"
+          }
+
+          shoot "$APP" portrait-dark dark
+          shoot "$APP" portrait-light light
+          only_orientation "$APP" "$RUNNER_TEMP/Land/OpenTokenUsage.app" UIInterfaceOrientationLandscapeLeft
+          shoot "$RUNNER_TEMP/Land/OpenTokenUsage.app" landscape-dark dark
+          ls -la screenshots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-screenshots
+          path: screenshots/
+          retention-days: 14
