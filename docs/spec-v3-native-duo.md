@@ -28,7 +28,7 @@ Tags: untagged = stated by user or verified; `[ASSUMPTION]` = author default, co
 - **All voice functions** (decided 2026-11-17): Gemini Live, voice commands, microphone button, audio visualiser, microphone permission. VoiceOver accessibility is *not* affected and stays required.
 - `[ASSUMPTION]` Model catalog, MCP tools, cost estimator.
 - PC daemon, Cloudflare Worker data path, D1 (retired from the app's data path).
-- App Store public release. `[ASSUMPTION]` Distribution is personal (TestFlight / own device only).
+- App Store release and TestFlight. Distribution is a sideloaded personal build with a free Apple ID (plan D9).
 - Android, iPad-specific layouts, macOS, Apple Watch.
 - Usage history charts / trends (only current state).
 - Editing vendor accounts, buying plans, or redeeming a free reset from inside the app (view only).
@@ -208,7 +208,7 @@ Duo layout & continuity (US-7)
 - **Vendor usage endpoints** (unofficial) for Codex, Claude Code, Cursor, Antigravity — `[OPEN_QUESTION]` exact URLs, auth, fields; resolved in plan P1. **Not ready.**
 - **Mac build path:** Xcode 27.1 on a cloud Mac or GitHub `xcode-27` runner — **not ready** (needs user approval/billing).
 - **iOS 27.1 SDK APIs:** `reservedRegions`, `NavigationSplitView` on Duo, vertical toolbar — verify per IOS_SPEC §4.4 (plan P1).
-- **Apple Developer account** for signing / TestFlight — user-owned.
+- **Free Apple ID** for signing a personal build (plan D9); capabilities allowed under a free team must be verified in P1.
 - **XcodeGen** (build tool only, not shipped).
 - **Codex** as second reviewer for every PR (dual review).
 
@@ -219,6 +219,7 @@ Duo layout & continuity (US-7)
 - **Risk:** Access tokens expire (hours). **Mitigation:** on-phone renewal (FR-21c); otherwise FR-24 one-tap re-sign-in.
 - **Risk:** Vendor ToS may forbid automated polling. **Mitigation:** minimum interval 15 s, per-vendor backoff; user accepts ToS risk (personal use).
 - **Risk:** Background refresh cadence controlled by iOS. **Mitigation:** stated in UI (FR-11); foreground guarantee only.
+- **Risk:** Free Apple ID builds expire after 7 days; an expired app won't open and the widget stops. **Mitigation:** re-install weekly from the latest manual CI build; in-app sign-ins live in the Keychain and are normally kept across a re-install of the same bundle ID, but `VERIFY` on device.
 - **Risk:** Duo simulator can't run most extensions. **Mitigation:** widget verified on device (G5).
 - **Risk:** No Mac in this cloud session. **Mitigation:** Core logic testable on Linux (G1); G2+ via CI runner.
 
@@ -229,7 +230,7 @@ Duo layout & continuity (US-7)
 - **Q3.** `[OPEN_QUESTION]` Do Cursor and Antigravity also grant free resets? Default: not shown. Owner: P1 spike.
 - **Q4.** **Resolved 2026-11-17:** Grok, model catalog and voice removed.
 - **Q5.** **Resolved:** free-plan GitHub macOS runner, manual runs only (plan D7). Device install limit noted in plan §5.
-- **Q6.** `[ASSUMPTION]` Personal distribution only (TestFlight), not public App Store. Owner: user.
+- **Q6.** **Resolved 2026-11-17:** personal use only, free Apple ID, sideloaded (no TestFlight, no App Store); re-install every 7 days (plan D9).
 - **Q7.** `[ASSUMPTION]` App name stays "OpenTokenUsage"; bundle ID unchanged from current project (IOS_SPEC forbids changing it without confirmation).
 
 ## 11. Success Metrics

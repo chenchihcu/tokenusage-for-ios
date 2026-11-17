@@ -16,6 +16,7 @@ Governs: `Institution/ios/IOS_SPEC.md` (SwiftUI, iOS 27.1 SDK, Gates G0–G5), `
 | D6 | **Free resets: badge + local phone notification** (decided 2026-11-17). See spec FR-30…FR-33. |
 | D7 | **Build path without paid accounts** (decided 2026-11-17, Claude's call): GitHub-hosted macOS runner on the free plan (private repo ≈ 2,000 min/month at 10× macOS multiplier ≈ 200 macOS min). macOS jobs run **manually (`workflow_dispatch`) only**, never on every push. Simulator build/test needs no Apple account. |
 | D8 | **Order: P0 first, then P1→P6.** |
+| D9 | **Free Apple ID only — no paid Apple Developer Program** (decided 2026-11-17). No TestFlight. Install path: CI builds an unsigned `.ipa` on the free GitHub macOS runner (manual run) → user signs and installs it from Windows with a free Apple ID using a sideloading tool (e.g. Sideloadly or AltServer; `[ASSUMPTION]` third-party, user's choice) or from a Mac with Xcode if one is available. Limits: the app expires after **7 days** and must be re-installed; at most 3 sideloaded apps per device. |
 
 Assumptions (stated, change if wrong):
 - A1. **Confirmed 2026-11-17:** four agents only — Codex, Claude Code, Cursor, Antigravity. Grok removed.
@@ -116,15 +117,15 @@ Each phase = one PR on a `claude/*` / `work/*` branch → Claude self-review →
 | G2/G3 build + XCTest/XCUITest on iPhone Duo sim | `xcode-27` GitHub runner | Actions link + xcresult |
 | Code review | **Codex** (you trigger) | PR review |
 | G4 posture screenshots | human + Agent | `docs/evidence/<date>-<feature>/matrix.md` |
-| G5 TestFlight on your iPhone Duo | you | sign-off |
+| G5 Sideloaded build (free Apple ID, D9) on your iPhone Duo | you | sign-off |
 
 Claude reports the highest Gate actually reached; never "verified" below G2.
 
 ## 5. Blockers / what I need from you
 
-1. **Mac build path** — resolved by D7. Remaining limit: **installing on your iPhone Duo.** Without the paid Apple Developer Program (US$99/yr) there is no TestFlight; a free Apple ID can install from Xcode on a Mac you can reach, but the app expires after 7 days and must be re-installed. G5 needs one of the two.
+1. **Mac build path** — resolved by D7. **Device install** — resolved by D9 (free Apple ID, 7-day re-install). `VERIFY` in P1: which capabilities a free (personal team) signing allows — Keychain sharing and local notifications are expected to work; **App Groups for the widget are uncertain**. If App Groups are refused, the widget reads its snapshot through the shared Keychain access group instead.
 2. **Tokens for P1 spikes** — one per vendor, entered via the session credential form or on-device, never pasted in chat.
-3. **Signing / TestFlight** stays with you (IOS_SPEC §8).
+3. **Signing and installing** stay with you (IOS_SPEC §8): your free Apple ID is entered only in your own signing tool, never in this repo or chat.
 4. ~~A1/A2~~ confirmed.
 
 ## 6. Risks
