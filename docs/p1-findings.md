@@ -33,7 +33,14 @@ Signing in from this app means presenting the vendors' **own CLI sign-in clients
 
 Run by `.github/workflows/sdk-probe.yml` (`scripts/sdk-probe.sh`).
 
-**BLOCKED (2026-11-17).** Run [44027472527](https://github.com/chenchihcu/tokenusage-for-ios/actions/runs/44027472527): both jobs (`xcode-27`, `macos-latest`) ended in 3–4 s with no runner assigned and no log. Every macOS run in this repo since 2026-11-16 ended the same way except one; PR #4 reports the same cause (free-plan Actions minutes). Consequence: **no SDK check, no native build, no simulator test is possible** until one of: the repo is made public (GitHub-hosted runners are free for public repos), the monthly minutes reset, or a Mac is available. Nothing above G1 can be reached meanwhile.
+**Unblocked 2026-11-17** after the repo was made public. Run [44031060815](https://github.com/chenchihcu/tokenusage-for-ios/actions/runs/44031060815):
+
+| Runner | Xcode / SDK / Swift | iPhone Duo simulator | Duo APIs |
+|---|---|---|---|
+| `xcode-27` | 27.1 (27.0–27.2 installed) / iOS 27.1 / Swift 6.4 | **Yes** (`SimDeviceType.iPhone-Duo`; runtimes 27.0, 27.1, 27.2) | **All FOUND**: `reservedRegions`, `UIViewReservedRegion`, `ArrangementView` / `arrangementViewStyle` / `overlayArrangementZIndex`, `UIArrangementViewController`, `onHingeChange`, `UIHingeInteraction`, `defaultTabBarPlacement`, `ConcentricRectangle`, `UICornerConfiguration`, `BGAppRefreshTask` |
+| `macos-latest` | 26.6 / iOS 26.5 | No | Duo APIs missing → **not usable**; all iOS jobs must use `xcode-27` |
+
+`ASWebAuthenticationSession` reported MISSING on both — a probe-pattern miss (API dates from iOS 12); `VERIFY` by compiling the sign-in code. The earlier runner block (first run 44027472527, no runner assigned) was the private-repo minutes limit.
 
 ## 5. Existing native work — PR #4
 
