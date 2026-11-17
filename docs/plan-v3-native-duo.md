@@ -1,6 +1,7 @@
 # Plan v3 — Native SwiftUI for iPhone Duo (iOS 27.1), direct phone refresh
 
 Status: **Draft — awaiting user approval** · Date: 2026-11-17 · Baseline SHA: `669f04d`
+Spec: `docs/spec-v3-native-duo.md` (FR-1…FR-29, acceptance criteria, open questions Q1–Q7).
 Governs: `Institution/ios/IOS_SPEC.md` (SwiftUI, iOS 27.1 SDK, Gates G0–G5), `00-core-rules.md`, `06-ui-ux-universal.md`.
 
 ## 0. Decisions (made by user, 2026-11-17)
