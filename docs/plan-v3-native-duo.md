@@ -157,3 +157,7 @@ Fixed: B1 (fetch binding), B2 (first network snapshot reset API state), B4 (free
 Evidence (local Worker + Chromium at Duo-approximate sizes): status 「已同步」; 15 s setting → requests at 0.1 / 15.1 / 30.1 s, manual → 1; a pushed credit change 0 → 2 appeared on the next refresh; 16/16 view × hand combinations scroll clear of the cluster with 0 off-screen controls and 0 targets < 44 pt; Playwright 58/58.
 Not done in P0 (by plan): B3 phone-direct data (P3), B7 light theme / small text (P4), B8 widget App Group (P5), B9 iOS 27.1 target (P2). Highest gate: G1-equivalent (web); no Duo simulator or device run.
 Deploy pending (needs user OK): Worker removal of `VoiceSessionDO` via migration `v2`.
+
+## 9. P1 status (2026-11-17)
+
+Vendor research done — `docs/p1-findings.md`. Live sign-in tests move to the first device build. **Blocked:** macOS runners do not start on this private free-plan repo (P1 SDK probe and PR #4 runs), so P2+ cannot be compiled. P2 will build on PR #4's `ios-native/`.
