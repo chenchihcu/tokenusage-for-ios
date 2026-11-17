@@ -1,5 +1,4 @@
 import http from 'node:http';
-import { WebSocketServer, WebSocket } from 'ws';
 import { securityHeaders } from '../shared/cors';
 import { defaultLedger } from './ledger/usage-ledger';
 import { discoverLatestModels, validateUpstreamUrl } from './catalog/discovery';
@@ -147,32 +146,6 @@ const server = http.createServer(async (req, res) => {
 
   res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('OpenTokenUsage Local Server Active');
-});
-
-const wss = new WebSocketServer({ server });
-
-wss.on('connection', (ws: WebSocket) => {
-  ws.send(JSON.stringify({ type: 'connected', message: 'Gemini 3.8 Live WebSocket Connected' }));
-
-  ws.on('message', async (data: string) => {
-    try {
-      const msg = JSON.parse(data.toString());
-      if (msg.type === 'call_tool') {
-        const toolResult = await handleMcpToolCall(msg.tool, msg.args);
-        ws.send(JSON.stringify({ type: 'tool_result', result: toolResult }));
-      } else if (msg.type === 'voice_input') {
-        ws.send(
-          JSON.stringify({
-            type: 'voice_response',
-            text: `已同步最新配額狀態。`,
-            audio: null,
-          })
-        );
-      }
-    } catch (err: any) {
-      ws.send(JSON.stringify({ type: 'error', error: err.message }));
-    }
-  });
 });
 
 if (process.env.NODE_ENV !== 'test') {

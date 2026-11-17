@@ -5,7 +5,6 @@ import { CockpitOverview } from './CockpitOverview';
 import { QuotaCardProps } from './QuotaCard';
 import { ChevronLeft } from 'lucide-react';
 import { DashboardViewMode, HandednessMode } from './ViewModeSelector';
-import { PlatformIcon } from './PlatformIcon';
 import { haptic } from '../services/haptics';
 import { decideColumns, type ColumnMode } from '../network/layout';
 
@@ -14,8 +13,6 @@ interface SplitViewContainerProps {
   selectedId: string;
   onSelect: (id: string) => void;
   isLoading: boolean;
-  isVoiceActive: boolean;
-  liveTranscript: string;
   viewMode: DashboardViewMode;
   onChangeViewMode: (mode: DashboardViewMode) => void;
   isOnline: boolean;
@@ -32,8 +29,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   selectedId,
   onSelect,
   isLoading,
-  isVoiceActive,
-  liveTranscript,
   viewMode,
   onChangeViewMode,
   isOnline,
@@ -143,6 +138,8 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   };
 
   const selectedItem = quotas.find((q) => q.id === selectedId);
+  // Same rule as the cockpit's 「只看告警」 chip.
+  const listQuotas = filterAlertOnly ? quotas.filter((q) => q.remainingPercent <= 20) : quotas;
 
   // =========================================================================
   // 特殊形態 A：W3C Viewport Segments 雙屏水平展開 (horizontal-viewport-segments: 2)
@@ -188,8 +185,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             selectedItem={selectedItem}
             isFocusMode={false}
             onToggleFocus={() => {}}
-            isVoiceActive={isVoiceActive}
-            liveTranscript={liveTranscript}
             handedness={handedness}
             connectionLabel={linkLabel}
           />
@@ -225,8 +220,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             selectedItem={selectedItem}
             isFocusMode={false}
             onToggleFocus={() => {}}
-            isVoiceActive={isVoiceActive}
-            liveTranscript={liveTranscript}
             handedness={handedness}
             connectionLabel={linkLabel}
           />
@@ -263,43 +256,8 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   if (wide) {
     return (
       <div
-        className={`flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe ${
-          handedness === 'left' ? 'flex-row-reverse' : ''
-        }`}
+className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe"
       >
-        {/* iPhone Duo 快速切換路徑圖示軌道 (44×44pt Apple HIG 觸控熱區) */}
-        <nav
-          aria-label="快速切換 AI 平台"
-          className="flex flex-col items-center justify-center gap-1.5 px-1.5 py-2 border-x border-slate-800/80 bg-slate-950/95 shrink-0"
-        >
-          {quotas.map((q) => {
-            const active = q.id === selectedId;
-            const isCrit = q.remainingPercent <= 5;
-            return (
-              <button
-                key={q.id}
-                type="button"
-                onClick={() => handleItemSelect(q.id)}
-                title={`${q.name} (${q.remainingPercent}%)`}
-                aria-label={`切換至 ${q.name}`}
-                aria-pressed={active}
-                className={`relative w-11 h-11 rounded-xl flex items-center justify-center border transition-all active:scale-95 touch-manipulation ${
-                  active
-                    ? 'bg-cyan-950/80 border-cyan-400 text-cyan-300 shadow-[0_0_14px_rgba(6,182,212,0.3)]'
-                    : 'bg-slate-900/70 border-slate-800 text-slate-400 hover:text-slate-100 hover:border-slate-700'
-                }`}
-              >
-                <PlatformIcon id={q.id} className="w-4 h-4" />
-                <span
-                  className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${
-                    isCrit ? 'bg-rose-400 animate-pulse' : 'bg-emerald-400'
-                  }`}
-                />
-              </button>
-            );
-          })}
-        </nav>
-
         {/* 左欄 Master List (38% 黃金分割寬度，支援 Focus Mode 收折) */}
         <aside
           aria-label="AI 平台清單"
@@ -310,7 +268,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
           }`}
         >
           <MasterList
-            quotas={quotas}
+            quotas={listQuotas}
             selectedId={selectedId}
             onSelect={handleItemSelect}
             isLoading={isLoading}
@@ -319,15 +277,13 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
 
         {/* 右欄 Detail Workbench (62% 寬度或 100% 全寬) */}
         <main
-          aria-label="AI 平台詳情與語音工作台"
+          aria-label="服務詳情"
           className="flex-1 h-full min-w-0 bg-slate-950"
         >
           <DetailWorkbench
             selectedItem={selectedItem}
             isFocusMode={isFocusMode}
             onToggleFocus={() => setIsFocusMode(!isFocusMode)}
-            isVoiceActive={isVoiceActive}
-            liveTranscript={liveTranscript}
             handedness={handedness}
             connectionLabel={linkLabel}
           />
@@ -357,8 +313,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
               selectedItem={selectedItem}
               isFocusMode={false}
               onToggleFocus={() => {}}
-              isVoiceActive={isVoiceActive}
-              liveTranscript={liveTranscript}
               handedness={handedness}
               connectionLabel={linkLabel}
             />
@@ -366,7 +320,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
         </div>
       ) : (
         <MasterList
-          quotas={quotas}
+          quotas={listQuotas}
           selectedId={selectedId}
           onSelect={handleItemSelect}
           isLoading={isLoading}

@@ -21,18 +21,14 @@
       "id": "dde703e1cb314858be3478285c75ea57"
     }
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "VOICE_SESSION",
-        "class_name": "VoiceSessionDO"
-      }
-    ]
-  },
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": ["VoiceSessionDO"]
+    },
+    {
+      "tag": "v2",
+      "deleted_classes": ["VoiceSessionDO"]
     }
   ]
 }

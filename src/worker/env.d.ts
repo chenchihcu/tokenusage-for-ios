@@ -2,8 +2,6 @@ export interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   KV_CATALOG: KVNamespace;
-  VOICE_SESSION: DurableObjectNamespace;
-  GEMINI_API_KEY?: string;
   ENCRYPTION_MASTER_KEY?: string;
 }
 

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>StringsTable</key>
+	<string>Root</string>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+			<key>Title</key>
+			<string>更新</string>
+			<key>FooterText</key>
+			<string>只在 App 開啟時更新，不會在背景使用網路。</string>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Title</key>
+			<string>自動更新</string>
+			<key>Key</key>
+			<string>opentokenusage_refresh_interval</string>
+			<key>DefaultValue</key>
+			<integer>60</integer>
+			<key>Titles</key>
+			<array>
+				<string>15 秒</string>
+				<string>30 秒</string>
+				<string>1 分鐘</string>
+				<string>5 分鐘</string>
+				<string>15 分鐘</string>
+				<string>僅手動</string>
+			</array>
+			<key>Values</key>
+			<array>
+				<integer>15</integer>
+				<integer>30</integer>
+				<integer>60</integer>
+				<integer>300</integer>
+				<integer>900</integer>
+				<integer>0</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>Title</key>
+			<string>觸覺回饋</string>
+			<key>Key</key>
+			<string>opentokenusage_haptics_enabled</string>
+			<key>DefaultValue</key>
+			<true/>
+		</dict>
+	</array>
+</dict>
+</plist>

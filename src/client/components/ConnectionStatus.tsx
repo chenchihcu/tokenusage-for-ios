@@ -5,17 +5,13 @@ import type { StatusPresentation } from '../network/presentStatus';
 interface ConnectionStatusProps {
   status: StatusPresentation;
   busy: boolean;
-  dataSaver: boolean;
   onRetry: () => void;
-  onToggleDataSaver: () => void;
 }
 
 export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   status,
   busy,
-  dataSaver,
   onRetry,
-  onToggleDataSaver,
 }) => {
   const [spoken, setSpoken] = useState(status.live ?? '正在確認連線…');
 
@@ -27,10 +23,10 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
 
   return (
     <div className="w-full border-b border-slate-800/80 bg-slate-950/95 px-4 py-1.5 sm:px-6 pl-safe-island pr-safe-island phoneland:py-0">
-      <div className="max-w-7xl mx-auto flex flex-wrap phoneland:flex-nowrap items-center gap-2">
-        <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-slate-100 min-h-[44px] min-w-0 phoneland:flex-1">
+      <div className="max-w-7xl mx-auto flex flex-nowrap items-center gap-2">
+        <p role="status" aria-live="polite" className="flex flex-1 items-center gap-2 text-sm text-slate-100 min-h-[44px] min-w-0">
           <Icon className="w-4 h-4 shrink-0 text-cyan-300" aria-hidden="true" />
-          <span className="phoneland:truncate">{spoken}</span>
+          <span className="min-w-0">{spoken}</span>
           {status.showProgress && busy ? <span className="text-xs text-slate-400">請稍候</span> : null}
         </p>
         {status.pathLabel ? (
@@ -45,16 +41,6 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
         >
           <RefreshCw className={`w-4 h-4 ${busy ? 'animate-spin' : ''}`} aria-hidden="true" />
           重試
-        </button>
-        <button
-          type="button"
-          onClick={onToggleDataSaver}
-          aria-pressed={dataSaver}
-          className={`inline-flex items-center min-h-[44px] px-3 rounded-xl border text-sm ${
-            dataSaver ? 'border-amber-500/60 text-amber-200' : 'border-slate-700 text-slate-200'
-          }`}
-        >
-          {dataSaver ? '節省流量：開' : '節省流量：關'}
         </button>
       </div>
       {status.checkHint ? <p className="text-xs text-slate-400 pb-1 max-w-3xl">{status.checkHint}</p> : null}

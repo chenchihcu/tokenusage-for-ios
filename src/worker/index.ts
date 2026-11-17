@@ -1,6 +1,5 @@
 import { Env, ProviderQuotaRecord, ModelCatalogItem } from './env';
 import { securityHeaders as allowlistedHeaders } from '../shared/cors';
-export { VoiceSessionDO } from './durable-objects/VoiceSessionDO';
 
 const ALLOWED_SSRF_HOSTS = [
   'generativelanguage.googleapis.com',
@@ -240,91 +239,6 @@ export const ACTIVE_FRONTIER_MODELS: ModelCatalogItem[] = [
   }
 ];
 
-// 用戶本機真實數據基準 (100% SSOT Verified)
-export const DEFAULT_REAL_QUOTAS: ProviderQuotaRecord[] = [
-  {
-    provider_id: 'cursor',
-    name: 'Cursor',
-    plan_name: 'Premium',
-    total_quota: 100,
-    used_quota: 100,
-    remaining_percent: 0,
-    reset_time: '2026-11-03T12:12:52.768Z',
-    status: 'active',
-    metrics_json: JSON.stringify([
-      { label: 'Total usage', used: 100.0, limit: 100.0, kind: 'percent', isAlert: true },
-      { label: 'Auto usage', used: 100.0, limit: 100.0, kind: 'percent' },
-      { label: 'Grok Bot', used: 100.0, limit: 100.0, kind: 'percent' },
-      { label: 'API usage', used: 0.0, limit: 100.0, kind: 'percent' }
-    ]),
-    fetched_at: '2026-10-30T17:55:18.457747Z'
-  },
-  {
-    provider_id: 'codex',
-    name: 'Codex',
-    plan_name: 'Plus',
-    total_quota: 100,
-    used_quota: 100,
-    remaining_percent: 0,
-    reset_time: '2026-11-04T06:48:16.000Z',
-    status: 'active',
-    metrics_json: JSON.stringify([
-      { label: 'Session', used: 0.0, limit: 100.0, kind: 'percent' },
-      { label: 'Weekly (Shared)', used: 100.0, limit: 100.0, kind: 'percent', isAlert: true },
-      { label: 'Resets', value: '0 available' },
-      { label: 'Credits', value: '$0.00' }
-    ]),
-    fetched_at: '2026-10-30T22:57:15.1249828Z'
-  },
-  {
-    provider_id: 'antigravity',
-    name: 'Google Antigravity',
-    plan_name: 'Google AI Pro',
-    total_quota: 100,
-    used_quota: 8,
-    remaining_percent: 92,
-    reset_time: '2026-10-30T23:29:29Z',
-    status: 'active',
-    metrics_json: JSON.stringify([
-      { label: 'Session', used: 8.0, limit: 100.0, kind: 'percent' },
-      { label: 'Claude Sub-Session', used: 0.0, limit: 100.0, kind: 'percent' },
-      { label: 'Claude Weekly', used: 54.0, limit: 100.0, kind: 'percent' }
-    ]),
-    fetched_at: '2026-10-30T22:57:18.6093812Z'
-  },
-  {
-    provider_id: 'claude',
-    name: 'Claude Code',
-    plan_name: 'Pro',
-    total_quota: 100,
-    used_quota: 98,
-    remaining_percent: 2,
-    reset_time: '2026-11-02T12:59:59.805Z',
-    status: 'active',
-    metrics_json: JSON.stringify([
-      { label: 'Session', used: 0.0, limit: 100.0, kind: 'percent' },
-      { label: 'Weekly (Shared)', used: 98.0, limit: 100.0, kind: 'percent', isAlert: true },
-      { label: 'Resets', value: '0 available' }
-    ]),
-    fetched_at: '2026-10-30T19:12:17.6328982Z'
-  },
-  {
-    provider_id: 'grok',
-    name: 'Grok (bonded with Cursor)',
-    plan_name: 'SuperGrok',
-    total_quota: 100,
-    used_quota: 100,
-    remaining_percent: 0,
-    reset_time: '2026-11-03T12:12:52.768Z',
-    status: 'active',
-    metrics_json: JSON.stringify([
-      { label: 'Weekly limit', used: 100.0, limit: 100.0, kind: 'percent', isAlert: true },
-      { label: 'Pay as you go', value: 'Disabled' },
-      { label: 'Bonded Sync', value: 'Cursor Linked' }
-    ]),
-    fetched_at: '2026-10-30T22:57:15.3476213Z'
-  }
-];
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -338,23 +252,6 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: securityHeaders });
-    }
-
-    // 2. WebSocket 路由 -> 轉發至 Cloudflare Durable Object (VoiceSessionDO)
-    if (url.pathname === '/ws/live') {
-      const origin = request.headers.get('Origin');
-      const host = request.headers.get('Host');
-      if (origin && host && !origin.includes(host.split(':')[0]) && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
-        return new Response('Forbidden: CSWSH Origin check failed', { status: 403 });
-      }
-
-      const sessionId = url.searchParams.get('sessionId') || 'default-session';
-      const doId = env.VOICE_SESSION.idFromName(sessionId);
-      const stub = env.VOICE_SESSION.get(doId);
-
-      const doUrl = new URL(request.url);
-      doUrl.pathname = '/ws';
-      return stub.fetch(new Request(doUrl.toString(), request));
     }
 
     // 3. API 路由: 取得各 AI 平台額度清單 (GET /api/quotas)
@@ -372,9 +269,7 @@ export default {
           }
         }
 
-        if (!quotas.length) {
-          quotas = DEFAULT_REAL_QUOTAS;
-        }
+        // No built-in sample rows: an empty table returns an empty list, and the app says 「尚無額度資料」.
 
         const bodyStr = JSON.stringify({ success: true, data: quotas });
         
