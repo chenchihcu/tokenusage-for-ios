@@ -129,3 +129,20 @@ Claude reports the highest Gate actually reached; never "verified" below G2.
 - Vendor usage endpoints are undocumented and can change or be blocked; tokens expire (re-entry flow needed). Mitigation: per-provider error state, never fabricated numbers.
 - Background refresh cadence is controlled by iOS, not the app.
 - Duo simulator cannot run most extensions (IOS_SPEC §9.2) → widget verified on device only.
+
+## 7. View-by-view review (2026-11-17, current build, rendered at Duo sizes)
+
+Rendered: ALL 全景 / DUO 雙欄 × outer portrait 375×812, outer landscape 812×375, inner portrait 626×890, inner landscape 890×626, plus left-hand, two-hand and alerts-only. Sizes are `[ASSUMPTION]` approximations; no Duo simulator here.
+
+| # | View | Finding | Fix (where) |
+|---|---|---|---|
+| V1 | All | Four stacked bars (header, status, reset strip, live bar) take 329/812 pt on outer portrait and leave only 164/375 pt of content in outer landscape. | P0: merge into one status line + reset strip; hide live bar when list shows the same data. P4: system nav bar + one summary row. |
+| V2 | All | Floating buttons cover card numbers in 10 of 12 views. | P0: reserve bottom inset equal to the cluster. P4: FR-18 safe-area cluster / toolbar. |
+| V3 | DUO, inner portrait | Three columns (icon rail + list + detail) squeezed into 626 pt: agent name truncated to 「C…」, 「確認中」 wraps one character per line. | P0: drop the icon rail when the list is visible. P4: `NavigationSplitView` two columns only. |
+| V4 | DUO, inner both | Detail pane leads with Gemini Live waveform + transcript; the usage numbers are below the fold. | P0: remove voice panels (D5); numbers first. |
+| V5 | DUO, inner | Detail contains 0K–100K "thinking budget" chips, partly off-screen; unrelated to usage monitoring. | P0: remove. Not in v3. |
+| V6 | Left-hand | Whole card content is mirrored (ring/arrow swapped, text right-aligned) and 「ALL 全景」 is pushed off-screen. HIG moves controls, not reading order. | P0: mirror only the button cluster. P4: FR-19. |
+| V7 | Two-hand | Identical to right-hand; the mode does nothing visible. | P0: remove the mode (right/left only, FR-19). |
+| V8 | DUO, outer portrait | 「DUO 雙欄」 selected but shows one column — the label promises something the screen can't do. | P0: hide the ALL/DUO switch on narrow widths. P4: layout follows size class automatically (FR-27); no manual switch. |
+| V9 | DUO list | Search field for 5 items; 「SSOT 有效」/「5 Platforms Bonded」 badges claim status the app hasn't verified. | P0: remove the search field and both badges. |
+| V10 | All | Refresh-interval menu and handedness control off-screen on outer portrait; reset chips cut off with no scroll hint. | P0: move interval + handedness into a Settings sheet reachable from the fast-path cluster; wrap reset chips. |
