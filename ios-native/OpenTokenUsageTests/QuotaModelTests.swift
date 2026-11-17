@@ -48,19 +48,26 @@ final class QuotaModelTests: XCTestCase {
         XCTAssertNil(QuotaDate.parse("not a date"))
     }
 
-    func testAutoResetRefillsExpiredExhaustedWindows() throws {
-        let items = try decode()
-        let after = try XCTUnwrap(QuotaDate.parse("2026-11-05T00:00:00Z"))
+    func testResetCreditsComeOnlyFromTheVendor() {
+        let now = Date()
+        let tier = QuotaParser.tier(id: "weekly", label: "每週", used: 100, resetsAt: nil)
+        let with = QuotaParser.make(.codex, plan: "Plus", poolName: "Codex", tiers: [tier],
+                                    metrics: [QuotaMetric(label: "Resets", value: "2 available")], now: now)
+        XCTAssertEqual(with.resetCredits, 2)
+        XCTAssertEqual(with.resetCreditsText, "免費重置 2 次")
 
-        let cursor = items[0].applyingAutoReset(now: after)
-        XCTAssertEqual(cursor.remainingPercent, 100)
+        let without = QuotaParser.make(.claude, plan: "Pro", poolName: "Claude", tiers: [tier], metrics: [], now: now)
+        XCTAssertNil(without.resetCredits)
+        XCTAssertEqual(without.resetCreditsText, "免費重置：不提供")
+        // An exhausted window whose reset time passed stays exhausted until the vendor says otherwise.
+        XCTAssertEqual(without.remainingPercent, 0)
+        XCTAssertFalse(QuotaParser.make(.cursor, plan: "Pro", poolName: "Cursor", tiers: [tier], metrics: [], now: now).reportsResetCredits)
+    }
 
-        // 31 % left is not exhausted, so it is not refilled early.
-        let antigravity = items[1].applyingAutoReset(now: after)
-        XCTAssertEqual(antigravity.remainingPercent, 31)
-
-        let before = try XCTUnwrap(QuotaDate.parse("2026-11-01T00:00:00Z"))
-        XCTAssertEqual(items[0].applyingAutoReset(now: before).remainingPercent, 0)
+    func testRefreshFloorsPerProvider() {
+        XCTAssertEqual(DirectProvider.claude.minimumInterval, 300)
+        XCTAssertEqual(DirectProvider.codex.minimumInterval, 60)
+        XCTAssertEqual(DirectProvider.cursor.minimumInterval, 60)
     }
 
     func testLevels() {

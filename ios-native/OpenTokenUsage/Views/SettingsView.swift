@@ -4,7 +4,7 @@ import UIKit
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
-    @AppStorage(SettingsKey.smartAutoReset) private var smartAutoReset = true
+    @AppStorage(SettingsKey.leftHanded) private var leftHanded = false
     @AppStorage(SettingsKey.haptics) private var haptics = true
     @AppStorage(SettingsKey.sampleData) private var sampleData = false
     @State private var tokens: [DirectProvider: String] = [:]
@@ -20,11 +20,14 @@ struct SettingsView: View {
                         }
                     }
                 } footer: {
-                    Text("只在 App 開啟時更新，不會在背景使用網路。")
+                    Text("App 開啟時依此頻率更新。Claude Code 最快每 5 分鐘、Codex 與 Cursor 最快每 1 分鐘查詢一次，避免被服務拒絕。")
                 }
 
                 Section {
-                    Toggle("重置時間到了就顯示為已補滿", isOn: $smartAutoReset)
+                    Picker("慣用手", selection: $leftHanded) {
+                        Text("右手").tag(false)
+                        Text("左手").tag(true)
+                    }
                     Toggle("觸覺回饋", isOn: $haptics)
                 }
 

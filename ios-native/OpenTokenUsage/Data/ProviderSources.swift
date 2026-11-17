@@ -67,6 +67,15 @@ enum DirectProvider: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Fastest the app will ask this provider, whatever the refresh setting.
+    /// Claude's usage endpoint answers 429 when polled often. Starting values; tune on device.
+    var minimumInterval: TimeInterval {
+        switch self {
+        case .claude: return 300
+        case .codex, .cursor: return 60
+        }
+    }
+
     var keychainKey: String { "token.\(rawValue)" }
     var token: String? { Keychain.get(keychainKey) }
 

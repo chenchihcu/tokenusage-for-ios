@@ -8,7 +8,7 @@ struct QuotaDetailContainer: View {
     var body: some View {
         if let quota = store.displayItems.first(where: { $0.id == id }) {
             QuotaDetailView(quota: quota)
-                .refreshable { await store.refresh() }
+                .refreshable { await store.refresh(force: true) }
         } else {
             ContentUnavailableView("找不到這個平台", systemImage: "questionmark.circle")
         }
@@ -96,6 +96,11 @@ private struct SummaryHeader: View {
                     ResetText(date: reset)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                }
+                if quota.reportsResetCredits {
+                    Label(quota.resetCreditsText, systemImage: "gift")
+                        .font(.subheadline)
+                        .foregroundStyle((quota.resetCredits ?? 0) > 0 ? Color.green : Color.secondary)
                 }
             }
             Spacer(minLength: 0)
