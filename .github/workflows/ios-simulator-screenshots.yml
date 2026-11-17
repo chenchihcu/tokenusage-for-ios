@@ -3,9 +3,13 @@ name: iOS Simulator Tests and Screenshots
 # Runs the native app's unit tests in the iOS Simulator, then captures
 # portrait and landscape screenshots. Prefers an iPhone Duo simulator when the
 # runner's Xcode has one, otherwise the first available iPhone.
-# Manual only until the repo is public (plan D7); then Claude starts it per change.
+# Repo is public (2026-11-17): macOS minutes are free. Runs when the native app changes.
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - ios-native/**
+      - .github/workflows/ios-simulator-screenshots.yml
 
 jobs:
   simulator:
