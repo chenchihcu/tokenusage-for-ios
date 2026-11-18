@@ -153,4 +153,36 @@ final class QuotaModelTests: XCTestCase {
         XCTAssertEqual(TokenImport.parse("WorkosCursorSessionToken=user_1%3A%3Ajwt")[.cursor], "user_1%3A%3Ajwt")
         XCTAssertTrue(TokenImport.parse("hello world").isEmpty)
     }
+
+    func testPKCEChallengeMatchesRFC7636Example() {
+        XCTAssertEqual(SignInService.challenge(for: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
+                       "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+        XCTAssertFalse(SignInService.randomURLSafe(bytes: 32).contains("="))
+    }
+
+    func testTokenResponsesBecomeCredentials() throws {
+        let fresh = try SignInService.credential(status: 200, json: ["access_token": "a", "refresh_token": "r", "expires_in": 3600], keepingRefresh: nil)
+        XCTAssertEqual(fresh.refreshToken, "r")
+        XCTAssertFalse(fresh.needsRenewal())
+        XCTAssertTrue(fresh.needsRenewal(now: Date().addingTimeInterval(3590)))
+
+        // A renewal that returns no new refresh token keeps the old one.
+        let renewed = try SignInService.credential(status: 200, json: ["access_token": "b"], keepingRefresh: "r")
+        XCTAssertEqual(renewed.refreshToken, "r")
+
+        XCTAssertThrowsError(try SignInService.credential(status: 400, json: [:], keepingRefresh: nil))
+        XCTAssertThrowsError(try SignInService.credential(status: 200, json: ["error": "x"], keepingRefresh: nil))
+    }
+
+    func testCursorCookieGetsTheUserIDFromTheToken() {
+        let payload = SignInService.base64URL(Data(#"{"sub":"auth0|user_42","exp":2000000000}"#.utf8))
+        let token = "h.\(payload).s"
+        XCTAssertEqual(JWT.cursorUserID(of: token), "user_42")
+        XCTAssertEqual(JWT.expiry(of: token), Date(timeIntervalSince1970: 2_000_000_000))
+        let cookie = DirectProvider.cursor.request(token: token).value(forHTTPHeaderField: "Cookie")
+        XCTAssertEqual(cookie, "WorkosCursorSessionToken=user_42%3A%3A\(token)")
+        // A full cookie value pasted by hand is left alone.
+        let pasted = DirectProvider.cursor.request(token: "user_1::abc").value(forHTTPHeaderField: "Cookie")
+        XCTAssertEqual(pasted, "WorkosCursorSessionToken=user_1::abc")
+    }
 }

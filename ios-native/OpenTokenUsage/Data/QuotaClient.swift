@@ -15,8 +15,8 @@ enum QuotaClientError: LocalizedError, Equatable {
         case .timedOut: return "連線逾時"
         case .server(let status): return "伺服器錯誤（\(status)）"
         case .badResponse: return "收到無法辨識的資料"
-        case .notConfigured: return "尚未設定帳號權杖"
-        case .unauthorized(let provider): return "\(provider) 的權杖已失效"
+        case .notConfigured: return "尚未登入任何服務"
+        case .unauthorized(let provider): return "\(provider) 需要重新登入"
         case .rateLimited(let provider): return "\(provider) 暫時限制查詢"
         }
     }
@@ -24,8 +24,8 @@ enum QuotaClientError: LocalizedError, Equatable {
     /// What the person can do about it.
     var hint: String {
         switch self {
-        case .notConfigured: return "到設定貼上至少一個平台的權杖。"
-        case .unauthorized: return "到設定重新貼上新的權杖。"
+        case .notConfigured: return "到設定登入至少一個服務。"
+        case .unauthorized: return "到設定重新登入這個服務。"
         case .rateLimited: return "稍後會自動再試，目前顯示上次的資料。"
         default: return "請稍後再試。"
         }
@@ -56,8 +56,14 @@ struct QuotaClient {
         if UserDefaults.standard.bool(forKey: SettingsKey.sampleData) {
             return Result(items: SampleData.items(), firstError: nil)
         }
-        let configured = DirectProvider.allCases.compactMap { provider in
-            provider.token.map { (provider, $0) }
+        // Renews tokens that are about to expire before asking for usage.
+        var configured: [(DirectProvider, String)] = []
+        for provider in DirectProvider.allCases where !skipping.contains(provider) || provider.isSignedIn {
+            if skipping.contains(provider) {
+                configured.append((provider, ""))
+            } else if let token = await SignInService.validToken(for: provider) {
+                configured.append((provider, token))
+            }
         }
         guard !configured.isEmpty else { throw QuotaClientError.notConfigured }
 
