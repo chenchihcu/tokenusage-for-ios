@@ -1,76 +1,28 @@
 import SwiftUI
+import UIKit
 
 struct QuotaListView: View {
-    enum Style { case push, select }
-
     @Bindable var store: QuotaStore
-    let style: Style
 
-    @State private var showSettings = false
-    @State private var showResets = false
     @AppStorage(SettingsKey.haptics) private var hapticsOn = true
-    @AppStorage(SettingsKey.leftHanded) private var leftHanded = false
-    @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var attention: [ProviderQuota] { store.visibleItems.filter { $0.level != .healthy } }
     private var healthy: [ProviderQuota] { store.visibleItems.filter { $0.level == .healthy } }
 
     var body: some View {
-        list
+        List(selection: $store.selectedID) { sections }
             .listStyle(.insetGrouped)
             .navigationTitle("額度")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Label("設定", systemImage: "gearshape")
-                    }
-                }
-                // Inner screen: the fast path lives in the toolbar, which the system
-                // moves to the vertical bar where it applies.
-                if style == .select {
-                    ToolbarItemGroup(placement: .topBarLeading) {
-                        Button {
-                            Task { await store.refresh(force: true) }
-                        } label: {
-                            Label("更新", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(store.isLoading)
-                        Button {
-                            showResets = true
-                        } label: {
-                            Label("重置", systemImage: store.resetCreditsTotal > 0 ? "gift.fill" : "gift")
-                        }
-                        .accessibilityLabel(store.resetCreditsTotal > 0 ? "免費重置，\(store.resetCreditsTotal) 次可用" : "免費重置與重置時間")
-                        Button {
-                            store.alertsOnly.toggle()
-                        } label: {
-                            Label("告警", systemImage: store.alertsOnly ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
-                        }
-                        .accessibilityLabel(store.alertsOnly ? "顯示全部服務" : "只看告警")
-                        Menu {
-                            Picker("更新頻率", selection: $refreshInterval) {
-                                ForEach(AppSettings.intervalOptions) { option in
-                                    Text(option.title).tag(option.seconds)
-                                }
-                            }
-                        } label: {
-                            Label("頻率", systemImage: "timer")
-                        }
-                    }
-                }
+                // Fast path (FR-17/18): standard toolbar items, never a custom bar. On iPhone Duo
+                // the system puts them on the vertical bar beside the outer camera, and on the
+                // inner display keeps them with this (leading) pane — Apple HIG, Designing for
+                // iPhone Duo › Vertical controls. They stay in the bar ahead of Settings.
+                FastPathItems(store: store)
+                    .visibilityPriority(.high)
                 ToolbarItem(placement: .status) {
                     StatusLine(store: store)
-                }
-            }
-            .toolbar(.visible, for: .bottomBar)
-            // Outer screen: the fast path sits in the thumb zone, on the chosen hand's side.
-            .safeAreaInset(edge: .bottom, alignment: leftHanded ? .leading : .trailing) {
-                if style == .push {
-                    FastPathBar(store: store, showResets: $showResets)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
                 }
             }
             .refreshable { await store.refresh(force: true) }
@@ -79,24 +31,9 @@ struct QuotaListView: View {
                     ProgressView("正在載入額度…")
                 }
             }
-            .sheet(isPresented: $showSettings, onDismiss: { Task { await store.refresh(force: true) } }) { SettingsView() }
-            .sheet(isPresented: $showResets) { ResetsView(store: store) }
-            .onReceive(NotificationCenter.default.publisher(for: NotificationRouter.openResets)) { _ in
-                showSettings = false
-                showResets = true
-            }
-            .sensoryFeedback(.selection, trigger: store.selectedID) { _, _ in hapticsOn && style == .select }
+            .sensoryFeedback(.selection, trigger: store.selectedID) { _, _ in hapticsOn && sizeClass == .regular }
             .sensoryFeedback(.success, trigger: store.refreshCount) { _, _ in hapticsOn }
-    }
-
-    @ViewBuilder
-    private var list: some View {
-        switch style {
-        case .select:
-            List(selection: $store.selectedID) { sections }
-        case .push:
-            List { sections }
-        }
+            .scrollsToTop(on: store.scrollToTop[.quotas, default: 0])
     }
 
     @ViewBuilder
@@ -129,7 +66,7 @@ struct QuotaListView: View {
             Section {
                 ForEach(store.missingProviders) { provider in
                     Button {
-                        showSettings = true
+                        store.selectedTab = .settings
                     } label: {
                         LabeledContent(provider.name) {
                             Text("前往設定").foregroundStyle(.tint)
@@ -148,15 +85,11 @@ struct QuotaListView: View {
         }
     }
 
-    @ViewBuilder
     private func rows(_ items: [ProviderQuota]) -> some View {
+        // In a split view's list, a value link selects the platform: unfolded it fills the
+        // detail pane, folded it pushes the detail screen.
         ForEach(items) { item in
-            switch style {
-            case .push:
-                NavigationLink(value: item.id) { QuotaRow(quota: item) }
-            case .select:
-                QuotaRow(quota: item)
-            }
+            NavigationLink(value: item.id) { QuotaRow(quota: item) }
         }
     }
 }
@@ -208,23 +141,37 @@ struct ProblemBanner: View {
 
 struct QuotaRow: View {
     let quota: ProviderQuota
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(spacing: 12) {
-            ProviderBadge(id: quota.id, name: quota.name)
+            // At accessibility text sizes the text needs the full width; the badge
+            // only repeats the name, so it steps aside.
+            if !typeSize.isAccessibilitySize {
+                ProviderBadge(id: quota.id, name: quota.name)
+            }
             VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
+                if typeSize.isAccessibilitySize {
                     Text(quota.name).font(.headline)
                     Text(quota.planName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Spacer(minLength: 8)
-                    Text(quota.remainingPercent / 100, format: .percent.precision(.fractionLength(0)))
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(quota.level.tint)
+                    percentText
+                } else {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(quota.name).font(.headline)
+                        Text(quota.planName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        percentText
+                    }
                 }
                 ProgressView(value: min(max(quota.remainingPercent, 0), 100), total: 100)
                     .tint(quota.level.tint)
+                if quota.pools.count > 1 {
+                    PoolSummary(pools: quota.pools)
+                }
                 if let reset = quota.resetDate {
                     ResetText(date: reset)
                         .font(.caption)
@@ -241,6 +188,47 @@ struct QuotaRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityValue("剩餘 \(Int(quota.remainingPercent.rounded()))%，\(quota.level.label)")
     }
+
+    private var percentText: some View {
+        Text(quota.remainingPercent / 100, format: .percent.precision(.fractionLength(0)))
+            .font(.headline.monospacedDigit())
+            .foregroundStyle(quota.level.tint)
+            .fixedSize()
+    }
+}
+
+/// Each separately metered model pool with what is left in it, so the row says which
+/// models still work when one pool has run out ("Opus 0% · Sonnet 80%").
+struct PoolSummary: View {
+    let pools: [TokenPool]
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                // One pool per line, free to wrap, so a long name never widens the row.
+                VStack(alignment: .leading, spacing: 2) { items(fixed: false) }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { items(fixed: true) }
+                    VStack(alignment: .leading, spacing: 2) { items(fixed: false) }
+                }
+            }
+        }
+        .font(.caption)
+    }
+
+    private func items(fixed: Bool) -> some View {
+        ForEach(pools) { pool in
+            (Text(pool.name).foregroundStyle(.secondary)
+             + Text(" ")
+             + Text(pool.effectiveRemaining / 100, format: .percent.precision(.fractionLength(0)))
+                .foregroundStyle(QuotaLevel(remaining: pool.effectiveRemaining).tint))
+                .monospacedDigit()
+                .fixedSize(horizontal: fixed, vertical: true)
+                .accessibilityElement(children: .combine)
+        }
+    }
 }
 
 struct ResetText: View {
@@ -255,21 +243,41 @@ struct ResetText: View {
     }
 }
 
+/// The agent's own logo when its file is in the app (FR-38), so each one is recognised at a
+/// glance; otherwise the first letter on the brand colour.
 struct ProviderBadge: View {
     let id: String
     let name: String
+    /// Grows with the text so the letter or logo is never clipped.
+    @ScaledMetric(relativeTo: .headline) private var side: CGFloat = 36
 
     var body: some View {
-        Text(String(name.prefix(1)))
-            .font(.headline)
-            .foregroundStyle(.white)
-            .frame(width: 36, height: 36)
-            .background(ProviderStyle.color(for: id), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .accessibilityHidden(true)
+        Group {
+            if let logo = ProviderStyle.logo(for: id) {
+                Image(uiImage: logo)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: side, height: side)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            } else {
+                Text(String(name.prefix(1)))
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(width: side, height: side)
+                    .background(ProviderStyle.color(for: id), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 
 enum ProviderStyle {
+    /// Logo files you add under Resources/Logos: logo-claude.png, logo-codex.png,
+    /// logo-cursor.png, logo-antigravity.png (square PNG, at least 180 × 180 px).
+    static func logo(for id: String) -> UIImage? {
+        UIImage(named: "logo-\(id)")
+    }
+
     static func color(for id: String) -> Color {
         switch id {
         case "cursor": return .teal
@@ -291,45 +299,33 @@ extension QuotaLevel {
     }
 }
 
-/// One-handed fast path for the outer screen: four actions, each with an icon,
-/// a visible title and at least a 44-point target.
-struct FastPathBar: View {
+/// The four fast-path actions (FR-17), each with a title and a symbol. Grouped so the
+/// system keeps them together on a vertical or horizontal bar.
+struct FastPathItems: ToolbarContent {
     @Bindable var store: QuotaStore
-    @Binding var showResets: Bool
     @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
 
-    var body: some View {
-        HStack(spacing: 2) {
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 Task { await store.refresh(force: true) }
             } label: {
-                FastPathLabel(title: "更新", systemImage: "arrow.clockwise")
+                Label("更新", systemImage: "arrow.clockwise")
             }
             .disabled(store.isLoading)
 
             Button {
-                showResets = true
+                store.presentedSheet = .resets
             } label: {
-                FastPathLabel(title: "重置", systemImage: store.resetCreditsTotal > 0 ? "gift.fill" : "gift")
+                Label("重置", systemImage: store.resetCreditsTotal > 0 ? "gift.fill" : "gift")
             }
-            .overlay(alignment: .topTrailing) {
-                if store.resetCreditsTotal > 0 {
-                    Text("\(store.resetCreditsTotal)")
-                        .font(.caption2.weight(.bold).monospacedDigit())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(.green, in: Capsule())
-                        .accessibilityHidden(true)
-                }
-            }
+            .badge(store.resetCreditsTotal)
             .accessibilityLabel(store.resetCreditsTotal > 0 ? "免費重置，\(store.resetCreditsTotal) 次可用" : "免費重置與重置時間")
 
             Button {
                 store.alertsOnly.toggle()
             } label: {
-                FastPathLabel(title: "告警",
-                              systemImage: store.alertsOnly ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                Label("告警", systemImage: store.alertsOnly ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
             }
             .accessibilityLabel(store.alertsOnly ? "顯示全部服務" : "只看告警")
 
@@ -340,28 +336,9 @@ struct FastPathBar: View {
                     }
                 }
             } label: {
-                FastPathLabel(title: "頻率", systemImage: "timer")
+                Label("頻率", systemImage: "timer")
             }
-            .accessibilityLabel("更新頻率")
         }
-        .buttonStyle(.borderless)
-        .padding(6)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
-    }
-}
-
-private struct FastPathLabel: View {
-    let title: String
-    let systemImage: String
-
-    var body: some View {
-        VStack(spacing: 2) {
-            Image(systemName: systemImage).font(.title3)
-            Text(title).font(.caption2)
-        }
-        .frame(minWidth: 52, minHeight: 48)
-        .contentShape(Rectangle())
     }
 }
 
@@ -382,8 +359,16 @@ struct ResetsView: View {
                             Label(quota.resetCreditsText, systemImage: "gift")
                                 .foregroundStyle((quota.resetCredits ?? 0) > 0 ? Color.green : Color.secondary)
                         }
-                        ForEach(quota.pools.flatMap(\.tiers)) { tier in
-                            LabeledContent(tier.label) {
+                        ForEach(quota.pools.flatMap { pool in
+                            // Name the pool when there are several, e.g. 「Opus · 每週」.
+                            pool.tiers.map { tier in
+                                (id: "\(pool.id).\(tier.id)",
+                                 label: quota.pools.count > 1 ? "\(pool.name) · \(tier.label)" : tier.label,
+                                 tier: tier)
+                            }
+                        }, id: \.id) { row in
+                            let tier = row.tier
+                            LabeledContent(row.label) {
                                 if let reset = tier.resetDate {
                                     ResetText(date: reset)
                                 } else {

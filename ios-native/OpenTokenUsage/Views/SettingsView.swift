@@ -2,11 +2,12 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
+    /// Changes when the 設定 tab is tapped again.
+    var scrollToTopToken = 0
     @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
-    @AppStorage(SettingsKey.leftHanded) private var leftHanded = false
     @AppStorage(SettingsKey.haptics) private var haptics = true
     @AppStorage(SettingsKey.sampleData) private var sampleData = false
+    @AppStorage(SettingsKey.catalogSchedule) private var catalogSchedule = ModelCatalog.Schedule.weekly.rawValue
     @State private var tokens: [DirectProvider: String] = [:]
     @State private var importMessage: String?
     @State private var signingIn: DirectProvider?
@@ -48,11 +49,15 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("慣用手", selection: $leftHanded) {
-                        Text("右手").tag(false)
-                        Text("左手").tag(true)
-                    }
                     Toggle("觸覺回饋", isOn: $haptics)
+                }
+
+                Section {
+                    Picker("模型與價格更新", selection: $catalogSchedule) {
+                        ForEach(ModelCatalog.Schedule.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
+                } footer: {
+                    Text("各代理會新增或淘汰模型。App 依此頻率下載最新的模型清單與 API 牌價（LiteLLM 公開價格表），只下載公開資料，不傳送你的任何資訊。")
                 }
 
                 Section {
@@ -102,6 +107,7 @@ struct SettingsView: View {
                     LabeledContent("版本", value: Bundle.main.appVersion)
                 }
             }
+            .scrollsToTop(on: scrollToTopToken)
             .task {
                 notificationsDenied = await ResetAlerts.authorizationDenied()
             }
@@ -129,12 +135,6 @@ struct SettingsView: View {
                 Text("這支手機會刪除此服務的登入憑證。")
             }
             .navigationTitle("設定")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                }
-            }
         }
     }
 }

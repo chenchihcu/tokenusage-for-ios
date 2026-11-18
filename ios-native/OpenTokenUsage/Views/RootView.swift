@@ -1,91 +1,83 @@
 import SwiftUI
 
-/// Picks the layout from the screen the app is on.
-///
-/// - Folded (outer screen, or any phone-sized window): one column. The list
-///   pushes the detail screen, with the standard back button and edge swipe.
-/// - Unfolded (inner screen, both sides at least 600 pt): two panes that meet
-///   exactly at the middle of the display, where the fold is. Held as a book
-///   (wider than tall) the panes sit left and right; turned upright they sit
-///   above and below, so nothing is ever drawn across the crease.
+/// The app's main pages in one standard tab bar (FR-39), so any page is one tap away and none
+/// needs a close button. On iPhone Duo the system places the bar for each display and pose
+/// (Apple HIG, Designing for iPhone Duo › Vertical controls); folding or unfolding keeps the
+/// current tab, the selected platform, the scroll position and any open sheet (FR-29).
 struct RootView: View {
     @Bindable var store: QuotaStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
-    static let unfoldedMinSide: CGFloat = 600
+    /// Tapping the tab you are already on is the way home: it returns that page to its start.
+    private var tabSelection: Binding<QuotaStore.Tab> {
+        Binding {
+            store.selectedTab
+        } set: { tab in
+            if tab == store.selectedTab {
+                store.returnToStart(tab, compact: sizeClass == .compact)
+            }
+            store.selectedTab = tab
+        }
+    }
 
     var body: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            if min(size.width, size.height) >= Self.unfoldedMinSide {
-                DualScreenView(store: store, size: size)
+        TabView(selection: tabSelection) {
+            Tab("額度", systemImage: "gauge.with.dots.needle.50percent", value: QuotaStore.Tab.quotas) {
+                QuotasSplitView(store: store)
+            }
+            Tab("分析", systemImage: "chart.xyaxis.line", value: QuotaStore.Tab.analytics) {
+                AnalyticsView(history: store.displayHistory, items: store.displayItems,
+                              scrollToTopToken: store.scrollToTop[.analytics, default: 0])
+            }
+            Tab("模型與費用", systemImage: "dollarsign.circle", value: QuotaStore.Tab.catalog) {
+                ModelCatalogView(store: store)
+            }
+            Tab("設定", systemImage: "gearshape", value: QuotaStore.Tab.settings) {
+                SettingsView(scrollToTopToken: store.scrollToTop[.settings, default: 0])
+                    // Sign-in or token changes take effect as soon as you leave Settings.
+                    .onDisappear { Task { await store.refresh(force: true) } }
+            }
+        }
+        .sheet(item: $store.presentedSheet) { sheet in
+            switch sheet {
+            case .resets:
+                ResetsView(store: store)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NotificationRouter.openResets)) { _ in
+            // A free-reset notification opens the resets sheet over the quotas page.
+            store.selectedTab = .quotas
+            store.presentedSheet = .resets
+        }
+    }
+}
+
+/// The quotas page: a standard split view. On the outer display (compact width) it collapses to
+/// the list, which pushes the detail screen; on the inner display list and detail sit side by
+/// side and the system fits the columns to the fold.
+private struct QuotasSplitView: View {
+    @Bindable var store: QuotaStore
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        NavigationSplitView {
+            QuotaListView(store: store)
+        } detail: {
+            if let id = store.selectedID {
+                QuotaDetailContainer(store: store, id: id)
             } else {
-                SingleScreenView(store: store)
-                    .frame(width: size.width, height: size.height)
+                ContentUnavailableView(
+                    "選擇一個平台",
+                    systemImage: "sidebar.leading",
+                    description: Text("在清單點選平台，詳細額度會顯示在這裡。")
+                )
             }
         }
-        // Measure the whole display so the split lands on the physical fold;
-        // each pane still keeps its own content inside the safe area.
-        .ignoresSafeArea()
-    }
-}
-
-struct SingleScreenView: View {
-    @Bindable var store: QuotaStore
-    @State private var path: [ProviderQuota.ID] = []
-
-    var body: some View {
-        NavigationStack(path: $path) {
-            QuotaListView(store: store, style: .push)
-                .navigationDestination(for: ProviderQuota.ID.self) { id in
-                    QuotaDetailContainer(store: store, id: id)
-                }
-        }
-        .onAppear {
-            // Coming from the unfolded layout: keep the platform that was open.
-            if let id = store.selectedID, path.isEmpty { path = [id] }
-        }
-        .onChange(of: path) { _, newPath in
-            store.selectedID = newPath.last
-        }
-    }
-}
-
-struct DualScreenView: View {
-    @Bindable var store: QuotaStore
-    let size: CGSize
-
-    private var sideBySide: Bool { size.width >= size.height }
-
-    var body: some View {
-        let layout = sideBySide
-            ? AnyLayout(HStackLayout(spacing: 0))
-            : AnyLayout(VStackLayout(spacing: 0))
-
-        layout {
-            NavigationStack {
-                QuotaListView(store: store, style: .select)
+        .onChange(of: sizeClass, initial: true) { _, newValue in
+            // Unfolding shows the most urgent platform right away instead of an empty pane.
+            if newValue == .regular, store.selectedID == nil {
+                store.selectedID = store.displayItems.first?.id
             }
-            .frame(width: sideBySide ? size.width / 2 : size.width,
-                   height: sideBySide ? size.height : size.height / 2)
-
-            NavigationStack {
-                if let id = store.selectedID {
-                    QuotaDetailContainer(store: store, id: id)
-                } else {
-                    ContentUnavailableView(
-                        "選擇一個平台",
-                        systemImage: "rectangle.righthalf.inset.filled",
-                        description: Text("在另一側的清單點選平台，詳細額度會顯示在這一側。")
-                    )
-                }
-            }
-            .frame(width: sideBySide ? size.width / 2 : size.width,
-                   height: sideBySide ? size.height : size.height / 2)
-        }
-        .frame(width: size.width, height: size.height)
-        .onAppear {
-            // Unfolding shows the most urgent platform right away.
-            if store.selectedID == nil { store.selectedID = store.displayItems.first?.id }
         }
     }
 }

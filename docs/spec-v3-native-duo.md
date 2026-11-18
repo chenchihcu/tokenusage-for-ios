@@ -26,11 +26,11 @@ Tags: untagged = stated by user or verified; `[ASSUMPTION]` = author default, co
 **Out of scope**
 - `[ASSUMPTION]` Grok (user tracks four agents).
 - **All voice functions** (decided 2026-11-17): Gemini Live, voice commands, microphone button, audio visualiser, microphone permission. VoiceOver accessibility is *not* affected and stays required.
-- `[ASSUMPTION]` Model catalog, MCP tools, cost estimator.
+- `[ASSUMPTION]` MCP tools, cost estimator. (Model catalog and fee table moved in scope 2026-11-18, FR-36/37.)
 - PC daemon, Cloudflare Worker data path, D1 (retired from the app's data path).
 - App Store release and TestFlight. Distribution is a sideloaded personal build with a free Apple ID (plan D9).
 - Android, iPad-specific layouts, macOS, Apple Watch.
-- Usage history charts / trends (only current state).
+- Exact per-model token counts for Claude Code and Codex (the phone cannot get them; charts use % history, FR-34).
 - Editing vendor accounts, buying plans, or redeeming a free reset from inside the app (view only).
 - Multiple accounts per vendor. `[ASSUMPTION]` One account per vendor.
 
@@ -39,7 +39,7 @@ Tags: untagged = stated by user or verified; `[ASSUMPTION]` = author default, co
 - **US-1.** As the owner, I want to see all four agents' remaining usage at a glance on either Duo screen, so that I know which agent I can still use.
 - **US-2.** As the owner, I want usage to refresh over my phone's own Wi-Fi or cellular at the interval I choose, so that I don't depend on my PC.
 - **US-3.** As the owner, I want to see Codex and Claude Code free-reset credits and next reset times, so that I can use a free reset when the vendor grants one.
-- **US-4.** As the owner, I want 4 fast-path icons in my right thumb's reach, so that I can act one-handed.
+- **US-4.** As the owner, I want 4 fast-path actions where iPhone Duo puts standard controls (the vertical bar beside the outer camera), so that I can act one-handed.
 - **US-5.** As the owner, I want to sign in to each vendor inside the app (no PC involved), stay signed in, and sign out, so that refresh works without a PC.
 - **US-6.** As the owner, I want a Home Screen widget with the same key numbers, so that I see them without opening the app.
 - **US-7.** As the owner, I want the layout to keep my place when I fold, unfold or rotate the Duo, so that nothing jumps or breaks.
@@ -49,6 +49,7 @@ Tags: untagged = stated by user or verified; `[ASSUMPTION]` = author default, co
 Dashboard (US-1)
 - **FR-1.** Dashboard lists exactly the four agents with remaining % of the governing (most restrictive) window per agent.
 - **FR-2.** Each agent shows its plan name, each window's remaining %, and time to reset (local time, Asia/Taipei).
+- **FR-2a.** (decided 2026-11-18) Models a vendor meters separately are separate pools: Claude Code 「所有模型」 (5 h + weekly, limits every model) plus one pool per model-specific weekly key (`seven_day_opus`, `seven_day_sonnet`, any other `seven_day_<name>`); Cursor 「Auto + Composer」 and 「API 模型」, with `totalPercentUsed` shown as 「方案總用量」 but not limiting either pool. The list row names each pool with its remaining %; the headline stays the tightest pool (RFC-003). Codex stays one pool until a per-model field is seen (`VERIFY`).
 - **FR-3.** Each agent shows "last updated" time; data older than 2× the refresh interval (min 10 min) is visibly marked stale.
 - **FR-4.** An agent with no token shows "未設定" with a button to Settings — never placeholder numbers.
 - **FR-5.** An agent whose last fetch failed shows the last good data, its timestamp, and the error in plain language with a retry action.
@@ -70,8 +71,8 @@ Free resets (US-3)
 
 Fast path (US-4)
 - **FR-17.** Four icons, each with SF Symbol + text title + VoiceOver label: (1) Refresh now `arrow.clockwise`, (2) Resets `gift`, (3) Alerts only `exclamationmark.triangle`, (4) Refresh interval `timer`.
-- **FR-18.** Outer screen: icons in a bottom-trailing cluster inside the safe area (thumb zone). Inner screen: icons are `.toolbar` items (system may place them in the vertical bar).
-- **FR-19.** Handedness setting (right default / left) mirrors the outer-screen cluster to bottom-leading.
+- **FR-18.** (revised 2026-11-18, Apple HIG › Designing for iPhone Duo) The four actions are one standard `ToolbarItemGroup` with `.visibilityPriority(.high)` on every display; no custom floating bar. The system places them: on the vertical bar beside the outer camera (outer display, and inner display in landscape), in a horizontal bar on the inner display in portrait, and with the list pane when unfolded.
+- **FR-19.** (removed 2026-11-18) No handedness setting: Apple keeps vertical controls aligned with the hardware and advises against overriding the default bar placement.
 - **FR-20.** "Alerts only" filters to agents with ≤ 5 % remaining; shows an empty state when none.
 
 Sign-in (US-5) — decided 2026-11-17: **sign in inside the app, never via PC**
@@ -95,9 +96,17 @@ Notifications (US-3) — decided 2026-11-17
 - **FR-33.** Tapping the notification opens the Resets sheet (F4). No remote push server; detection depends on iOS background refresh timing (FR-11).
 
 Duo layout & continuity (US-7)
-- **FR-27.** Layout branches only on horizontal size class: compact → single column; regular → `NavigationSplitView` (agent list | detail).
+- **FR-27.** One `NavigationSplitView` for every display: compact collapses to the list, regular shows list | detail; the system fits the columns to the fold.
 - **FR-28.** No interactive control overlaps a `.division` reserved region (crease) in partially folded postures.
 - **FR-29.** Folding/unfolding/rotating keeps the selected agent, scroll position and open sheet.
+
+Analytics, model catalog and icons (decided 2026-11-18)
+- **FR-34.** Every refresh records each pool's use on the phone as daily totals: the rise of the pool's longest window between refreshes, and after a window reset the new reading. Kept 400 days, never uploaded. 「用量分析」 charts it per pool by day, week or month. The unit is % of that pool's window, so pools are drawn as separate lines, never stacked.
+- **FR-35.** (revised 2026-11-18: SPC I/MR/EWMA charts removed at the owner's request) 「用量分析」 shows three charts: the trend line (FR-34); a horizontal bar chart of each pool's use in the latest day, week or month (follows the same 每日／每週／每月 switch, largest first); and one donut per pool with its current tightest window, used (level colour) vs remaining (grey). Each pool keeps the same colour in the trend and bar charts.
+- **FR-36.** 「模型與費用」 lists the models each agent can use, downloaded from LiteLLM's public price file on a schedule set in Settings (每週 default, 每月, 僅手動) and on demand. Kept: Anthropic `claude-*` generation ≥ 4 (Claude Code, Cursor), OpenAI `gpt-*` generation ≥ 5 or `*codex*` (Codex, Cursor), Google `gemini-*` ≥ 2.5 (Antigravity, Cursor); chat models only; dated duplicates and audio/realtime/image/search variants dropped; models past their `deprecation_date` removed. Each refresh lists models added and removed since the last one.
+- **FR-37.** The fee table shows input, output and cache-read list prices in USD per million tokens, context size and any announced retirement date, labelled as API list prices (not subscription cost).
+- **FR-38.** Each agent's badge shows its own logo when `Resources/Logos/logo-<id>.png` is in the app (ids `claude`, `codex`, `cursor`, `antigravity`; files supplied by the owner), otherwise the first letter on the brand colour.
+- **FR-39.** (decided 2026-11-18) Main pages sit in one standard tab bar — 額度 · 分析 · 模型與費用 · 設定 — so any page is one tap from any other and none needs a close button; the system places the bar for each Duo display and pose. Each tab keeps its own place (scroll, selected platform); folding or unfolding keeps the current tab. 重置 stays a sheet from the fast path; a free-reset notification opens it over 額度. 「前往設定」 rows switch to the 設定 tab. Leaving 設定 refreshes, so a new sign-in shows at once. Tapping the tab you are already on returns that page to its start: folded, 額度 closes the open platform and shows the list; every page scrolls to its top (the way home from anywhere).
 
 ## 5. Acceptance Criteria
 
@@ -141,8 +150,8 @@ Duo layout & continuity (US-7)
 - **Given** Codex credits = 1 **When** the dashboard shows **Then** fast-path icon 2 shows a badge and its accessibility label includes "1 項可用".
 
 ### FR-17 / FR-18 / FR-19
-- **Given** the outer screen in portrait, right-hand mode **When** the dashboard shows **Then** the 4 icons are bottom-trailing, each ≥ 44×44 pt, and fully inside the safe area.
-- **Given** left-hand mode **When** the dashboard shows **Then** the cluster is bottom-leading.
+- **Given** the outer screen **When** the dashboard shows **Then** the 4 actions are in the system's vertical bar below the camera.
+- **Given** the inner screen in portrait **When** the dashboard shows **Then** the 4 actions are in the list pane's horizontal toolbar.
 - **Given** VoiceOver on **When** focus reaches each icon **Then** it reads its text title.
 
 ### FR-20

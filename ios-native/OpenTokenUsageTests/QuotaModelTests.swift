@@ -106,12 +106,37 @@ final class QuotaModelTests: XCTestCase {
         XCTAssertEqual(quota.metrics.first?.value, "0")
     }
 
-    func testParsesCursorUsage() throws {
-        let data = try json(#"{"membershipType":"pro","billingCycleEnd":"2026-12-01T00:00:00.000Z","individualUsage":{"plan":{"used":1500,"limit":2000,"autoPercentUsed":60.5}}}"#)
+    func testClaudeModelLimitsAreSeparatePools() throws {
+        let data = try json(#"{"five_hour":{"utilization":10,"resets_at":"2026-11-17T03:00:00Z"},"seven_day":{"utilization":40,"resets_at":"2026-11-20T00:00:00Z"},"seven_day_opus":{"utilization":100,"resets_at":"2026-11-20T00:00:00Z"},"seven_day_sonnet":{"utilization":20,"resets_at":"2026-11-20T00:00:00Z"},"seven_day_haiku_x":{"utilization":5,"resets_at":null},"extra_usage":{"is_enabled":false}}"#)
+        let quota = try XCTUnwrap(DirectProvider.claude.parse(data))
+        XCTAssertEqual(quota.pools.map(\.id), ["claude_all", "claude_haiku_x", "claude_opus", "claude_sonnet"])
+        XCTAssertEqual(quota.pools.map(\.name), ["所有模型", "Haiku X", "Opus", "Sonnet"])
+        XCTAssertEqual(quota.pools[0].effectiveRemaining, 60, accuracy: 0.001)
+        XCTAssertEqual(quota.pools[2].effectiveRemaining, 0, accuracy: 0.001)
+        XCTAssertEqual(quota.pools[3].effectiveRemaining, 80, accuracy: 0.001)
+        // The headline is the tightest pool, so an exhausted model is never hidden.
+        XCTAssertEqual(quota.remainingPercent, 0, accuracy: 0.001)
+    }
+
+    func testParsesCursorPools() throws {
+        let data = try json(#"{"membershipType":"pro","billingCycleEnd":"2026-12-01T00:00:00.000Z","individualUsage":{"plan":{"totalPercentUsed":62,"autoPercentUsed":100,"apiPercentUsed":24}}}"#)
         let quota = try XCTUnwrap(DirectProvider.cursor.parse(data))
-        XCTAssertEqual(quota.remainingPercent, 25, accuracy: 0.001)
-        XCTAssertEqual(try XCTUnwrap(quota.pools.first).tiers.map(\.id), ["total", "auto"])
+        XCTAssertEqual(quota.pools.map(\.name), ["Auto + Composer", "API 模型"])
+        XCTAssertEqual(quota.pools[0].effectiveRemaining, 0, accuracy: 0.001)
+        XCTAssertEqual(quota.pools[1].effectiveRemaining, 76, accuracy: 0.001)
+        XCTAssertEqual(quota.remainingPercent, 0, accuracy: 0.001)
+        // The combined figure is shown but does not gate either pool.
+        XCTAssertEqual(quota.metrics.first?.label, "方案總用量")
+        XCTAssertEqual(try XCTUnwrap(quota.metrics.first?.percentUsed), 62, accuracy: 0.001)
         XCTAssertNotNil(quota.resetDate)
+    }
+
+    func testCursorWithOnlyCombinedFigureIsOnePool() throws {
+        let data = try json(#"{"membershipType":"pro","individualUsage":{"plan":{"used":1500,"limit":2000}}}"#)
+        let quota = try XCTUnwrap(DirectProvider.cursor.parse(data))
+        XCTAssertEqual(quota.pools.map(\.id), ["cursor_plan"])
+        XCTAssertEqual(quota.remainingPercent, 25, accuracy: 0.001)
+        XCTAssertTrue(quota.metrics.isEmpty)
     }
 
     func testUnrecognisedPayloadsAreRejected() throws {

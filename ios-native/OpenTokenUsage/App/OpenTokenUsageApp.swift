@@ -21,6 +21,7 @@ struct OpenTokenUsageApp: App {
                     // Poll only while on screen: no background network use.
                     if phase == .active {
                         store.startAutoRefresh()
+                        Task { await store.refreshCatalogIfDue() }
                     } else {
                         store.stopAutoRefresh()
                         if phase == .background { BackgroundRefresh.schedule() }
@@ -34,6 +35,7 @@ struct OpenTokenUsageApp: App {
         .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) {
             BackgroundRefresh.schedule()
             await store.refresh()
+            await store.refreshCatalogIfDue()
         }
     }
 }
