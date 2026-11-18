@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var signingIn: DirectProvider?
     @State private var signingOut: DirectProvider?
     @State private var signedIn: Set<DirectProvider> = []
+    @AppStorage(ResetAlerts.enabledKey) private var resetAlerts = false
+    @State private var notificationsDenied = false
 
     var body: some View {
         NavigationStack {
@@ -24,6 +26,25 @@ struct SettingsView: View {
                     }
                 } footer: {
                     Text("App 開啟時依此頻率更新。Claude Code 最快每 5 分鐘、Codex 與 Cursor 最快每 1 分鐘查詢一次，避免被服務拒絕。")
+                }
+
+                Section {
+                    Toggle("免費重置通知", isOn: Binding(get: { resetAlerts }, set: { on in
+                        if on {
+                            Task {
+                                let granted = await ResetAlerts.requestPermission()
+                                notificationsDenied = !granted
+                            }
+                        } else {
+                            resetAlerts = false
+                        }
+                    }))
+                } footer: {
+                    if notificationsDenied {
+                        Text("通知已關閉，可到 iOS「設定」›「通知」開啟。")
+                    } else {
+                        Text("Codex 或 Claude Code 出現免費重置時通知你。背景檢查的時間由 iOS 決定。")
+                    }
                 }
 
                 Section {
@@ -80,6 +101,9 @@ struct SettingsView: View {
                 Section {
                     LabeledContent("版本", value: Bundle.main.appVersion)
                 }
+            }
+            .task {
+                notificationsDenied = await ResetAlerts.authorizationDenied()
             }
             .onAppear {
                 for provider in DirectProvider.allCases { tokens[provider] = Keychain.get(provider.keychainKey) ?? "" }

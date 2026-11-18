@@ -98,6 +98,7 @@ final class QuotaStore {
             state = result.firstError.map { .failed($0) } ?? .idle
             refreshCount += 1
             QuotaCache.save(result.items)
+            ResetAlerts.check(result.items)
         } catch let error as QuotaClientError {
             if error == .notConfigured { items = [] }
             state = .failed(error)

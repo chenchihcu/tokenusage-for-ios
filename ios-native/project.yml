@@ -17,6 +17,13 @@ targets:
     platform: iOS
     sources:
       - path: OpenTokenUsage
+    info:
+      path: OpenTokenUsage/Info.plist
+      properties:
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.chihfu.opentokenusage.refresh
+        UIBackgroundModes:
+          - fetch
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.chihfu.opentokenusage

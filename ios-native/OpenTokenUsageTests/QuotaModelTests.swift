@@ -185,4 +185,12 @@ final class QuotaModelTests: XCTestCase {
         let pasted = DirectProvider.cursor.request(token: "user_1::abc").value(forHTTPHeaderField: "Cookie")
         XCTAssertEqual(pasted, "WorkosCursorSessionToken=user_1::abc")
     }
+
+    func testResetAlertsFireOnlyOnIncrease() {
+        XCTAssertEqual(ResetAlerts.increases(previous: [:], current: ["codex": 1]), ["codex": 1])
+        XCTAssertEqual(ResetAlerts.increases(previous: ["codex": 1], current: ["codex": 1]), [:])
+        XCTAssertEqual(ResetAlerts.increases(previous: ["codex": 1], current: ["codex": 2]), ["codex": 2])
+        XCTAssertEqual(ResetAlerts.increases(previous: ["claude": 2], current: ["claude": 0]), [:])
+        XCTAssertEqual(ResetAlerts.increases(previous: [:], current: ["claude": 0]), [:])
+    }
 }

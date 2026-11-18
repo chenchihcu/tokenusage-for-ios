@@ -1,4 +1,6 @@
+import BackgroundTasks
 import SwiftUI
+import UserNotifications
 
 @main
 struct OpenTokenUsageApp: App {
@@ -8,6 +10,7 @@ struct OpenTokenUsageApp: App {
 
     init() {
         AppSettings.registerDefaults()
+        UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         _store = State(initialValue: QuotaStore())
     }
 
@@ -16,11 +19,21 @@ struct OpenTokenUsageApp: App {
             RootView(store: store)
                 .onChange(of: scenePhase, initial: true) { _, phase in
                     // Poll only while on screen: no background network use.
-                    if phase == .active { store.startAutoRefresh() } else { store.stopAutoRefresh() }
+                    if phase == .active {
+                        store.startAutoRefresh()
+                    } else {
+                        store.stopAutoRefresh()
+                        if phase == .background { BackgroundRefresh.schedule() }
+                    }
                 }
                 .onChange(of: refreshInterval) {
                     if scenePhase == .active { store.startAutoRefresh() }
                 }
+        }
+        // iOS decides when this runs (FR-11). It refreshes once and asks for the next slot.
+        .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) {
+            BackgroundRefresh.schedule()
+            await store.refresh()
         }
     }
 }
