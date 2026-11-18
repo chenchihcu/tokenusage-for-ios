@@ -266,6 +266,7 @@ test.describe('3. 右手快速操作（4 個圖示）', () => {
     await expect(page.getByRole('heading', { name: 'Codex', exact: true }).first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Google Antigravity', exact: true })).toHaveCount(0);
   });
+
 });
 
 test.describe('4. 版面', () => {
@@ -289,4 +290,38 @@ test.describe('4. 版面', () => {
     );
     expect(overflow).toBe(0);
   });
+
+  // iPhone Duo（PR #4）：Apple 未公布點數，以下為第三方估算的內外螢幕尺寸
+  for (const [label, width, height, twoColumns] of [
+    ['外螢幕直向', 466, 678, false],
+    ['外螢幕橫向', 678, 466, true],
+    ['內螢幕直向', 669, 951, true],
+    ['內螢幕直向 (626pt 估算)', 626, 890, true],
+    ['內螢幕橫向', 951, 669, true],
+  ] as const) {
+    test(`iPhone Duo ${label} (${width}x${height})：頂列與按鈕不溢出，雙欄時顯示詳情`, async ({ page }) => {
+      await serveQuotas(page);
+      await page.setViewportSize({ width, height });
+      await page.goto('/?view=split');
+
+      const detail = page.getByRole('main', { name: '服務詳情' });
+      if (twoColumns) await expect(detail).toBeVisible();
+      else await expect(detail).toHaveCount(0);
+
+      const buttons = page.locator('header button, nav[aria-label="快速操作"] button');
+      const count = await buttons.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        const box = await buttons.nth(i).boundingBox();
+        expect(box).not.toBeNull();
+        if (!box) continue;
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+      }
+
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(scrollWidth).toBeLessThanOrEqual(width);
+    });
+  }
 });
