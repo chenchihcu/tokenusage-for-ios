@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import Observation
+import WidgetKit
 
 @MainActor
 @Observable
@@ -98,6 +99,8 @@ final class QuotaStore {
             state = result.firstError.map { .failed($0) } ?? .idle
             refreshCount += 1
             QuotaCache.save(result.items)
+            WidgetCenter.shared.reloadAllTimelines()
+            ResetAlerts.check(result.items)
         } catch let error as QuotaClientError {
             if error == .notConfigured { items = [] }
             state = .failed(error)

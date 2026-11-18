@@ -9,6 +9,11 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.sampleData) private var sampleData = false
     @State private var tokens: [DirectProvider: String] = [:]
     @State private var importMessage: String?
+    @State private var signingIn: DirectProvider?
+    @State private var signingOut: DirectProvider?
+    @State private var signedIn: Set<DirectProvider> = []
+    @AppStorage(ResetAlerts.enabledKey) private var resetAlerts = false
+    @State private var notificationsDenied = false
 
     var body: some View {
         NavigationStack {
@@ -24,6 +29,25 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("免費重置通知", isOn: Binding(get: { resetAlerts }, set: { on in
+                        if on {
+                            Task {
+                                let granted = await ResetAlerts.requestPermission()
+                                notificationsDenied = !granted
+                            }
+                        } else {
+                            resetAlerts = false
+                        }
+                    }))
+                } footer: {
+                    if notificationsDenied {
+                        Text("通知已關閉，可到 iOS「設定」›「通知」開啟。")
+                    } else {
+                        Text("Codex 或 Claude Code 出現免費重置時通知你。背景檢查的時間由 iOS 決定。")
+                    }
+                }
+
+                Section {
                     Picker("慣用手", selection: $leftHanded) {
                         Text("右手").tag(false)
                         Text("左手").tag(true)
@@ -32,35 +56,77 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Button("從剪貼簿匯入權杖", systemImage: "doc.on.clipboard") { importFromClipboard() }
+                    ForEach(DirectProvider.allCases) { provider in
+                        if signedIn.contains(provider) {
+                            LabeledContent(provider.name) {
+                                Button("登出", role: .destructive) { signingOut = provider }
+                            }
+                        } else {
+                            LabeledContent(provider.name) {
+                                Button("登入") { signingIn = provider }
+                            }
+                        }
+                    }
+                    LabeledContent("Google Antigravity") {
+                        Text("暫不支援手機登入").foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("帳號")
                 } footer: {
-                    Text(importMessage ?? "在電腦上複製整份權杖文字，再按這裡一次存好全部。")
+                    Text("登入在各服務的官方頁面進行。這些登入方式並非官方公開介面，服務更新後可能失效。")
                 }
 
-                ForEach(DirectProvider.allCases) { provider in
-                    Section {
-                        SecureField(provider.tokenTitle, text: tokenBinding(provider))
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                    } header: {
-                        Text(provider.name)
-                    } footer: {
-                        Text(provider.tokenHelp)
+                Section {
+                    DisclosureGroup("進階：手動貼上權杖") {
+                        Button("從剪貼簿匯入權杖", systemImage: "doc.on.clipboard") { importFromClipboard() }
+                        if let importMessage {
+                            Text(importMessage).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        ForEach(DirectProvider.allCases) { provider in
+                            SecureField(provider.tokenTitle, text: tokenBinding(provider))
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                        }
                     }
+                } footer: {
+                    Text("只有在 App 內登入無法使用時才需要。")
                 }
 
                 Section {
                     Toggle("示範資料", isOn: $sampleData)
                 } footer: {
-                    Text("權杖只存在這支手機的鑰匙圈，App 直接向各平台查詢用量，不經過任何中繼伺服器。開啟示範資料時不會連線。")
+                    Text("登入憑證只存在這支手機的鑰匙圈，App 直接向各服務查詢用量，不經過任何中繼伺服器。開啟示範資料時不會連線，顯示的不是你的真實用量。")
                 }
 
                 Section {
                     LabeledContent("版本", value: Bundle.main.appVersion)
                 }
             }
+            .task {
+                notificationsDenied = await ResetAlerts.authorizationDenied()
+            }
             .onAppear {
-                for provider in DirectProvider.allCases { tokens[provider] = provider.token ?? "" }
+                for provider in DirectProvider.allCases { tokens[provider] = Keychain.get(provider.keychainKey) ?? "" }
+                reloadSignedIn()
+            }
+            .sheet(item: $signingIn, onDismiss: reloadSignedIn) { provider in
+                SignInView(provider: provider)
+            }
+            .confirmationDialog(
+                "登出 \(signingOut?.name ?? "")？",
+                isPresented: Binding(get: { signingOut != nil }, set: { if !$0 { signingOut = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("登出", role: .destructive) {
+                    if let provider = signingOut {
+                        CredentialStore.delete(provider)
+                        tokens[provider] = ""
+                        reloadSignedIn()
+                    }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("這支手機會刪除此服務的登入憑證。")
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
@@ -74,6 +140,10 @@ struct SettingsView: View {
 }
 
 private extension SettingsView {
+    func reloadSignedIn() {
+        signedIn = Set(DirectProvider.allCases.filter(\.isSignedIn))
+    }
+
     func importFromClipboard() {
         let found = TokenImport.parse(UIPasteboard.general.string ?? "")
         guard !found.isEmpty else {
@@ -84,6 +154,7 @@ private extension SettingsView {
             Keychain.set(value, for: provider.keychainKey)
             tokens[provider] = value
         }
+        reloadSignedIn()
         UIPasteboard.general.string = ""
         let names = DirectProvider.allCases.filter { found[$0] != nil }.map(\.name)
         importMessage = "已匯入：\(names.joined(separator: "、"))。剪貼簿已清空。"

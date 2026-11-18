@@ -77,7 +77,18 @@ enum DirectProvider: String, CaseIterable, Identifiable {
     }
 
     var keychainKey: String { "token.\(rawValue)" }
-    var token: String? { Keychain.get(keychainKey) }
+    /// Signed in (or, as an advanced fallback, a manually pasted token is present).
+    var token: String? { CredentialStore.load(self)?.accessToken ?? Keychain.get(keychainKey) }
+    var isSignedIn: Bool { token != nil }
+
+    /// How the vendor's sign-in works, in the person's words.
+    var signInSummary: String {
+        switch self {
+        case .claude: return "會開啟 Claude 官方登入頁。登入後頁面會顯示一組授權碼，複製後回到這裡貼上。"
+        case .codex: return "App 會顯示一組代碼，並開啟 OpenAI 官方頁面。在該頁登入並輸入代碼即可。"
+        case .cursor: return "會開啟 Cursor 官方登入頁。登入並同意後，回到這裡會自動完成。"
+        }
+    }
 
     func request(token: String) -> URLRequest {
         var request: URLRequest
@@ -95,7 +106,11 @@ enum DirectProvider: String, CaseIterable, Identifiable {
         case .cursor:
             request = URLRequest(url: URL(string: "https://cursor.com/api/usage-summary")!)
             let name = "WorkosCursorSessionToken="
-            let value = token.hasPrefix(name) ? String(token.dropFirst(name.count)) : token
+            var value = token.hasPrefix(name) ? String(token.dropFirst(name.count)) : token
+            // The cookie is "<user id>::<token>". A bare token from in-app sign-in gets the id added.
+            if !value.contains("::"), !value.contains("%3A%3A"), let user = JWT.cursorUserID(of: value) {
+                value = "\(user)%3A%3A\(value)"
+            }
             request.setValue(name + value, forHTTPHeaderField: "Cookie")
         }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -183,14 +198,8 @@ enum QuotaParser {
 
     /// The ChatGPT account id is a claim inside the access token itself.
     static func chatGPTAccountID(fromJWT token: String) -> String? {
-        let parts = token.split(separator: ".")
-        guard parts.count >= 2 else { return nil }
-        var base64 = parts[1].replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
-        while base64.count % 4 != 0 { base64 += "=" }
-        guard let data = Data(base64Encoded: base64),
-              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let auth = claims["https://api.openai.com/auth"] as? [String: Any] else { return nil }
-        return auth["chatgpt_account_id"] as? String
+        let auth = JWT.claims(token)?["https://api.openai.com/auth"] as? [String: Any]
+        return auth?["chatgpt_account_id"] as? String
     }
 
     // MARK: - Building blocks

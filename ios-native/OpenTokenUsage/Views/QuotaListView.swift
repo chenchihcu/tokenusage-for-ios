@@ -81,6 +81,10 @@ struct QuotaListView: View {
             }
             .sheet(isPresented: $showSettings, onDismiss: { Task { await store.refresh(force: true) } }) { SettingsView() }
             .sheet(isPresented: $showResets) { ResetsView(store: store) }
+            .onReceive(NotificationCenter.default.publisher(for: NotificationRouter.openResets)) { _ in
+                showSettings = false
+                showResets = true
+            }
             .sensoryFeedback(.selection, trigger: store.selectedID) { _, _ in hapticsOn && style == .select }
             .sensoryFeedback(.success, trigger: store.refreshCount) { _, _ in hapticsOn }
     }

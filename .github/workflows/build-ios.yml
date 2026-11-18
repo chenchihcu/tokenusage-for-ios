@@ -1,37 +1,34 @@
-name: Build iOS IPA (Cloud Mac)
+name: Build iOS IPA (native, unsigned)
 
-# Manual only (plan D7): the repo is private on a free plan, and macOS minutes
-# count 10x against the monthly allowance. Run it from the Actions tab when needed.
+# Builds ios-native/ as an unsigned .ipa for sideloading with a free Apple ID (plan D9).
+# The repo is public, so macOS minutes are free.
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths: [ "ios-native/**", ".github/workflows/build-ios.yml" ]
+  pull_request:
+    paths: [ "ios-native/**", ".github/workflows/build-ios.yml" ]
 
 jobs:
   build-ios:
-    runs-on: macos-14
+    runs-on: xcode-27
+    timeout-minutes: 40
     steps:
-      - name: 檢出代碼 (Checkout)
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 設置 Node.js 環境 (Setup Node.js)
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: 安裝依賴與前端打包 (Build Web Assets)
+      - name: Generate Xcode project
         run: |
-          npm ci
-          npm run build
+          xcodebuild -version
+          brew install xcodegen
+          cd ios-native && xcodegen generate
 
-      - name: Capacitor iOS 資產同步 (Sync Capacitor iOS)
+      - name: Unsigned Release build and IPA
         run: |
-          npx cap sync ios
-
-      - name: 執行 xcodebuild 無簽名構建 (Unsigned Build & Package IPA)
-        run: |
-          cd ios/App
-          xcodebuild -workspace App.xcworkspace \
-            -scheme App \
+          cd ios-native
+          xcodebuild -project OpenTokenUsage.xcodeproj \
+            -scheme OpenTokenUsage \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -derivedDataPath build/DerivedData \
@@ -40,15 +37,13 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
           mkdir -p build/Payload
-          cp -r build/DerivedData/Build/Products/Release-iphoneos/App.app build/Payload/
-          if [ -d "App/Settings.bundle" ]; then
-            cp -r App/Settings.bundle build/Payload/App.app/
-          fi
-          cd build && zip -r OpenTokenUsage.ipa Payload
+          cp -R build/DerivedData/Build/Products/Release-iphoneos/OpenTokenUsage.app build/Payload/
+          cd build && zip -qr OpenTokenUsage.ipa Payload
+          ls -la OpenTokenUsage.ipa
 
-      - name: 上傳 IPA 產出物 (Upload IPA Artifact)
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: OpenTokenUsage-iOS-Release
-          path: ios/App/build/OpenTokenUsage.ipa
-          retention-days: 14
+          name: OpenTokenUsage-unsigned-ipa
+          path: ios-native/build/OpenTokenUsage.ipa
+          retention-days: 30

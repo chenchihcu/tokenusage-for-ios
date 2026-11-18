@@ -17,6 +17,21 @@ targets:
     platform: iOS
     sources:
       - path: OpenTokenUsage
+    info:
+      path: OpenTokenUsage/Info.plist
+      properties:
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.chihfu.opentokenusage.refresh
+        UIBackgroundModes:
+          - fetch
+    entitlements:
+      path: OpenTokenUsage/OpenTokenUsage.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.chihfu.opentokenusage
+    dependencies:
+      - target: OpenTokenUsageWidget
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.chihfu.opentokenusage
@@ -29,6 +44,31 @@ targets:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         CODE_SIGN_STYLE: Automatic
+  OpenTokenUsageWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widget
+      - path: OpenTokenUsage/Model
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: AI 額度
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widget/OpenTokenUsageWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.chihfu.opentokenusage
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.chihfu.opentokenusage.widget
+        PRODUCT_NAME: OpenTokenUsageWidget
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
   OpenTokenUsageTests:
     type: bundle.unit-test
     platform: iOS
