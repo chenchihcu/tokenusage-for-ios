@@ -13,8 +13,6 @@ interface SplitViewContainerProps {
   selectedId: string;
   onSelect: (id: string) => void;
   isLoading: boolean;
-  isVoiceActive: boolean;
-  liveTranscript: string;
   viewMode: DashboardViewMode;
   onChangeViewMode: (mode: DashboardViewMode) => void;
   isOnline: boolean;
@@ -31,8 +29,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   selectedId,
   onSelect,
   isLoading,
-  isVoiceActive,
-  liveTranscript,
   viewMode,
   onChangeViewMode,
   isOnline,
@@ -142,6 +138,8 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   };
 
   const selectedItem = quotas.find((q) => q.id === selectedId);
+  // Same rule as the cockpit's 「只看告警」 chip.
+  const listQuotas = filterAlertOnly ? quotas.filter((q) => q.remainingPercent <= 20) : quotas;
 
   // =========================================================================
   // 特殊形態 A：W3C Viewport Segments 雙屏水平展開 (horizontal-viewport-segments: 2)
@@ -187,8 +185,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             selectedItem={selectedItem}
             isFocusMode={false}
             onToggleFocus={() => {}}
-            isVoiceActive={isVoiceActive}
-            liveTranscript={liveTranscript}
             handedness={handedness}
             connectionLabel={linkLabel}
           />
@@ -224,8 +220,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             selectedItem={selectedItem}
             isFocusMode={false}
             onToggleFocus={() => {}}
-            isVoiceActive={isVoiceActive}
-            liveTranscript={liveTranscript}
             handedness={handedness}
             connectionLabel={linkLabel}
           />
@@ -257,22 +251,24 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   }
 
   // ==========================================
-  // 標準模式 B：iPhone Duo 雙欄自適應佈局 (38% : 62%)
+  // 標準模式 B：iPhone Duo 雙欄自適應佈局 (38% : 62% + Path Icon Rail)
   // ==========================================
   if (wide) {
     return (
-      <div className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe">
+      <div
+className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe"
+      >
         {/* 左欄 Master List (38% 黃金分割寬度，支援 Focus Mode 收折) */}
         <aside
           aria-label="AI 平台清單"
           className={`h-full transition-apple overflow-hidden ${
             isFocusMode
               ? 'w-0 opacity-0 pointer-events-none'
-              : 'w-[38%] min-w-[280px] max-w-[420px] opacity-100'
+              : 'w-[38%] min-w-[260px] max-w-[400px] opacity-100'
           }`}
         >
           <MasterList
-            quotas={quotas}
+            quotas={listQuotas}
             selectedId={selectedId}
             onSelect={handleItemSelect}
             isLoading={isLoading}
@@ -281,15 +277,13 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
 
         {/* 右欄 Detail Workbench (62% 寬度或 100% 全寬) */}
         <main
-          aria-label="AI 平台詳情與語音工作台"
+          aria-label="服務詳情"
           className="flex-1 h-full min-w-0 bg-slate-950"
         >
           <DetailWorkbench
             selectedItem={selectedItem}
             isFocusMode={isFocusMode}
             onToggleFocus={() => setIsFocusMode(!isFocusMode)}
-            isVoiceActive={isVoiceActive}
-            liveTranscript={liveTranscript}
             handedness={handedness}
             connectionLabel={linkLabel}
           />
@@ -319,8 +313,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
               selectedItem={selectedItem}
               isFocusMode={false}
               onToggleFocus={() => {}}
-              isVoiceActive={isVoiceActive}
-              liveTranscript={liveTranscript}
               handedness={handedness}
               connectionLabel={linkLabel}
             />
@@ -328,7 +320,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
         </div>
       ) : (
         <MasterList
-          quotas={quotas}
+          quotas={listQuotas}
           selectedId={selectedId}
           onSelect={handleItemSelect}
           isLoading={isLoading}

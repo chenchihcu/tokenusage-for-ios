@@ -10,7 +10,7 @@
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 			<key>Title</key>
-			<string>視圖與人體工學偏好 (View & Ergonomics)</string>
+			<string>視圖與人體工學偏好 (View &amp; Ergonomics)</string>
 		</dict>
 		<dict>
 			<key>Type</key>
@@ -58,7 +58,7 @@
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 			<key>Title</key>
-			<string>同步與推算策略 (Sync & Calculation)</string>
+			<string>同步與推算策略 (Sync &amp; Calculation)</string>
 		</dict>
 		<dict>
 			<key>Type</key>
@@ -146,7 +146,7 @@
 			<key>Key</key>
 			<string>opentokenusage_app_version</string>
 			<key>DefaultValue</key>
-			<string>v1.2.0 (iPhone Duo Dedicated)</string>
+			<string>v2.1 (iPhone Duo Dedicated)</string>
 		</dict>
 	</array>
 </dict>

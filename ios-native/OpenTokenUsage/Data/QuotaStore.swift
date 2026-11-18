@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import Observation
+import WidgetKit
 
 @MainActor
 @Observable
@@ -19,6 +20,14 @@ final class QuotaStore {
     private(set) var refreshCount = 0
 
     var selectedID: ProviderQuota.ID?
+    /// Fast-path filter: only agents with 20 % or less remaining.
+    var alertsOnly = false
+    /// Providers with no sign-in yet; shown as 「未設定」 rows, never as numbers.
+    private(set) var missingProviders: [DirectProvider] = DirectProvider.allCases.filter { $0.token == nil }
+
+    /// Earliest time each provider may be asked again (its floor, or a 429 back-off).
+    private var floorUntil: [DirectProvider: Date] = [:]
+    private var blockedUntil: [DirectProvider: Date] = [:]
 
     private let client = QuotaClient()
     private let monitor = NWPathMonitor()
@@ -41,15 +50,21 @@ final class QuotaStore {
         monitor.start(queue: DispatchQueue(label: "opentokenusage.path"))
     }
 
+    /// Exactly what the vendors last reported, most urgent first. Nothing is inferred.
     var displayItems: [ProviderQuota] {
-        let smart = UserDefaults.standard.bool(forKey: SettingsKey.smartAutoReset)
-        let now = Date()
-        return items
-            .map { smart ? $0.applyingAutoReset(now: now) : $0 }
-            .sorted { lhs, rhs in
-                if lhs.level != rhs.level { return lhs.level < rhs.level }
-                return lhs.remainingPercent < rhs.remainingPercent
-            }
+        items.sorted { lhs, rhs in
+            if lhs.level != rhs.level { return lhs.level < rhs.level }
+            return lhs.remainingPercent < rhs.remainingPercent
+        }
+    }
+
+    var visibleItems: [ProviderQuota] {
+        alertsOnly ? displayItems.filter { $0.remainingPercent <= 20 } : displayItems
+    }
+
+    /// Free resets available across Codex and Claude Code (badge on the fast path).
+    var resetCreditsTotal: Int {
+        items.filter(\.reportsResetCredits).compactMap(\.resetCredits).reduce(0, +)
     }
 
     var selected: ProviderQuota? {
@@ -61,17 +76,33 @@ final class QuotaStore {
 
     var isLoading: Bool { state == .loading }
 
-    func refresh() async {
+    /// `force` is a person asking (pull, button): it ignores the per-provider floor
+    /// but still honours a 429 back-off.
+    func refresh(force: Bool = false) async {
         guard state != .loading else { return }
+        missingProviders = DirectProvider.allCases.filter { $0.token == nil }
+        let now = Date()
+        let skipping = Set(DirectProvider.allCases.filter { provider in
+            if let until = blockedUntil[provider], now < until { return true }
+            if !force, let until = floorUntil[provider], now < until { return true }
+            return false
+        })
         state = .loading
         do {
-            let result = try await client.fetchQuotas(previous: items)
+            let result = try await client.fetchQuotas(previous: items, skipping: skipping)
+            for provider in result.asked {
+                floorUntil[provider] = now.addingTimeInterval(provider.minimumInterval)
+                blockedUntil[provider] = result.retryAfter[provider].map { now.addingTimeInterval($0) }
+            }
             items = result.items
-            lastUpdated = Date()
+            if !result.asked.isEmpty { lastUpdated = Date() }
             state = result.firstError.map { .failed($0) } ?? .idle
             refreshCount += 1
             QuotaCache.save(result.items)
+            WidgetCenter.shared.reloadAllTimelines()
+            ResetAlerts.check(result.items)
         } catch let error as QuotaClientError {
+            if error == .notConfigured { items = [] }
             state = .failed(error)
         } catch {
             state = .failed(.badResponse)

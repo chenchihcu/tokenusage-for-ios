@@ -1,92 +1,25 @@
-# OpenTokenUsage Web & AI 語音駕駛艙 (Cloudflare 邊緣原生版)
+# OpenTokenUsage — AI 額度監控（iPhone Duo）
 
-[![Production Release](https://img.shields.io/badge/Release-v1.2.0-blue.svg)](https://github.com/chenchihcu/opentokenusage-web)
-[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers%20%7C%20Durable%20Objects%20%7C%20D1-orange.svg)](https://workers.cloudflare.com/)
-[![E2E Tests](https://img.shields.io/badge/Playwright-36%2F36%20Passed-brightgreen.svg)](tests/e2e.spec.ts)
-[![Apple HIG](https://img.shields.io/badge/Design-Apple%20HIG%20%26%20W3C%20Foldable-purple.svg)](docs/rfc-apple-hig-foldable-onehanded.md)
+監控四個 AI 編程服務的剩餘額度與重置時間：**Codex、Claude Code、Cursor、Google Antigravity**。Codex 與 Claude Code 另顯示供應商給的**免費重置次數**。
 
-全端現代化 AI 額度與訂閱監控駕駛艙，具備 **一頁式全景極簡監控 (One-Page High-Density Cockpit)**、**Apple HIG 折疊屏滿版與單手盲操標準 (W3C CSS Viewport Segments API)**、**Cloudflare 邊緣原生架構 (Workers + Durable Objects + D1 + KV)**、**Gemini 3.8 Live API 實時雙向語音對話**與**企業級 AI 供應商六大治理維度**。
-
-- 🌐 **正式公網端點 (Edge Live)**：[https://opentokenusage-web.chihfu-chen-tw.workers.dev](https://opentokenusage-web.chihfu-chen-tw.workers.dev)
-- 📦 **當前發布版本**：`v1.2.0` (Production Ready)
+- 🌐 API：`https://opentokenusage-web.chihfu-chen-tw.workers.dev`
+- 📦 版本：`v1.3.0`（P0：修正資料讀取、移除語音與 Grok、iPhone Duo 版面修正）
+- 🗺️ 下一版：原生 SwiftUI（iOS 27.1）、手機內登入各服務、不經電腦同步 — 見 [`docs/plan-v3-native-duo.md`](docs/plan-v3-native-duo.md) 與 [`docs/spec-v3-native-duo.md`](docs/spec-v3-native-duo.md)。
 
 ---
 
-## 🌟 核心架構與功能特色
+## 目前功能（v1.3.0）
 
-### 1. 一頁式全景極簡監控駕駛艙 (One-Page High-Density Cockpit)
-- **原生輕量 SVG 環形圖表 (`MiniRingChart`)**：
-  - 徹底捨棄肥厚第三方圖表庫（如 Chart.js/ECharts），以純原生 SVG `<circle>` + `stroke-dashoffset` 實現 60fps 動態環形儀表盤。
-  - 支援 5 大平台專屬主題光譜漸變、剩餘額度微標籤與耗盡警戒動態呼吸脈動。
-- **頂部 Governing Bottleneck 監控中樞**：
-  - 置頂捕捉 5 大平台中最嚴格瓶頸池（Governing Bottleneck），即時呈現全系統耗盡計數與在線心跳。
-- **徹底去文字化 (Zero Fluff)**：
-  - 移除所有贅字說明與冗長教學段落，全數改以高信噪比之狀態指示燈、微標籤與等寬數字 (`font-mono tabular-nums`)，實現秒級狀態感知。
-- **雙重視圖模式無縫切換 (`ViewModeSelector`)**：
-  - 支援 `⊞ ALL` 一頁式全景矩陣（一次瀏覽 Cursor、Codex、Antigravity、Claude Code、Grok 全部平台）與 `▤ DUO` 雙欄深入工作台切換，支援 URL 深度連結（`?view=cockpit&duo=1`）與 `localStorage` 持久化。
+- **只顯示真實資料**：畫面只呈現 `/api/quotas` 回傳的資料；沒有資料時顯示「尚無額度資料」，不再有內建範例數字。
+- **更新頻率**：15 秒 / 30 秒 / 1 分鐘 / 5 分鐘 / 15 分鐘 / 手動；App 在前景時依設定更新，背景由 iOS 決定。
+- **免費重置監控**：Codex、Claude Code 顯示「免費重置 N 次」；供應商未提供時顯示「不提供」。重置時間已過但尚未有新資料時顯示「已到重置時間」，不再誤標 FREE。
+- **右手快速操作（4 個圖示）**：更新、重置、告警（只看剩餘 ≤ 20%）、設定（更新頻率、慣用手）。左手模式移到左下，卡片內容不鏡像。
+- **iPhone Duo 版面**：窄螢幕（外螢幕）單欄；寬螢幕（內螢幕）才出現「全景 / 雙欄」切換，雙欄為清單 + 詳情兩欄。內容可捲離快速操作列，不被遮住。
+- **連線**：路徑由 iOS 選擇（Wi-Fi 或行動數據）；狀態列顯示「已同步 · 資料時間」或離線 / 錯誤原因與「重試」。
 
-### 2. Apple HIG 折疊屏滿版瀏覽與單手人體工學 (Foldable & One-Handed Ergonomics)
-- **Apple HIG 觸控指標全面落地**：
-  - 全域互動元件嚴格遵循 Apple 官方標準，最小點擊熱區 **`≥ 44 × 44 pt`**（CSS px），元件間距保持 **`≥ 8 pt`**。
-- **W3C CSS Viewport Segments 原生雙屏避讓**：
-  - **水平雙屏書本模式 (`horizontal-viewport-segments: 2`)**：自動分流為左屏 Cockpit 與右屏 Detail 工作台，並以 `calc(env(viewport-segment-left 1 0) - env(viewport-segment-right 0 0))` 自動計算硬體鉸鏈中縫，保證 0 數據落於物理折縫。
-  - **垂直雙屏筆電/帳篷模式 (`vertical-viewport-segments: 2`)**：上半部為 Glance 監控中樞、下半部為 Touch 操控控制台。
-- **150ms 姿態轉態防抖 (Posture Debounce)**：
-  - 螢幕折疊展開、收合或橫豎旋轉時，防白屏並 100% 保持 WebSocket / Gemini 3.8 Live 語音連線不中斷。
-- **單手握持自然拇指區下沉 (Bottom-Heavy Reachability)**：
-  - 螢幕上半部 40% 規劃為 Glance 視覺監控區，下半部 60% 規劃為 Touch 容易觸及區。
-- **左右手握持偏好自適應 (Handedness Ergonomics)**：
-  - 支援右手模式 (`right`，預設右側貼靠)、左手模式 (`left`，左側貼靠) 與雙手模式 (`dual`，左右分置懸浮軌道)；點擊伴隨 `navigator.vibrate` 微震觸覺盲操反饋。
-- **風險優先單手過濾晶片**：
-  - 剩餘配額 $\le 5\%$ 之耗盡平台自動置頂下沉至拇指第一熱區，並提供 `[ ALL 5 | ⚠️ ALERTS ]` 單手大熱區過濾晶片。
-- **思維鏈預算大熱區快選膠囊**：
-  - 針對手機單手操作微調不易之痛點，提供 `0K`、`16K`、`32K`、`64K`、`100K (o3-mini 頂峰)` 五大專屬大觸控膠囊（`min-h-[44px]`）。
-- **動態島與手勢條滿版避讓**：
-  - 橫向握持時精準避讓 iOS 動態島 59px 原生安全邊距（`pl-safe-island pr-safe-island`）與底部手勢條（`pb-safe`）。
+已移除：Gemini Live 語音與麥克風權限、Grok、模型型錄、思維鏈預算滑桿。
 
-### 3. 平台多配額池獨立架構 (Multi-Token Pools)
-- **多模型家族配額池獨立監控**：
-  - 支援單一供應商多配額池（例如 Google Antigravity 內部的 Gemini Flash、Gemini Pro、Thinking 等獨立池；以及 Grok / Claude 獨立池）。
-- **獨立重置週期與進度呈現**：
-  - 各配額池擁有獨立之消耗進度、使用比例與重置時間視窗。
-- **池級粒度配額硬阻斷 (Pool-Level Hard Stop)**：
-  - 配額耗盡時精準針對單一配額池實施阻斷，防範單點耗盡擴散性盲區。
-
-### 4. Cloudflare 邊緣原生架構 (Edge-Native Architecture)
-- **Cloudflare Workers Static Assets**：
-  - 前端採用 React 19 + Tailwind CJK + Lucide 靜態資產，經 Anycast 邊緣網絡全球就近分發。
-- **Durable Objects (`VoiceSessionDO`)**：
-  - 狀態化雙向 WebSocket 會話管理，結合 **WebSocket Hibernation API**，靜默零 CPU 計費，節省 90% 運算成本。
-- **Cloudflare D1 SQL**：
-  - 邊緣分散式關聯資料庫，儲存 `ai_usage_ledger` 用量帳本（含思維鏈 Thinking Tokens 追蹤）與平台 Quota。
-- **Cloudflare KV (`MODEL_CATALOG_KV`)**：
-  - 邊緣動態模型型錄快取。
-
-### 5. Gemini 3.8 Live API 實時雙向語音
-- **極低延遲音訊串流**：
-  - 16kHz PCM 音訊上行 / 24kHz PCM 下行，支援即時字幕同步與語音非同步調用 MCP 工具查詢額度。
-- **離屏 Canvas 波形動畫**：
-  - 60 FPS 流暢聲波渲染，零 DOM Reflow 與 Layout Shift。
-
-### 6. AI 供應商六大治理維度與 MCP 支援
-- **AES-256-GCM** 金鑰加密儲存，前端展示時強制動態掩碼（如 `sk-ant-api...3f8a`）。
-- **SSRF 嚴格白名單過濾器**，杜絕私有內網與本機位址滲透。
-- **Quota Hard Stop** 每日累計額度硬阻斷機制，杜絕帳單爆發。
-- **標準 MCP (Model Context Protocol) 工具集**：
-  - `get_provider_quota`：查詢指定平台額度。
-  - `list_active_models`：取得在線有效模型清單。
-  - `estimate_token_cost`：試算 Token 與思維鏈成本。
-  - `trigger_model_sync`：手動觸發模型型錄同步。
-
-### 7. 自適應桌面帳號同步守護程式
-- `scripts/sync-desktop-accounts.py` 與 `scripts/sync-desktop-daemon.py`。
-- 本機桌面快取自適應增量推送，具備指數退避重試與邊緣安全 User-Agent 標頭防護。
-- 桌面守護程式直接 POST 公開 HTTPS Worker。手機不參與這條推送，也不需要 Tailscale。
-
-### 8. iPhone 安裝版直連公開 Internet
-- 安裝版 UI 在本機 WebView，API 使用 `https://opentokenusage-web.chihfu-chen-tw.workers.dev`。路徑由 iOS 選擇（Wi-Fi 或行動數據），App 不指定 SIM、5G 或 VPN。
-- `CapacitorHttp` 維持關閉。連線狀態拆成路徑、API、登入與資料，不再用單一 `navigator.onLine`。
-- 前景才輪詢。寫入沒有冪等契約時，逾時保留「結果待確認」，不自動重送。
+> **資料來源限制（v1.3.0）**：Worker 的資料仍由電腦端 `scripts/sync-desktop-*.py` 上傳。改為手機直接讀取各服務是 v3 計畫的 P3。
 
 ---
 
@@ -165,11 +98,11 @@ opentokenusage-web/
 │   │   ├── components/
 │   │   │   ├── CockpitOverview.tsx      # 一頁式極簡全景駕駛艙 (Includes All)
 │   │   │   ├── MiniRingChart.tsx        # 原生 SVG 60fps 動態環形儀表盤
-│   │   │   ├── ViewModeSelector.tsx     # 雙手熱區切換器與慣用手偏置
-│   │   │   ├── DetailWorkbench.tsx      # 去文字化工作台與思考預算熱區膠囊
+│   │   │   ├── ViewModeSelector.tsx     # 全景 / 雙欄切換（僅寬螢幕）
+│   │   │   ├── DetailWorkbench.tsx      # 服務詳情（數字、重置、免費重置）
 │   │   │   ├── SplitViewContainer.tsx   # W3C 折疊屏雙視區避讓滿版容器
-│   │   │   ├── FloatingActionToolbar.tsx# 懸浮操作軌道與動態島安全避讓
-│   │   │   ├── AudioVisualizer.tsx      # 離屏 Canvas 語音動畫
+│   │   │   ├── FloatingActionToolbar.tsx# 右手 / 左手 4 個快速操作
+│   │   │   ├── Sheet.tsx                # 重置與設定面板
 │   │   │   └── FrequencySelector.tsx    # 自適應更新頻率選擇器
 │   │   ├── App.tsx                      # 根組件與全域狀態持久化
 │   │   └── main.tsx                     # 前端入口
@@ -177,14 +110,13 @@ opentokenusage-web/
 │   │   ├── crypto/encryption.ts         # AES-256-GCM 加解密模組
 │   │   ├── ledger/usage-ledger.ts       # 用量帳本與配額硬阻斷引擎
 │   │   └── mcp/quota-mcp-server.ts      # MCP 標準工具集伺服器
-│   ├── worker/                          # Cloudflare Workers 與 Durable Objects
-│   │   ├── durable-objects/
-│   │   │   └── VoiceSessionDO.ts        # 語音對話 Durable Object (Hibernation)
-│   │   └── index.ts                     # Worker HTTP / WebSocket 路由分發
+│   ├── worker/                          # Cloudflare Worker
+│   │   └── index.ts                     # Worker HTTP 路由
 │   └── types/quota.ts                   # 共享型別契約 (DTO)
 ├── tests/
-│   └── e2e.spec.ts                      # 36 項 Playwright 自動化端到端測試
-├── package.json                         # 專案依賴與腳本定義 (v1.2.0)
+│   ├── e2e.spec.ts                      # Playwright UI 與後端測試
+│   └── direct-internet.spec.ts          # 網路層測試
+├── package.json                         # 專案依賴與腳本定義 (v1.3.0)
 ├── playwright.config.ts                 # 跨平台測試配置 (Desktop & iPhone Duo)
 ├── tailwind.config.js                   # Tailwind 配置 (動態島與安全邊距)
 ├── vite.config.ts                       # Vite 構建配置
@@ -193,11 +125,9 @@ opentokenusage-web/
 
 ---
 
-## 🛡️ 治理與驗證狀態 (Verification Status)
+## 🛡️ 驗證狀態（v1.3.0，2026-11-17）
 
-- **靜態類型與構建驗證**：TypeScript 5.x 零錯誤，Vite 生產構建成功。
-- **Playwright 自動化測試**：36 / 36 項測試全通（跨 `Desktop Chrome` 與 `iPhone Duo Landscape`）。
-- **邊緣雲即時探針檢驗**：
-  - HTML 端點：`HTTP 200 OK`
-  - `/api/quotas` 端點：`HTTP 200 OK`，`API Success: True`
-  - 5 大平台在線狀態：Cursor、Codex、Google Antigravity、Claude Code、Grok 5 大平台健康度 100%。
+- 在 Linux 雲端容器以本機 Worker + Chromium 驗證（iPhone Duo 尺寸為近似值，未在 Duo 模擬器或實機執行）。
+- Playwright：`tests/e2e.spec.ts`、`tests/direct-internet.spec.ts` 58 / 58 通過（Desktop Chrome 與 iPhone Duo Landscape）。
+- 前端 TypeScript 無錯誤；`src/worker`、`src/server` 有既存型別錯誤（與本次變更無關）。
+- 正式環境尚未部署本版本；部署需移除 `VoiceSessionDO`（`wrangler.jsonc` migration `v2`）。

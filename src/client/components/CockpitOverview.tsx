@@ -3,11 +3,12 @@ import { QuotaCardProps } from './QuotaCard';
 import { MiniRingChart } from './MiniRingChart';
 import { TokenPool } from '../../types/quota';
 import { HandednessMode } from './ViewModeSelector';
+import { PlatformIcon } from './PlatformIcon';
+import { extractResetWindowSummary } from '../utils/resetMonitor';
 import {
   Activity,
   AlertTriangle,
   Clock,
-  Link2,
   ArrowUpRight,
   Filter,
 } from 'lucide-react';
@@ -80,16 +81,6 @@ const PLATFORM_THEMES: Record<
     badgeText: 'text-amber-300',
     badgeBorder: 'border-amber-500/40',
   },
-  grok: {
-    gradient: ['#FF007A', '#7928CA'],
-    border: 'border-pink-500/20',
-    borderSelected: 'border-pink-400',
-    glowSelected: 'shadow-[0_0_20px_rgba(255,0,122,0.25)]',
-    textAccent: 'text-pink-400',
-    badgeBg: 'bg-pink-950/60',
-    badgeText: 'text-pink-300',
-    badgeBorder: 'border-pink-500/40',
-  },
 };
 
 export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
@@ -102,7 +93,6 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
   countdownSeconds,
   filterAlertOnly = false,
   onToggleFilterAlert,
-  handedness = 'right',
   compact = false,
 }) => {
   // 找出全平台最嚴格治理瓶頸 (Governing Bottleneck)
@@ -143,7 +133,7 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
     : quotas;
 
   return (
-    <div className="flex flex-col h-full w-full bg-slate-950 overflow-y-auto sm:overflow-hidden select-none p-2 sm:p-3 lg:p-4 gap-2 sm:gap-3">
+    <div className="flex flex-col h-full w-full bg-slate-950 overflow-y-auto select-none p-2 sm:p-3 lg:p-4 gap-2 sm:gap-3 fab-clearance">
       {/* 1. 即時脈動監控中樞 (System Pulse Monitor - Apple HIG Touch Safe) */}
       <section
         aria-label="系統脈動監控"
@@ -207,9 +197,7 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
 
         {/* 右側：單手過濾晶片與高密度 KPI 膠囊 (Apple HIG ≥ 44pt Touch Targets) */}
         <div
-          className={`flex items-center gap-2 text-[11px] font-mono shrink-0 ${
-            handedness === 'left' ? 'flex-row-reverse' : ''
-          }`}
+          className="flex flex-wrap items-center gap-2 text-[11px] font-mono shrink-0"
         >
           {/* 單手快速過濾晶片 (Quick Filter Chip: ALL vs ⚠️ ALERTS) */}
           {onToggleFilterAlert && (
@@ -225,7 +213,7 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
-              <span>{filterAlertOnly ? '⚠️ ALERTS' : 'ALL 5'}</span>
+              <span>{filterAlertOnly ? '只看告警' : `全部 ${quotas.length}`}</span>
             </button>
           )}
 
@@ -261,11 +249,11 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
 
       {/* 2. 五大平台全景矩陣 (Includes All - 5 Platform Cards Grid) */}
       <main
-        aria-label="五大平台監控儀表"
-        className={`flex-1 grid gap-2 sm:gap-3 min-h-0 ${
+        aria-label="四個服務的額度"
+        className={`grid shrink-0 gap-2 sm:gap-3 ${
           filteredQuotas.length <= 2
             ? 'grid-cols-1 sm:grid-cols-2 max-w-2xl mx-auto w-full'
-            : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5'
+            : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
         }`}
       >
         {filteredQuotas.length === 0 ? (
@@ -322,11 +310,12 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
                 {/* 卡片頂部：平台名 + 方案徽章 + 深入箭頭 (Apple HIG 觸控熱區) */}
                 <div>
                   <div
-                    className={`flex items-center justify-between gap-1 mb-2 ${
-                      handedness === 'left' ? 'flex-row-reverse' : ''
-                    }`}
+                    className="flex items-center justify-between gap-1 mb-2"
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`p-1 rounded-md border shrink-0 ${theme.badgeBg} ${theme.badgeText} ${theme.badgeBorder}`}>
+                        <PlatformIcon id={item.id} className="w-3.5 h-3.5" />
+                      </span>
                       <h3 className="font-bold text-sm text-slate-100 tracking-tight truncate">
                         {item.name}
                       </h3>
@@ -335,15 +324,6 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
                       >
                         {item.planName}
                       </span>
-                      {item.id === 'grok' && (
-                        <span
-                          className="flex items-center gap-0.5 text-[8px] font-mono px-1 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 shrink-0"
-                          title="與 Cursor 連動"
-                        >
-                          <Link2 className="w-2 h-2 text-cyan-400" />
-                          BOND
-                        </span>
-                      )}
                     </div>
 
                     <button
@@ -352,7 +332,8 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
                         e.stopPropagation();
                         onOpenDetail(item.id);
                       }}
-                      title="深入此平台工作台 (DUO Split)"
+                      title="查看詳情"
+                      aria-label={`查看 ${item.name} 詳情`}
                       className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95"
                     >
                       <ArrowUpRight className="w-4 h-4" />
@@ -361,9 +342,7 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
 
                   {/* 核心視覺：SVG 環形圖表 (Chart) + 主要 Key-Value */}
                   <div
-                    className={`flex items-center justify-between gap-2 py-1 ${
-                      handedness === 'left' ? 'flex-row-reverse' : ''
-                    }`}
+                    className="flex items-center justify-between gap-2 py-1"
                   >
                     {/* SVG 環形圖表 */}
                     <MiniRingChart
@@ -379,9 +358,7 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
 
                     {/* 核心鍵值對 (Key-Value Deck) */}
                     <div
-                      className={`flex flex-col gap-1 font-mono ${
-                        handedness === 'left' ? 'text-left' : 'text-right'
-                      }`}
+                      className="flex flex-col gap-1 font-mono text-right"
                     >
                       <div>
                         <span className="text-[9px] text-slate-500 uppercase font-bold block leading-none">
@@ -396,9 +373,21 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
                         <span className="text-[9px] text-slate-500 uppercase font-bold block leading-none">
                           RESET TIME
                         </span>
-                        <span className="text-[10px] font-semibold text-slate-300 tabular-nums truncate max-w-[100px] block leading-none mt-0.5">
-                          {shortReset}
-                        </span>
+                        {(() => {
+                          const win = extractResetWindowSummary(item);
+                          return (
+                            <>
+                              <span className="text-[10px] font-semibold text-slate-300 tabular-nums truncate max-w-[110px] block leading-none mt-0.5">
+                                {shortReset}
+                              </span>
+                              {win.sessionText !== '--' && (
+                                <span className="text-[9px] font-mono text-cyan-300 block leading-none mt-0.5">
+                                  5h {win.sessionText} · Wk {win.weeklyText}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>

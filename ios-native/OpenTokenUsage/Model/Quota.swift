@@ -142,43 +142,21 @@ enum QuotaDate {
 }
 
 extension ProviderQuota {
-    /// Once a window's reset time has passed, show it as refilled instead of
-    /// waiting for the next sync (same rule as the previous app).
-    func applyingAutoReset(now: Date = Date()) -> ProviderQuota {
-        var copy = self
-        let pools = self.pools
-        if !pools.isEmpty {
-            var changed = false
-            let updated = pools.map { pool -> TokenPool in
-                var p = pool
-                p.tiers = pool.tiers.map { tier in
-                    guard let reset = tier.resetDate, now >= reset,
-                          tier.remaining == 0 || tier.used >= 100 else { return tier }
-                    changed = true
-                    var t = tier
-                    t.used = 0
-                    t.remaining = 100
-                    t.resetDurationText = "已重置"
-                    t.isGoverning = false
-                    return t
-                }
-                if let minRemaining = p.tiers.map(\.remaining).min() {
-                    p.effectiveRemaining = minRemaining
-                    p.effectiveUsed = 100 - minRemaining
-                    p.isCritical = minRemaining <= 5
-                }
-                return p
-            }
-            if changed, let data = try? JSONEncoder().encode(updated) {
-                copy.tokenPoolsJson = String(data: data, encoding: .utf8)
-                let worst = updated.map(\.effectiveRemaining).min() ?? copy.remainingPercent
-                copy.remainingPercent = worst
-                copy.usedQuota = 100 - worst
-            }
-        } else if let reset = resetDate, now >= reset, remainingPercent <= 0 {
-            copy.remainingPercent = 100
-            copy.usedQuota = 0
+    /// Codex and Claude Code can grant free resets; other providers never do.
+    var reportsResetCredits: Bool { providerId == "codex" || providerId == "claude" }
+
+    /// Free resets the vendor says are available ("Resets: 2 available").
+    /// `nil` means the vendor did not report a number — never shown as 0.
+    var resetCredits: Int? {
+        for metric in metrics where metric.label.lowercased().hasPrefix("reset") {
+            guard let value = metric.value else { continue }
+            let digits = value.drop { !$0.isNumber }.prefix { $0.isNumber }
+            if let count = Int(digits) { return count }
         }
-        return copy
+        return nil
+    }
+
+    var resetCreditsText: String {
+        resetCredits.map { "免費重置 \($0) 次" } ?? "免費重置：不提供"
     }
 }

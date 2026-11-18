@@ -1,14 +1,18 @@
-name: Build iOS IPA (Cloud Mac)
+name: Build iOS IPA (native, unsigned)
 
-# Builds the native SwiftUI app in ios-native/ (no web view) as an unsigned IPA.
+# Builds ios-native/ as an unsigned .ipa for sideloading with a free Apple ID (plan D9).
+# The repo is public, so macOS minutes are free.
 on:
   workflow_dispatch:
   push:
-    branches: [ main, "work/**", "cursor/**" ]
+    branches: [ main ]
+    paths: [ "ios-native/**", ".github/workflows/build-ios.yml" ]
+  pull_request:
+    paths: [ "ios-native/**", ".github/workflows/build-ios.yml" ]
 
 jobs:
   build-ios:
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 40
     steps:
       - name: Checkout
@@ -16,6 +20,7 @@ jobs:
 
       - name: Generate Xcode project
         run: |
+          xcodebuild -version
           brew install xcodegen
           cd ios-native && xcodegen generate
 
@@ -34,10 +39,11 @@ jobs:
           mkdir -p build/Payload
           cp -R build/DerivedData/Build/Products/Release-iphoneos/OpenTokenUsage.app build/Payload/
           cd build && zip -qr OpenTokenUsage.ipa Payload
+          ls -la OpenTokenUsage.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: OpenTokenUsage-iOS-Release
+          name: OpenTokenUsage-unsigned-ipa
           path: ios-native/build/OpenTokenUsage.ipa
-          retention-days: 14
+          retention-days: 30

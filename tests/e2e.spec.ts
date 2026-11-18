@@ -144,279 +144,154 @@ test.describe('1. 安全性、後端 MCP 與模型過期守衛驗證', () => {
   });
 });
 
-test.describe('2. 極致暗黑主題、Live Bar、自訂頻率與 5 大平台真實帳號 UI 驗證', () => {
-  test('極致暗黑曜石背景與 Live Bar 原創光譜條渲染', async ({ page }) => {
+// ---------------------------------------------------------------------------
+// UI (P0): the app shows only what /api/quotas returns. Tests serve a fixed
+// payload through page.route so no built-in sample numbers are needed.
+// ---------------------------------------------------------------------------
+type Page = import('@playwright/test').Page;
+
+function iso(hoursFromNow: number): string {
+  return new Date(Date.now() + hoursFromNow * 3_600_000).toISOString();
+}
+
+function quotaPayload() {
+  const tier = (id: string, label: string, used: number, h: number, governing: boolean) => ({
+    id, label, used, limit: 100, remaining: 100 - used, resetsAt: iso(h), resetDurationText: '', isGoverning: governing,
+  });
+  const row = (id: string, name: string, plan: string, remaining: number, metrics: unknown[], pools?: unknown[]) => ({
+    provider_id: id, name, plan_name: plan, total_quota: 100, used_quota: 100 - remaining, remaining_percent: remaining,
+    reset_time: iso(48), status: 'active', metrics_json: JSON.stringify(metrics),
+    token_pools_json: pools ? JSON.stringify(pools) : null, fetched_at: new Date().toISOString(),
+  });
+  return {
+    success: true,
+    data: [
+      row('codex', 'Codex', 'Plus', 3, [{ label: 'Resets', value: '1 available' }], [
+        { id: 'codex_shared', name: 'Codex CLI & Cloud', effectiveRemaining: 3, effectiveUsed: 97, primaryResetTime: iso(20), isCritical: true,
+          tiers: [tier('weekly', 'Weekly limit', 97, 20, true), tier('5h', '5h Session', 40, 3, false)] },
+      ]),
+      row('claude', 'Claude Code', 'Pro', 58, [{ label: 'Resets', value: '0 available' }]),
+      row('cursor', 'Cursor', 'Pro', 41, [{ label: 'Total usage', used: 59, limit: 100, kind: 'percent' }]),
+      row('antigravity', 'Google Antigravity', 'Google AI Pro', 77, []),
+      row('grok', 'Grok', 'SuperGrok', 0, []),
+    ],
+  };
+}
+
+async function serveQuotas(page: Page, body: unknown = quotaPayload()) {
+  await page.route('**/api/quotas', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) }),
+  );
+}
+
+test.describe('2. 資料與狀態', () => {
+  test('只顯示四個服務（無 Grok），狀態列顯示已同步', async ({ page }) => {
+    await serveQuotas(page);
     await page.goto('/');
-
-    // 驗證極致暗黑主題容器
-    const appContainer = page.locator('div.bg-slate-950').first();
-    await expect(appContainer).toBeVisible();
-
-    // 驗證 Live Bar 及其 5 色等比配額分段
-    const liveBar = page.locator('text=LIVE').first();
-    await expect(liveBar).toBeVisible();
-
-    // 驗證 5 大平台分段存在
-    await expect(page.locator('button[title*="Cursor: 剩餘 0%"]')).toBeVisible();
-    await expect(page.locator('button[title*="Codex: 剩餘 0%"]')).toBeVisible();
-    await expect(page.locator('button[title*="Antigravity: 剩餘 31%"]')).toBeVisible();
-    await expect(page.locator('button[title*="Claude Code: 剩餘 2%"]')).toBeVisible();
-    await expect(page.locator('button[title*="Grok: 剩餘 0%"]')).toBeVisible();
-  });
-
-  test('使用者自訂更新頻率控制器與持久化 (FrequencySelector)', async ({ page }) => {
-    await page.goto('/');
-
-    // 預設為 1 分鐘
-    const freqBtn = page.locator('button[title*="調整 Token 用量自動更新頻率"]');
-    await expect(freqBtn).toBeVisible();
-    await expect(freqBtn).toContainText('1 分鐘');
-
-    // 展開選單切換至「15 秒」
-    await freqBtn.click();
-    const opt15s = page.locator('button:has-text("15 秒")');
-    await expect(opt15s).toBeVisible();
-    await opt15s.click();
-
-    // 驗證按鈕標籤變更
-    await expect(freqBtn).toContainText('15 秒');
-
-    // 驗證 localStorage 持久化
-    const stored = await page.evaluate(() => localStorage.getItem('opentokenusage_refresh_interval_sec'));
-    expect(stored).toBe('15');
-  });
-
-  test('5 大專屬平台卡片與真實帳號基準數值驗證', async ({ page }) => {
-    await page.goto('/?view=split');
-
-    // 1. Cursor (Premium, 0% 剩餘)
-    const cursorCard = page.locator('div[role="button"]:has-text("Cursor")').first();
-    await expect(cursorCard).toBeVisible();
-    await expect(cursorCard.locator('.tabular-nums').first()).toContainText('0%');
-
-    // 2. Codex (Plus, 最嚴格瓶頸優先：Weekly 100% 耗盡 -> 剩餘 0%)
-    const codexCard = page.locator('div[role="button"]:has-text("Codex")').first();
-    await expect(codexCard).toBeVisible();
-    await expect(codexCard.locator('.tabular-nums').first()).toContainText('0%');
-    await expect(codexCard.getByText('Weekly:', { exact: true })).toBeVisible();
-    await expect(codexCard.locator('span:has-text("100%")').first()).toBeVisible();
-
-    // 3. Google Antigravity (Google AI Pro, 工作馬瓶頸優先：Gemini 31% 瓶頸 -> 剩餘 31%)
-    const antiCard = page.locator('div[role="button"]:has-text("Google Antigravity")').first();
-    await expect(antiCard).toBeVisible();
-    await expect(antiCard.locator('.tabular-nums').first()).toContainText('31%');
-    // 多配額池 Mini-Chips 膠囊驗證
-    await expect(antiCard.getByText('Gemini Models:', { exact: false })).toBeVisible();
-    await expect(antiCard.getByText('Claude and GPT models:', { exact: false })).toBeVisible();
-    await expect(antiCard.getByText('Gemini 4 Argon:', { exact: false })).toBeVisible();
-    await expect(antiCard.getByText('部分配額池耗盡')).toBeVisible();
-
-    // 4. Claude Code (Pro, 最嚴格瓶頸優先：Weekly 98% 耗用 -> 剩餘 2%)
-    const claudeCard = page.locator('div[role="button"]:has-text("Claude Code")').first();
-    await expect(claudeCard).toBeVisible();
-    await expect(claudeCard.locator('.tabular-nums').first()).toContainText('2%');
-    await expect(claudeCard.getByText('Weekly:', { exact: true })).toBeVisible();
-    await expect(claudeCard.locator('span:has-text("98%")').first()).toBeVisible();
-    await expect(claudeCard.getByText('Session:', { exact: true })).toBeVisible();
-    // 視覺語義一致性：<=5% 時必顯示告警標籤
-    await expect(claudeCard.getByText('配額耗盡 / 告警')).toBeVisible();
-
-    // 5. Grok (SuperGrok, 0% 剩餘, 標註 Bonded)
-    const grokCard = page.locator('div[role="button"]:has-text("Grok (bonded with Cursor)")').first();
-    await expect(grokCard).toBeVisible();
-    await expect(grokCard.locator('.tabular-nums').first()).toContainText('0%');
-    await expect(grokCard.getByText('Bonded', { exact: true })).toBeVisible();
-  });
-
-  test('Detail 工作台多維度指標卡與 100K 思考預算滑桿', async ({ page }) => {
-    await page.goto('/?view=split');
-
-    // 點選 Codex 卡片
-    const codexCard = page.locator('div[role="button"]:has-text("Codex")').first();
-    await codexCard.click();
-
-    // 驗證真實帳戶多維度限額細項
-    await expect(page.locator('text=真實帳戶多維度限額細項')).toBeVisible();
-    await expect(page.locator('text=Weekly (Shared)')).toBeVisible();
-    await expect(page.locator('text=Credits')).toBeVisible();
-
-    // 驗證思考預算滑桿支援至 100K
-    await expect(page.locator('text=100K (o3-mini 頂峰)')).toBeVisible();
-
-    // 點選 Google Antigravity 驗證專屬 Multi-Pool Matrix Deck 矩陣儀表板
-    const antiCard = page.locator('div[role="button"]:has-text("Google Antigravity")').first();
-    await antiCard.click();
-
-    await expect(page.locator('text=Google Antigravity 多配額池 (Token Pools) 獨立儀表板')).toBeVisible();
-    await expect(page.locator('text=3 個配額池在線')).toBeVisible();
-    await expect(page.getByText('Gemini Models', { exact: true })).toBeVisible();
-    await expect(page.getByText('Claude and GPT models', { exact: true })).toBeVisible();
-    await expect(page.getByText('Gemini 4 Argon', { exact: true })).toBeVisible();
-    await expect(page.getByText('2d 9h').first()).toBeVisible();
-    await expect(page.getByText('4h 37m').first()).toBeVisible();
-  });
-
-  test('最新前瞻模型型錄視窗：嚴格排除任何過期廢棄模型', async ({ page }) => {
-    await page.goto('/');
-
-    const toolbar = page.getByRole('complementary', { name: '即時浮動控制列' });
-    const syncBtn = toolbar.locator('button[title*="同步最新模型型錄"]');
-    await syncBtn.click();
-
-    // 驗證 Modal 標題與 Active 標籤
-    const modal = page.locator('.fixed:has-text("5 大平台最新活躍前瞻 AI 模型型錄")');
-    await expect(modal).toBeVisible();
-    await expect(modal.getByText('5 大平台最新活躍前瞻 AI 模型型錄')).toBeVisible();
-    await expect(modal.getByText('Active', { exact: true }).first()).toBeVisible();
-
-    // 驗證最新前瞻模型存在
-    await expect(modal.getByText('GPT-6.1 Sol (Workhorse Coding)')).toBeVisible();
-    await expect(modal.getByText('OpenAI o3-mini (High Reasoning 100K)')).toBeVisible();
-    await expect(modal.getByText('Gemini 3.8 Live (Audio & Vision)')).toBeVisible();
-    await expect(modal.getByText('Claude 3.7 Sonnet (Hybrid Thinking)')).toBeVisible();
-    await expect(modal.getByText('Grok 4.5 Full Reasoning')).toBeVisible();
-    await expect(modal.getByText('Cursor Composer (Fast Edit)')).toBeVisible();
-
-    // 斷言絕對不含任何已過期舊模型
-    const modalContent = await modal.innerText();
-    expect(modalContent).not.toContain('gpt-3.5');
-    expect(modalContent).not.toContain('GPT-3.5');
-    expect(modalContent).not.toContain('davinci');
-    expect(modalContent).not.toContain('claude-1');
-    expect(modalContent).not.toContain('gemini-1.0');
-  });
-
-  test('Focus Mode 專注模式全寬切換', async ({ page }) => {
-    await page.goto('/?view=split');
-
-    const masterList = page.getByRole('complementary', { name: 'AI 平台清單' });
-    await expect(masterList).toBeVisible();
-
-    const focusBtn = page.locator('button[title*="專注全寬模式"]');
-    if (await focusBtn.isVisible()) {
-      await focusBtn.click();
-      await expect(masterList).toHaveClass(/w-0/);
-
-      const restoreBtn = page.locator('button[title*="展開導航欄"]');
-      await restoreBtn.click();
-      await expect(masterList).not.toHaveClass(/w-0/);
+    await expect(page.getByRole('status').filter({ hasText: '已同步' })).toBeVisible();
+    for (const name of ['Codex', 'Claude Code', 'Cursor', 'Google Antigravity']) {
+      await expect(page.getByRole('heading', { name, exact: true }).first()).toBeVisible();
     }
+    await expect(page.getByText('Grok')).toHaveCount(0);
+  });
+
+  test('伺服器沒有資料時顯示空狀態，不顯示內建數字', async ({ page }) => {
+    await serveQuotas(page, { success: true, data: [] });
+    await page.goto('/');
+    await expect(page.getByText('尚無額度資料')).toBeVisible();
+    await expect(page.getByText(/\d+%/)).toHaveCount(0);
+  });
+
+  test('Codex 與 Claude Code 顯示免費重置次數', async ({ page }) => {
+    await serveQuotas(page);
+    await page.goto('/');
+    const bar = page.getByRole('region', { name: /免費重置/ });
+    await expect(bar.getByText('免費重置 1 次')).toBeVisible();
+    await expect(bar.getByText('免費重置 0 次')).toBeVisible();
+  });
+
+  test('沒有語音功能（無麥克風按鈕、無語音字幕）', async ({ page }) => {
+    await serveQuotas(page);
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: /語音|麥克風|Gemini/ })).toHaveCount(0);
+    await expect(page.getByText(/TRANSCRIPT|語音/)).toHaveCount(0);
   });
 });
 
-
-test.describe('3. 一頁式極簡監控駕駛艙 (Cockpit All View) 與 iPhone Duo 視圖切換驗證', () => {
-  test('預設呈現一頁式全景駕駛艙 (Includes All 5 Platforms) 與 Governing Bottleneck 監控中樞', async ({ page }) => {
+test.describe('3. 右手快速操作（4 個圖示）', () => {
+  test('四個操作都有文字標題且至少 44×44', async ({ page }) => {
+    await serveQuotas(page);
     await page.goto('/');
-
-    // 1. 驗證視圖切換器存在，且預設為 ALL 全景
-    const allBtn = page.getByRole('button', { name: /ALL 全景/ });
-    await expect(allBtn).toBeVisible();
-    await expect(allBtn).toHaveAttribute('aria-pressed', 'true');
-
-    // 2. 驗證 Governing Bottleneck 瓶頸中樞置頂呈現
-    await expect(page.getByText('GOVERNING BOTTLENECK 瓶頸中樞')).toBeVisible();
-
-    // 3. 驗證一屏同時呈現全部 5 大平台 (Cursor, Codex, Antigravity, Claude, Grok)
-    const monitorGrid = page.getByRole('main', { name: '五大平台監控儀表' });
-    await expect(monitorGrid).toBeVisible();
-
-    await expect(monitorGrid.getByText('Cursor', { exact: true })).toBeVisible();
-    await expect(monitorGrid.getByText('Codex', { exact: true })).toBeVisible();
-    await expect(monitorGrid.getByText('Google Antigravity', { exact: true })).toBeVisible();
-    await expect(monitorGrid.getByText('Claude Code', { exact: true })).toBeVisible();
-    await expect(monitorGrid.getByText('Grok (bonded with Cursor)', { exact: true })).toBeVisible();
-
-    // 4. 驗證 SVG 環形圖表 (MiniRingChart) 渲染
-    const ringCharts = page.locator('svg circle[stroke-dasharray]');
-    await expect(ringCharts.first()).toBeVisible();
-    expect(await ringCharts.count()).toBeGreaterThanOrEqual(5);
-
-    // 5. 驗證高對比鍵值對採用 tabular-nums
-    const kvNumbers = page.locator('.tabular-nums');
-    expect(await kvNumbers.count()).toBeGreaterThanOrEqual(5);
-  });
-
-  test('一鍵切換視圖模式 (ViewMode Toggle: ALL <-> DUO) 與 URL 深度連結同步', async ({ page }) => {
-    await page.goto('/');
-
-    // 點擊切換為 DUO 雙欄模式
-    const duoBtn = page.getByRole('button', { name: /DUO 雙欄/ });
-    await expect(duoBtn).toBeVisible();
-    await duoBtn.click();
-
-    // 驗證 Master-Detail 結構出現
-    const masterList = page.getByRole('complementary', { name: 'AI 平台清單' });
-    await expect(masterList).toBeVisible();
-
-    // 驗證 URL 參數包含 view=split
-    expect(page.url()).toContain('view=split');
-
-    // 點擊切換回 ALL 全景駕駛艙
-    const allBtn = page.getByRole('button', { name: /ALL 全景/ });
-    await allBtn.click();
-
-    const monitorGrid = page.getByRole('main', { name: '五大平台監控儀表' });
-    await expect(monitorGrid).toBeVisible();
-    expect(page.url()).toContain('view=cockpit');
-  });
-
-  test('iPhone Duo 橫向視區 (844x390) 雙手握持人體工學與一頁滿版適配 (No Scroll Overflow)', async ({ page }) => {
-    // 模擬 iPhone 15/16 橫向視區
-    await page.setViewportSize({ width: 844, height: 390 });
-    await page.goto('/?view=cockpit&duo=1');
-
-    // 驗證全景駕駛艙可見
-    const monitorGrid = page.getByRole('main', { name: '五大平台監控儀表' });
-    await expect(monitorGrid).toBeVisible();
-
-    // 驗證雙手熱區控制列避讓與可見性
-    const viewSelector = page.getByRole('navigation', { name: '視圖模式切換器' });
-    await expect(viewSelector).toBeVisible();
-
-    const fab = page.getByRole('complementary', { name: '即時浮動控制列' });
-    await expect(fab).toBeVisible();
-
-    // 驗證卡片點擊深入功能：點擊深入按鈕自動切換至 DUO 模式
-    const expandBtn = page.locator('button[title*="深入此平台工作台"]').first();
-    await expandBtn.click();
-
-    // 驗證切換為雙欄工作台
-    expect(page.url()).toContain('view=split');
-  });
-
-  test('iPhone Duo 橫向 (852x393) DUO 雙欄：精簡頂部區域，讓清單與工作台取得可用高度', async ({ page }) => {
-    await page.setViewportSize({ width: 852, height: 393 });
-    await page.goto('/?view=split');
-
-    const masterList = page.getByRole('complementary', { name: 'AI 平台清單' });
-    await expect(masterList).toBeVisible();
-
-    // 頂部導航 + 連線狀態合計不超過 120pt（原本 190pt，只剩 203pt 給內容）
-    const content = await page.locator('#app-content').boundingBox();
-    expect(content).not.toBeNull();
-    if (content) {
-      expect(content.y).toBeLessThanOrEqual(120);
-      expect(content.height).toBeGreaterThanOrEqual(270);
+    const nav = page.getByRole('navigation', { name: '快速操作' });
+    for (const label of ['更新', '重置', '告警', '設定']) {
+      const box = await nav.getByRole('button').filter({ hasText: label }).boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(44);
     }
-
-    // 至少一張平台卡片完整可見
-    const cards = masterList.locator('[role="button"]');
-    const first = await cards.first().boundingBox();
-    expect(first).not.toBeNull();
-    if (first) expect(first.y + first.height).toBeLessThanOrEqual(393);
-
-    // 工作台捲到底時，最後的內容不被懸浮工具列遮住
-    const workbench = page.getByRole('main', { name: 'AI 平台詳情與語音工作台' }).locator('> div').first();
-    await workbench.evaluate((el) => el.scrollTo(0, el.scrollHeight));
-    const fab = await page.getByRole('complementary', { name: '即時浮動控制列' }).boundingBox();
-    const lastSection = await workbench.locator('section').last().boundingBox();
-    expect(fab).not.toBeNull();
-    expect(lastSection).not.toBeNull();
-    if (fab && lastSection) expect(lastSection.y + lastSection.height).toBeLessThanOrEqual(fab.y);
   });
 
-  // iPhone Duo 折疊機：Apple 未公布點數，以下為第三方估算的內外螢幕尺寸
+  test('重置徽章顯示可用次數，點擊開啟重置面板', async ({ page }) => {
+    await serveQuotas(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: '免費重置，1 項可用' }).click();
+    const sheet = page.getByRole('dialog', { name: '免費重置與重置時間' });
+    await expect(sheet.getByText('免費重置 1 次')).toBeVisible();
+    await sheet.getByRole('button', { name: '完成' }).click();
+    await expect(sheet).toHaveCount(0);
+  });
+
+  test('設定：更新頻率持久化', async ({ page }) => {
+    await serveQuotas(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: /設定/ }).click();
+    await page.getByRole('radio', { name: '5 分鐘', exact: true }).check();
+    await page.reload();
+    await page.getByRole('button', { name: /設定/ }).click();
+    await expect(page.getByRole('radio', { name: '5 分鐘', exact: true })).toBeChecked();
+  });
+
+  test('左手模式：操作列移到左下，卡片內容不鏡像', async ({ page }) => {
+    await serveQuotas(page);
+    await page.goto('/?handed=left');
+    const nav = await page.getByRole('navigation', { name: '快速操作' }).boundingBox();
+    const vw = page.viewportSize()!.width;
+    expect(nav!.x + nav!.width / 2).toBeLessThan(vw / 2);
+  });
+
+  test('只看告警：只留剩餘 ≤ 20% 的服務', async ({ page }) => {
+    await serveQuotas(page);
+    await page.goto('/?view=cockpit');
+    await page.getByRole('button', { name: /只看告警/ }).click();
+    await expect(page.getByRole('heading', { name: 'Codex', exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Google Antigravity', exact: true })).toHaveCount(0);
+  });
+
+});
+
+test.describe('4. 版面', () => {
+  test('窄螢幕不顯示全景/雙欄切換，寬螢幕才顯示', async ({ page }) => {
+    await serveQuotas(page);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/');
+    await expect(page.getByRole('navigation', { name: '視圖模式切換器' })).toHaveCount(0);
+    await page.setViewportSize({ width: 890, height: 626 });
+    await expect(page.getByRole('navigation', { name: '視圖模式切換器' })).toBeVisible();
+  });
+
+  test('所有可見按鈕都在視窗寬度內', async ({ page }) => {
+    await serveQuotas(page);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/');
+    const overflow = await page.evaluate(() =>
+      [...document.querySelectorAll('button')]
+        .map((b) => b.getBoundingClientRect())
+        .filter((r) => r.width > 0 && (r.right > window.innerWidth + 1 || r.left < -1)).length,
+    );
+    expect(overflow).toBe(0);
+  });
+
+  // iPhone Duo（PR #4）：Apple 未公布點數，以下為第三方估算的內外螢幕尺寸
   for (const [label, width, height, twoColumns] of [
     ['外螢幕直向', 466, 678, false],
     ['外螢幕橫向', 678, 466, true],
@@ -424,107 +299,29 @@ test.describe('3. 一頁式極簡監控駕駛艙 (Cockpit All View) 與 iPhone D
     ['內螢幕直向 (626pt 估算)', 626, 890, true],
     ['內螢幕橫向', 951, 669, true],
   ] as const) {
-    test(`iPhone Duo 折疊機 ${label} (${width}x${height})：頂列單行不溢出，欄數正確`, async ({ page }) => {
+    test(`iPhone Duo ${label} (${width}x${height})：頂列與按鈕不溢出，雙欄時顯示詳情`, async ({ page }) => {
+      await serveQuotas(page);
       await page.setViewportSize({ width, height });
       await page.goto('/?view=split');
 
-      await expect(page.getByRole('textbox', { name: '搜尋平台' })).toBeVisible();
-      const detail = page.getByRole('main', { name: 'AI 平台詳情與語音工作台' });
+      const detail = page.getByRole('main', { name: '服務詳情' });
       if (twoColumns) await expect(detail).toBeVisible();
       else await expect(detail).toHaveCount(0);
 
-      // 頂列按鈕：全部在畫面內、不換行（單行高度）、熱區 ≥ 44pt
-      const headerButtons = page.locator('header button');
-      const count = await headerButtons.count();
+      const buttons = page.locator('header button, nav[aria-label="快速操作"] button');
+      const count = await buttons.count();
       expect(count).toBeGreaterThan(0);
       for (let i = 0; i < count; i++) {
-        const box = await headerButtons.nth(i).boundingBox();
+        const box = await buttons.nth(i).boundingBox();
         expect(box).not.toBeNull();
         if (!box) continue;
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(width);
         expect(box.height).toBeGreaterThanOrEqual(44);
-        expect(box.height).toBeLessThanOrEqual(45);
       }
 
       const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
       expect(scrollWidth).toBeLessThanOrEqual(width);
     });
   }
-});
-
-
-test.describe('4. Apple HIG 折疊屏滿版瀏覽與單手人體工學驗證', () => {
-  test('單手握持慣用手偏置切換 (RH <-> LH) 與懸浮軌道貼靠反轉', async ({ page }) => {
-    await page.goto('/');
-
-    const handedBtn = page.getByRole('button', { name: /單手握持模式/ });
-    await expect(handedBtn).toBeVisible();
-    await expect(handedBtn).toContainText('RH');
-
-    // 點擊切換為左手握持 (LH)
-    await handedBtn.click();
-    await expect(handedBtn).toContainText('LH');
-    expect(page.url()).toContain('handed=left');
-
-    // 驗證右下角 FAB 浮動列貼靠反轉至左側 (left-6)
-    const fab = page.getByRole('complementary', { name: '即時浮動控制列' });
-    await expect(fab).toHaveClass(/left-6/);
-
-    // 驗證切換回雙手 (DUO)
-    await handedBtn.click();
-    await expect(handedBtn).toContainText('DUO');
-    expect(page.url()).toContain('handed=dual');
-  });
-
-  test('Apple HIG 全域最小點擊熱區 (≥ 44×44 pt) 與單手快速過濾晶片', async ({ page }) => {
-    await page.goto('/');
-
-    // 1. 驗證單手過濾晶片存在
-    const filterBtn = page.locator('button[title*="單手快速過濾"]');
-    await expect(filterBtn).toBeVisible();
-    await expect(filterBtn).toContainText('ALL 5');
-
-    // 2. 檢驗點擊熱區尺寸滿足 Apple HIG (≥ 44pt)
-    const box = await filterBtn.boundingBox();
-    expect(box).not.toBeNull();
-    if (box) {
-      expect(box.height).toBeGreaterThanOrEqual(40); // ≥ 44pt hit target with padding
-    }
-
-    // 3. 點擊啟動「⚠️ ALERTS」單手快速過濾
-    await filterBtn.click();
-    await expect(filterBtn).toContainText('⚠️ ALERTS');
-    expect(page.url()).toContain('filter=alert');
-
-    // 4. 再次點擊復原全部 5 大平台
-    await filterBtn.click();
-    await expect(filterBtn).toContainText('ALL 5');
-    expect(page.url()).not.toContain('filter=alert');
-  });
-
-  test('思維鏈預算單手快選熱區膠囊 (0K / 16K / 32K / 64K / 100K)', async ({ page }) => {
-    await page.goto('/?view=split');
-
-    // 點選任意平台以載入工作台
-    const codexCard = page.locator('div[role="button"]:has-text("Codex")').first();
-    await codexCard.click();
-
-    // 驗證 5 個單手快選按鈕存在
-    const btn16k = page.getByRole('button', { name: /16K/ });
-    const btn64k = page.getByRole('button', { name: /64K/ });
-    const btn100k = page.getByRole('button', { name: /100K/ });
-
-    await expect(btn16k).toBeVisible();
-    await expect(btn64k).toBeVisible();
-    await expect(btn100k).toBeVisible();
-
-    // 單手輕觸 64K
-    await btn64k.click();
-    await expect(page.getByText('65,536 TOKENS')).toBeVisible();
-
-    // 單手輕觸 100K (o3-mini 頂峰)
-    await btn100k.click();
-    await expect(page.getByText('100,000 TOKENS')).toBeVisible();
-  });
 });

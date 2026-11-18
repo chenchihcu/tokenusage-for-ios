@@ -1,0 +1,21 @@
+name: iOS SDK probe (P1)
+
+# Repo is public (2026-11-17): macOS minutes are free. Runs when the probe changes.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/sdk-probe.yml
+      - scripts/sdk-probe.sh
+
+jobs:
+  probe:
+    runs-on: ${{ matrix.image }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [xcode-27, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/sdk-probe.sh

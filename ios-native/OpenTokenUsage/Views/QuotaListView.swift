@@ -7,10 +7,13 @@ struct QuotaListView: View {
     let style: Style
 
     @State private var showSettings = false
+    @State private var showResets = false
     @AppStorage(SettingsKey.haptics) private var hapticsOn = true
+    @AppStorage(SettingsKey.leftHanded) private var leftHanded = false
+    @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
 
-    private var attention: [ProviderQuota] { store.displayItems.filter { $0.level != .healthy } }
-    private var healthy: [ProviderQuota] { store.displayItems.filter { $0.level == .healthy } }
+    private var attention: [ProviderQuota] { store.visibleItems.filter { $0.level != .healthy } }
+    private var healthy: [ProviderQuota] { store.visibleItems.filter { $0.level == .healthy } }
 
     var body: some View {
         list
@@ -24,18 +27,64 @@ struct QuotaListView: View {
                         Label("設定", systemImage: "gearshape")
                     }
                 }
+                // Inner screen: the fast path lives in the toolbar, which the system
+                // moves to the vertical bar where it applies.
+                if style == .select {
+                    ToolbarItemGroup(placement: .topBarLeading) {
+                        Button {
+                            Task { await store.refresh(force: true) }
+                        } label: {
+                            Label("更新", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(store.isLoading)
+                        Button {
+                            showResets = true
+                        } label: {
+                            Label("重置", systemImage: store.resetCreditsTotal > 0 ? "gift.fill" : "gift")
+                        }
+                        .accessibilityLabel(store.resetCreditsTotal > 0 ? "免費重置，\(store.resetCreditsTotal) 次可用" : "免費重置與重置時間")
+                        Button {
+                            store.alertsOnly.toggle()
+                        } label: {
+                            Label("告警", systemImage: store.alertsOnly ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                        }
+                        .accessibilityLabel(store.alertsOnly ? "顯示全部服務" : "只看告警")
+                        Menu {
+                            Picker("更新頻率", selection: $refreshInterval) {
+                                ForEach(AppSettings.intervalOptions) { option in
+                                    Text(option.title).tag(option.seconds)
+                                }
+                            }
+                        } label: {
+                            Label("頻率", systemImage: "timer")
+                        }
+                    }
+                }
                 ToolbarItem(placement: .status) {
                     StatusLine(store: store)
                 }
             }
             .toolbar(.visible, for: .bottomBar)
-            .refreshable { await store.refresh() }
-            .overlay {
-                if store.displayItems.isEmpty {
-                    emptyState
+            // Outer screen: the fast path sits in the thumb zone, on the chosen hand's side.
+            .safeAreaInset(edge: .bottom, alignment: leftHanded ? .leading : .trailing) {
+                if style == .push {
+                    FastPathBar(store: store, showResets: $showResets)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
                 }
             }
-            .sheet(isPresented: $showSettings, onDismiss: { Task { await store.refresh() } }) { SettingsView() }
+            .refreshable { await store.refresh(force: true) }
+            .overlay {
+                if store.items.isEmpty, store.isLoading {
+                    ProgressView("正在載入額度…")
+                }
+            }
+            .sheet(isPresented: $showSettings, onDismiss: { Task { await store.refresh(force: true) } }) { SettingsView() }
+            .sheet(isPresented: $showResets) { ResetsView(store: store) }
+            .onReceive(NotificationCenter.default.publisher(for: NotificationRouter.openResets)) { _ in
+                showSettings = false
+                showResets = true
+            }
             .sensoryFeedback(.selection, trigger: store.selectedID) { _, _ in hapticsOn && style == .select }
             .sensoryFeedback(.success, trigger: store.refreshCount) { _, _ in hapticsOn }
     }
@@ -52,10 +101,10 @@ struct QuotaListView: View {
 
     @ViewBuilder
     private var sections: some View {
-        if case .failed(let error) = store.state {
+        if case .failed(let error) = store.state, error != .notConfigured {
             Section {
                 ProblemBanner(error: error, hasData: !store.items.isEmpty) {
-                    Task { await store.refresh() }
+                    Task { await store.refresh(force: true) }
                 }
             }
         }
@@ -64,6 +113,38 @@ struct QuotaListView: View {
         }
         if !healthy.isEmpty {
             Section("額度充足") { rows(healthy) }
+        }
+        if store.alertsOnly, store.visibleItems.isEmpty {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("目前沒有告警").font(.headline)
+                    Text("沒有服務的剩餘額度低於 20%。").font(.subheadline).foregroundStyle(.secondary)
+                    Button("顯示全部") { store.alertsOnly = false }
+                        .buttonStyle(.bordered)
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        if !store.alertsOnly {
+            Section {
+                ForEach(store.missingProviders) { provider in
+                    Button {
+                        showSettings = true
+                    } label: {
+                        LabeledContent(provider.name) {
+                            Text("前往設定").foregroundStyle(.tint)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                }
+                LabeledContent("Google Antigravity") {
+                    Text("暫不支援手機登入").foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("未設定")
+            } footer: {
+                Text("設定後，這裡會顯示該服務的剩餘額度與重置時間。")
+            }
         }
     }
 
@@ -75,22 +156,6 @@ struct QuotaListView: View {
                 NavigationLink(value: item.id) { QuotaRow(quota: item) }
             case .select:
                 QuotaRow(quota: item)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var emptyState: some View {
-        if store.isLoading {
-            ProgressView("正在載入額度…")
-        } else {
-            ContentUnavailableView {
-                Label("還沒有額度資料", systemImage: "chart.bar.xaxis")
-            } description: {
-                Text(store.isOnline ? "下拉即可重新整理。" : "連上網路後會自動載入。")
-            } actions: {
-                Button("重新整理") { Task { await store.refresh() } }
-                    .buttonStyle(.borderedProminent)
             }
         }
     }
@@ -165,6 +230,11 @@ struct QuotaRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if quota.reportsResetCredits {
+                    Label(quota.resetCreditsText, systemImage: "gift")
+                        .font(.caption)
+                        .foregroundStyle((quota.resetCredits ?? 0) > 0 ? Color.green : Color.secondary)
+                }
             }
         }
         .padding(.vertical, 4)
@@ -206,7 +276,6 @@ enum ProviderStyle {
         case "codex": return .green
         case "antigravity": return .indigo
         case "claude": return .orange
-        case "grok": return .pink
         default: return .gray
         }
     }
@@ -219,5 +288,120 @@ extension QuotaLevel {
         case .low: return .orange
         case .healthy: return .green
         }
+    }
+}
+
+/// One-handed fast path for the outer screen: four actions, each with an icon,
+/// a visible title and at least a 44-point target.
+struct FastPathBar: View {
+    @Bindable var store: QuotaStore
+    @Binding var showResets: Bool
+    @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Button {
+                Task { await store.refresh(force: true) }
+            } label: {
+                FastPathLabel(title: "更新", systemImage: "arrow.clockwise")
+            }
+            .disabled(store.isLoading)
+
+            Button {
+                showResets = true
+            } label: {
+                FastPathLabel(title: "重置", systemImage: store.resetCreditsTotal > 0 ? "gift.fill" : "gift")
+            }
+            .overlay(alignment: .topTrailing) {
+                if store.resetCreditsTotal > 0 {
+                    Text("\(store.resetCreditsTotal)")
+                        .font(.caption2.weight(.bold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.green, in: Capsule())
+                        .accessibilityHidden(true)
+                }
+            }
+            .accessibilityLabel(store.resetCreditsTotal > 0 ? "免費重置，\(store.resetCreditsTotal) 次可用" : "免費重置與重置時間")
+
+            Button {
+                store.alertsOnly.toggle()
+            } label: {
+                FastPathLabel(title: "告警",
+                              systemImage: store.alertsOnly ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+            }
+            .accessibilityLabel(store.alertsOnly ? "顯示全部服務" : "只看告警")
+
+            Menu {
+                Picker("更新頻率", selection: $refreshInterval) {
+                    ForEach(AppSettings.intervalOptions) { option in
+                        Text(option.title).tag(option.seconds)
+                    }
+                }
+            } label: {
+                FastPathLabel(title: "頻率", systemImage: "timer")
+            }
+            .accessibilityLabel("更新頻率")
+        }
+        .buttonStyle(.borderless)
+        .padding(6)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+    }
+}
+
+private struct FastPathLabel: View {
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Image(systemName: systemImage).font(.title3)
+            Text(title).font(.caption2)
+        }
+        .frame(minWidth: 52, minHeight: 48)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Free resets (Codex, Claude Code) and every window's reset time, in one place.
+struct ResetsView: View {
+    let store: QuotaStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if store.displayItems.isEmpty {
+                    Text("尚無資料。").foregroundStyle(.secondary)
+                }
+                ForEach(store.displayItems) { quota in
+                    Section(quota.name) {
+                        if quota.reportsResetCredits {
+                            Label(quota.resetCreditsText, systemImage: "gift")
+                                .foregroundStyle((quota.resetCredits ?? 0) > 0 ? Color.green : Color.secondary)
+                        }
+                        ForEach(quota.pools.flatMap(\.tiers)) { tier in
+                            LabeledContent(tier.label) {
+                                if let reset = tier.resetDate {
+                                    ResetText(date: reset)
+                                } else {
+                                    Text("重置時間不明")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("免費重置與重置時間")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

@@ -1,20 +1,21 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { QuotaCardProps } from './QuotaCard';
-import { AudioVisualizer } from './AudioVisualizer';
 import { MiniRingChart } from './MiniRingChart';
 import { TokenPool } from '../../types/quota';
 import { HandednessMode } from './ViewModeSelector';
 import { haptic } from '../services/haptics';
+import { creditsLabel } from './ResetMonitorBar';
+import { PlatformIcon } from './PlatformIcon';
+import { extractResetWindowSummary } from '../utils/resetMonitor';
 import {
   PanelLeftClose,
   PanelLeftOpen,
-  BrainCircuit,
   Activity,
   Zap,
   Clock,
   Sparkles,
+  Gift,
   AlertTriangle,
-  Link2,
   Layers,
 } from 'lucide-react';
 
@@ -22,8 +23,6 @@ interface DetailWorkbenchProps {
   selectedItem: QuotaCardProps | undefined;
   isFocusMode: boolean;
   onToggleFocus: () => void;
-  isVoiceActive: boolean;
-  liveTranscript: string;
   handedness?: HandednessMode;
   connectionLabel?: string;
 }
@@ -41,13 +40,9 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
   selectedItem,
   isFocusMode,
   onToggleFocus,
-  isVoiceActive,
-  liveTranscript,
-  handedness = 'right',
+  handedness: _handedness = 'right',
   connectionLabel = '待確認',
 }) => {
-  const [thinkingBudget, setThinkingBudget] = useState<number>(32768);
-
   if (!selectedItem) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center text-slate-500 bg-slate-950 select-none">
@@ -91,18 +86,11 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
     }
   }
 
-  const handleSelectPreset = (tokens: number) => {
-    haptic.impactMedium();
-    setThinkingBudget(tokens);
-  };
-
   return (
-    <div className="flex flex-col h-full bg-slate-950 overflow-y-auto text-slate-100 select-none pb-24">
+    <div className="flex flex-col h-full bg-slate-950 overflow-y-auto text-slate-100 select-none fab-clearance">
       {/* 頂部工具列 (Apple HIG ≥ 44pt 觸控熱區) */}
       <div
-        className={`flex items-center justify-between p-3 sm:p-4 phoneland:p-2 border-b border-slate-800/80 sticky top-0 bg-slate-950/90 backdrop-blur-xl z-10 ${
-          handedness === 'left' ? 'flex-row-reverse' : ''
-        }`}
+        className="flex items-center justify-between p-3 sm:p-4 phoneland:p-2 border-b border-slate-800/80 sticky top-0 bg-slate-950/90 backdrop-blur-xl z-10"
       >
         <div className="flex items-center gap-3">
           <button
@@ -117,16 +105,13 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
           </button>
           <div>
             <h2 id="detail-title" tabIndex={-1} className="font-bold text-lg text-white tracking-tight flex items-center gap-2 outline-none">
+              <span className="p-1.5 rounded-lg bg-slate-900 border border-slate-700/80 text-cyan-300 shrink-0">
+                <PlatformIcon id={selectedItem.id} className="w-4 h-4" />
+              </span>
               {selectedItem.name}
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-cyan-950/60 text-cyan-300 border border-cyan-500/40">
                 {selectedItem.planName}
               </span>
-              {selectedItem.id === 'grok' && (
-                <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-pink-950/60 text-pink-300 border border-pink-500/40">
-                  <Link2 className="w-3 h-3 text-cyan-400" />
-                  Bonded with Cursor
-                </span>
-              )}
             </h2>
           </div>
         </div>
@@ -140,22 +125,6 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
       </div>
 
       <div className="p-4 sm:p-6 phoneland:p-3 space-y-5 phoneland:space-y-3 max-w-4xl mx-auto w-full">
-        {/* 即時語音互動與波形面板 */}
-        <section className="space-y-3">
-          <AudioVisualizer isActive={isVoiceActive} volume={isVoiceActive ? 0.75 : 0} />
-
-          {/* 即時字幕面板 */}
-          <div className="p-3 sm:p-4 rounded-2xl glass-panel border border-slate-800/80">
-            <div className="flex items-center gap-2 mb-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-              LIVE TRANSCRIPT 字幕
-            </div>
-            <p className="text-sm leading-relaxed text-slate-200 min-h-[36px] font-mono text-xs">
-              {liveTranscript || (isVoiceActive ? 'LISTENING 正在聆聽語音...' : 'STANDBY 語音休眠中')}
-            </p>
-          </div>
-        </section>
-
         {/* 核心高保真數據卡片格線 (Governing Bottleneck) */}
         <section className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3 sm:gap-4">
           <div className="p-4 rounded-2xl glass-panel border border-slate-800/80 flex items-center justify-between">
@@ -183,8 +152,6 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
                   ? ['#4285F4', '#A855F7']
                   : selectedItem.id === 'claude'
                   ? ['#F59E0B', '#FB923C']
-                  : selectedItem.id === 'grok'
-                  ? ['#FF007A', '#7928CA']
                   : ['#00F2FE', '#4FACFE']
               }
               isCritical={selectedItem.remainingPercent <= 5}
@@ -209,10 +176,38 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
               <span className="font-mono text-[10px] uppercase font-bold">RESET TIME 週期重置</span>
               <Clock className="w-4 h-4 text-purple-400" />
             </div>
-            <div className="text-sm font-bold font-mono text-slate-100 break-words mt-1.5">
-              {displayReset}
-            </div>
-            <div className="text-xs text-slate-400 mt-1 font-mono">最緊迫週期重置日</div>
+            {(() => {
+              const win = extractResetWindowSummary(selectedItem);
+              return (
+                <>
+                  <div className="text-sm font-bold font-mono text-slate-100 break-words mt-1.5">
+                    {displayReset}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px] font-mono">
+                    {win.sessionText !== '--' && (
+                      <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">
+                        5h: <strong className="text-cyan-300">{win.sessionText}</strong>
+                      </span>
+                    )}
+                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">
+                      Wk: <strong className="text-purple-300">{win.weeklyText}</strong>
+                    </span>
+                    {(selectedItem.id === 'codex' || selectedItem.id === 'claude') && (
+                      <span
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-bold ${
+                          (win.resetCredits ?? 0) > 0
+                            ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                            : 'bg-slate-900 border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        <Gift className="w-3 h-3" aria-hidden="true" />
+                        {creditsLabel(win.resetCredits)}
+                      </span>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </section>
 
@@ -333,9 +328,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
                 <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
                 {selectedItem.name} 真實帳戶多維度限額細項
               </span>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                SSOT Verified
-              </span>
+
             </div>
 
             <div className="grid grid-cols-[repeat(auto-fit,minmax(6.5rem,1fr))] gap-2.5 text-xs">
@@ -377,63 +370,6 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
           </section>
         )}
 
-        {/* 深度思考 (Extended Thinking) 預算控制器 - Apple HIG 單手熱區拇指預設按鈕 (≥ 44pt Touch Targets) */}
-        <section className="p-4 rounded-2xl glass-panel border border-slate-800/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BrainCircuit className="w-4 h-4 text-cyan-400" />
-              <h3 className="font-bold text-xs uppercase tracking-wider text-slate-300 font-mono">
-                THINKING BUDGET 思維鏈預算
-              </h3>
-            </div>
-            <span className="tabular-nums font-mono text-xs px-2.5 py-1 rounded-md bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 font-bold">
-              {thinkingBudget.toLocaleString()} TOKENS
-            </span>
-          </div>
-
-          <div className="py-2">
-            <input
-              type="range"
-              min={0}
-              max={100000}
-              step={1024}
-              value={thinkingBudget}
-              onChange={(e) => setThinkingBudget(Number(e.target.value))}
-              className="w-full accent-cyan-400 h-3 bg-slate-800 rounded-lg cursor-pointer touch-manipulation"
-              aria-label="思維鏈預算調整滑桿"
-            />
-          </div>
-
-          {/* 單手一鍵快選拇指熱區膠囊 (One-Handed Thumb Presets - Apple HIG ≥ 44×44pt) */}
-          <div className="grid grid-cols-5 gap-1.5 pt-1">
-            {[
-              { label: '0K', value: 0, sub: '即時回應' },
-              { label: '16K', value: 16384, sub: '標準編程' },
-              { label: '32K', value: 32768, sub: '深度架構' },
-              { label: '64K', value: 65536, sub: '極限推論' },
-              { label: '100K', value: 100000, sub: 'o3-mini 頂峰' },
-            ].map((p) => {
-              const isCurrent = Math.abs(thinkingBudget - p.value) < 1024;
-              return (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => handleSelectPreset(p.value)}
-                  className={`flex flex-col items-center justify-center p-1.5 rounded-xl border font-mono transition-all min-h-[44px] active:scale-95 touch-manipulation ${
-                    isCurrent
-                      ? 'bg-cyan-950/80 border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.3)] ring-1 ring-cyan-400/40'
-                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-850'
-                  }`}
-                >
-                  <span className="text-xs font-bold leading-none">{p.label}</span>
-                  <span className="text-[8px] text-slate-500 mt-1 leading-none text-center truncate w-full">
-                    {p.label === '100K' ? '100K (o3-mini 頂峰)' : p.sub}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
       </div>
     </div>
   );

@@ -3,14 +3,17 @@ name: iOS Simulator Tests and Screenshots
 # Runs the native app's unit tests in the iOS Simulator, then captures
 # portrait and landscape screenshots. Prefers an iPhone Duo simulator when the
 # runner's Xcode has one, otherwise the first available iPhone.
+# Repo is public (2026-11-17): macOS minutes are free. Runs when the native app changes.
 on:
   workflow_dispatch:
-  push:
-    branches: [ "claude/**" ]
+  pull_request:
+    paths:
+      - ios-native/**
+      - .github/workflows/ios-simulator-screenshots.yml
 
 jobs:
   simulator:
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -60,9 +63,22 @@ jobs:
             xcrun simctl terminate "$UDID" "$BUNDLE" || true
             xcrun simctl uninstall "$UDID" "$BUNDLE" || true
             xcrun simctl install "$UDID" "$app"
+            # Layout check only: demo data, clearly labelled in the app as not real usage.
+            xcrun simctl spawn "$UDID" defaults write "$BUNDLE" opentokenusage_sample_data -bool YES
             xcrun simctl launch "$UDID" "$BUNDLE"
             sleep 12
-            xcrun simctl io "$UDID" screenshot "screenshots/$name.png"
+            capture "$name"
+          }
+
+          # iPhone Duo has two displays (outer, inner); capture each one it reports.
+          capture () {
+            local name="$1" err displays
+            if err=$(xcrun simctl io "$UDID" screenshot "screenshots/$name.png" 2>&1); then return 0; fi
+            displays=$(echo "$err" | grep -oE -- '--display=[0-9]+' | cut -d= -f2 | sort -u)
+            [ -n "$displays" ] || { echo "$err"; return 1; }
+            for d in $displays; do
+              xcrun simctl io "$UDID" screenshot --display="$d" "screenshots/$name-display$d.png"
+            done
           }
 
           only_orientation () {
