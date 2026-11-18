@@ -2,13 +2,24 @@
 
 監控四個 AI 編程服務的剩餘額度與重置時間：**Codex、Claude Code、Cursor、Google Antigravity**。Codex 與 Claude Code 另顯示供應商給的**免費重置次數**。
 
-- 🌐 API：`https://opentokenusage-web.chihfu-chen-tw.workers.dev`
-- 📦 版本：`v1.3.0`（P0：修正資料讀取、移除語音與 Grok、iPhone Duo 版面修正）
-- 🗺️ 下一版：原生 SwiftUI（iOS 27.1）、手機內登入各服務、不經電腦同步 — 見 [`docs/plan-v3-native-duo.md`](docs/plan-v3-native-duo.md) 與 [`docs/spec-v3-native-duo.md`](docs/spec-v3-native-duo.md)。
+## 這個 repo 裡有什麼
+
+| 資料夾 | 是什麼 | 怎麼建置 |
+|---|---|---|
+| **`ios-native/`** | **iPhone App（正式版）**：原生 SwiftUI，iPhone Duo / iOS 27.1；App 內登入各服務、直接用手機網路更新、免費重置通知、主畫面小工具 | GitHub Actions `build-ios.yml`（xcode-27）產生未簽名 `.ipa`，以免費 Apple ID 側載；見 [`ios-native/README.md`](ios-native/README.md) |
+| `src/` | 網站版（React）與 Cloudflare Worker API | `npm run build`、`npm run worker:deploy` |
+| `scripts/` | 電腦端同步腳本（只供網站版使用；iPhone App 不需要） | Python |
+| `docs/` | 計畫、規格、研究紀錄 | — |
+
+舊的 Capacitor 網頁外殼 App（`ios/`）已於 v1.4.0 移除，請只使用 `ios-native/`。
+
+- 🌐 網站 / API：`https://opentokenusage-web.chihfu-chen-tw.workers.dev`
+- 📦 網站版本：`v1.4.0`
+- 🗺️ 計畫與規格：[`docs/plan-v3-native-duo.md`](docs/plan-v3-native-duo.md)、[`docs/spec-v3-native-duo.md`](docs/spec-v3-native-duo.md)
 
 ---
 
-## 目前功能（v1.3.0）
+## 網站版功能
 
 - **只顯示真實資料**：畫面只呈現 `/api/quotas` 回傳的資料；沒有資料時顯示「尚無額度資料」，不再有內建範例數字。
 - **更新頻率**：15 秒 / 30 秒 / 1 分鐘 / 5 分鐘 / 15 分鐘 / 手動；App 在前景時依設定更新，背景由 iOS 決定。
@@ -19,7 +30,7 @@
 
 已移除：Gemini Live 語音與麥克風權限、Grok、模型型錄、思維鏈預算滑桿。
 
-> **資料來源限制（v1.3.0）**：Worker 的資料仍由電腦端 `scripts/sync-desktop-*.py` 上傳。改為手機直接讀取各服務是 v3 計畫的 P3。
+> **資料來源（網站版）**：Worker 的資料由電腦端 `scripts/sync-desktop-*.py` 上傳。iPhone App（`ios-native/`）不經過這條路徑，直接向各服務查詢。
 
 ---
 
@@ -80,7 +91,8 @@ npm run worker:deploy
 
 ```text
 opentokenusage-web/
-├── docs/                                # 系統架構規格書 (SSOT RFCs)
+├── ios-native/                          # iPhone App（SwiftUI，XcodeGen project.yml）
+├── docs/                                # 計畫、規格與 RFC
 │   ├── rfc-adaptive-network-sync.md     # RFC-001 連線感知自適應同步
 │   ├── rfc-dashboard-onepage-viewmode.md# RFC-002 一頁式極簡駕駛艙
 │   ├── rfc-multi-token-pools.md         # RFC-003 多配額池獨立架構
@@ -116,7 +128,7 @@ opentokenusage-web/
 ├── tests/
 │   ├── e2e.spec.ts                      # Playwright UI 與後端測試
 │   └── direct-internet.spec.ts          # 網路層測試
-├── package.json                         # 專案依賴與腳本定義 (v1.3.0)
+├── package.json                         # 專案依賴與腳本定義 (v1.4.0)
 ├── playwright.config.ts                 # 跨平台測試配置 (Desktop & iPhone Duo)
 ├── tailwind.config.js                   # Tailwind 配置 (動態島與安全邊距)
 ├── vite.config.ts                       # Vite 構建配置
@@ -125,9 +137,8 @@ opentokenusage-web/
 
 ---
 
-## 🛡️ 驗證狀態（v1.3.0，2026-11-17）
+## 🛡️ 驗證狀態
 
-- 在 Linux 雲端容器以本機 Worker + Chromium 驗證（iPhone Duo 尺寸為近似值，未在 Duo 模擬器或實機執行）。
-- Playwright：`tests/e2e.spec.ts`、`tests/direct-internet.spec.ts` 58 / 58 通過（Desktop Chrome 與 iPhone Duo Landscape）。
-- 前端 TypeScript 無錯誤；`src/worker`、`src/server` 有既存型別錯誤（與本次變更無關）。
-- 正式環境尚未部署本版本；部署需移除 `VoiceSessionDO`（`wrangler.jsonc` migration `v2`）。
+- **iPhone App**：GitHub `xcode-27` runner（Xcode 27.1、iOS 27.1 SDK、iPhone Duo 模擬器）上編譯與單元測試通過；尚未在實機執行。
+- **網站版（v1.4.0）**：`tests/e2e.spec.ts`、`tests/direct-internet.spec.ts` 68 / 68 通過（Chromium，Desktop 與 iPhone Duo 尺寸估算值）。前端 TypeScript 無錯誤；`src/worker`、`src/server` 有既存型別錯誤。
+- 正式環境尚未部署 v1.3.0 之後的 Worker；部署需移除 `VoiceSessionDO`（`wrangler.jsonc` migration `v2`）。

@@ -1,20 +1,33 @@
-# OpenTokenUsage — native iPhone app
+# OpenTokenUsage — iPhone app
 
-SwiftUI app with no web view. It asks each provider (Claude, Codex,
-Cursor) for usage directly from the phone, using account tokens kept in the
-Keychain, with no relay server. Built for the iPhone Duo. Launch with
-`-opentokenusage_sample_data YES` (or Settings → 示範資料) to see bundled figures.
+SwiftUI app for iPhone Duo (iOS 27.1), no web view and no relay server. It asks each
+service for usage directly from the phone, over Wi-Fi or cellular.
+
+| Service | Sign-in (Settings › 帳號) | Shows |
+|---|---|---|
+| Codex | Device code, approved on OpenAI's page | 5 h / weekly windows, free-reset count when reported |
+| Claude Code | Claude's page, then paste the code it shows | 5 h / weekly windows, free-reset count when reported |
+| Cursor | Cursor's page; the app detects when sign-in finishes | Plan usage |
+| Google Antigravity | Not supported on the phone yet | — |
+
+Sign-in happens on each vendor's own page; the app never sees a password. Credentials stay
+in the Keychain and are renewed on the phone. None of these sign-in or usage endpoints is a
+documented public API, so a vendor change can break one service without affecting the others.
+A manual token field remains under Settings › 帳號 › 進階 as a fallback.
+
+## Using it
 
 | Screen | Layout |
 |---|---|
-| Folded (outer screen) or any phone-sized window | One column: list → tap → detail, standard back button and edge swipe |
-| Unfolded (inner screen, both sides ≥ 600 pt) | Two panes meeting at the middle of the display, where the fold is: side by side when held as a book, stacked when turned upright |
+| Outer screen (compact width) | One column. Fast path in the thumb zone: 更新 · 重置 · 告警 · 頻率 (bottom right, or bottom left in left-hand mode) |
+| Inner screen (both sides ≥ 600 pt) | List and detail panes meeting at the fold; the fast path sits in the toolbar |
 
-Pull to refresh. It refreshes automatically only while open (interval in the app's
-Settings sheet or in the iOS Settings app), shows the last data when offline, and
-plays haptics on selection and successful refresh.
+- **Refresh** follows the chosen interval (15 s … 15 min, or manual) while the app is open. Each service has a floor (Claude Code 5 min, Codex and Cursor 1 min), and a 429 reply backs that service off. In the background iOS decides when to refresh.
+- **Free resets**: shown only when the vendor reports them; otherwise 「免費重置：不提供」. Turn on 「免費重置通知」 to get one notification when Codex or Claude Code credits appear or increase.
+- **Widget** (small, medium): remaining usage from the app's last refresh.
+- **示範資料** in Settings shows sample figures for checking layouts; they are not your usage.
 
-## Build
+## Build and install
 
 ```bash
 brew install xcodegen
@@ -24,9 +37,9 @@ brew install xcodegen
 cd ios-native && xcodegen generate && open OpenTokenUsage.xcodeproj
 ```
 
-CI: `.github/workflows/build-ios.yml` (unsigned IPA) and
-`.github/workflows/ios-simulator-screenshots.yml` (unit tests + simulator screenshots).
+Without a Mac: GitHub Actions `build-ios.yml` (runner `xcode-27`) builds an unsigned
+`OpenTokenUsage.ipa` on every change to `ios-native/`. Download it from the run's
+Artifacts and sign it with a free Apple ID (Xcode, or a sideloading tool on Windows).
+Free-account builds expire after 7 days and must be reinstalled.
 
-## Not ported from the web app
-
-Gemini Live voice, the model catalog sheet and the thinking-budget presets.
+`ios-simulator-screenshots.yml` runs the unit tests and captures both iPhone Duo displays.

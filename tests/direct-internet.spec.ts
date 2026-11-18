@@ -41,7 +41,8 @@ test('CORS reflects only known origins and never a wildcard', () => {
   expect(allowed['Access-Control-Expose-Headers']).toContain('Retry-After');
   expect(securityHeaders('https://evil.example')['Access-Control-Allow-Origin']).toBeUndefined();
   expect(JSON.stringify(securityHeaders('https://localhost'))).not.toContain('*');
-  expect(ALLOWED_ORIGINS).toContain('capacitor://localhost');
+  // The Capacitor shell was removed; its WebView origin is no longer allowed.
+  expect(ALLOWED_ORIGINS).not.toContain('capacitor://localhost');
 });
 
 test('stale network snapshots are dropped and a lost path clears a verified API', () => {
