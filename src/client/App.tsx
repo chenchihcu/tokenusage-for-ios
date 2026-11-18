@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { StatusBar, Style } from '@capacitor/status-bar';
 import { Sparkles } from 'lucide-react';
 import { SplitViewContainer } from './components/SplitViewContainer';
 import { FloatingActionToolbar } from './components/FloatingActionToolbar';
@@ -97,13 +96,6 @@ export const App: React.FC = () => {
     window.addEventListener('resize', apply);
     return () => window.removeEventListener('resize', apply);
   }, [net.textScale]);
-
-  useEffect(() => {
-    try {
-      StatusBar.setStyle({ style: Style.Dark });
-      StatusBar.setBackgroundColor({ color: '#020617' });
-    } catch {}
-  }, []);
 
   // Display snapshot shared with the widget / offline view.
   useEffect(() => {

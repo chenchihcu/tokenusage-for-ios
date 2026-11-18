@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Capacitor } from '@capacitor/core';
 import { resolveApiOrigin } from '../../shared/cors';
 import { ApiClient } from '../network/apiClient';
 import { bindDeviceNetwork } from '../network/deviceNetwork';
@@ -74,7 +73,7 @@ export function useDirectInternet(options: {
   const gateRef = useRef(new ProbeGate());
   const originRef = useRef(
     resolveApiOrigin({
-      native: Capacitor.isNativePlatform(),
+      native: false,
       override: readOriginOverride(),
     }),
   );

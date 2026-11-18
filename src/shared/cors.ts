@@ -2,15 +2,13 @@
 export const PUBLIC_API_ORIGIN = 'https://opentokenusage-web.chihfu-chen-tw.workers.dev';
 
 /**
- * Origins that may call the API from a browser or the Capacitor WebView.
+ * Origins that may call the API from a browser.
  * Credentials are not used, and the allowlist is still exact — never `*`.
  */
 export const ALLOWED_ORIGINS: readonly string[] = [
   PUBLIC_API_ORIGIN,
   'https://localhost',
   'http://localhost',
-  'capacitor://localhost',
-  'ionic://localhost',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
   'http://localhost:5173',
