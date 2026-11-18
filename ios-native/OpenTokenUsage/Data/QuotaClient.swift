@@ -120,27 +120,3 @@ struct QuotaClient {
         return .success(quota)
     }
 }
-
-/// Last successful response on disk, so the app opens with data even offline.
-enum QuotaCache {
-    private static var url: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appending(path: "quotas-v1.json")
-    }
-
-    struct Snapshot: Codable {
-        var savedAt: Date
-        var items: [ProviderQuota]
-    }
-
-    static func load() -> Snapshot? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(Snapshot.self, from: data)
-    }
-
-    static func save(_ items: [ProviderQuota], at date: Date = Date()) {
-        guard let data = try? JSONEncoder().encode(Snapshot(savedAt: date, items: items)) else { return }
-        try? data.write(to: url, options: .atomic)
-    }
-}
