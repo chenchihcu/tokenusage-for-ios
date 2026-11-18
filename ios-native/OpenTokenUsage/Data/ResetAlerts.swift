@@ -12,10 +12,15 @@ enum ResetAlerts {
 
     /// Asked only when the person turns the switch on, never at launch.
     static func requestPermission() async -> Bool {
-        let center = UNUserNotificationCenter.current()
-        let granted = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        let granted = await askNotificationPermission()
         UserDefaults.standard.set(granted, forKey: enabledKey)
         return granted
+    }
+
+    /// Shared with `QuotaAlerts`; iOS shows the prompt only the first time.
+    static func askNotificationPermission() async -> Bool {
+        let center = UNUserNotificationCenter.current()
+        return (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
     static func authorizationDenied() async -> Bool {
@@ -29,6 +34,8 @@ enum ResetAlerts {
 
     /// Compares with the last seen counts, notifies once per increase, then remembers the new counts.
     static func check(_ items: [ProviderQuota]) {
+        // Demo figures are not your credits: no notification, and the seen counts stay as they were.
+        guard !UserDefaults.standard.bool(forKey: SettingsKey.sampleData) else { return }
         var current: [String: Int] = [:]
         for item in items where item.reportsResetCredits {
             if let credits = item.resetCredits { current[item.providerId] = credits }
@@ -56,11 +63,17 @@ enum ResetAlerts {
 final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
     static let shared = NotificationRouter()
     static let openResets = Notification.Name("opentokenusage.openResets")
+    static let openQuotas = Notification.Name("opentokenusage.openQuotas")
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse) async {
-        if response.notification.request.content.userInfo["open"] as? String == "resets" {
+        switch response.notification.request.content.userInfo["open"] as? String {
+        case "resets":
             await MainActor.run { NotificationCenter.default.post(name: Self.openResets, object: nil) }
+        case "quotas":
+            await MainActor.run { NotificationCenter.default.post(name: Self.openQuotas, object: nil) }
+        default:
+            break
         }
     }
 

@@ -316,10 +316,7 @@ private struct PaceRowView: View {
         "\(Int(value.rounded()))%"
     }
 
-    static func span(_ seconds: TimeInterval) -> String {
-        Duration.seconds(max(seconds, 60))
-            .formatted(.units(allowed: [.days, .hours, .minutes], width: .abbreviated, maximumUnitCount: 2))
-    }
+    static func span(_ seconds: TimeInterval) -> String { PaceEstimate.span(seconds) }
 }
 
 /// Bullet bar in the 額度 page's direction: remaining quota (filled), time left in the window

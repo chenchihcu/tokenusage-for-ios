@@ -49,6 +49,10 @@ struct RootView: View {
             store.selectedTab = .quotas
             store.presentedSheet = .resets
         }
+        .onReceive(NotificationCenter.default.publisher(for: NotificationRouter.openQuotas)) { _ in
+            // A quota warning opens the 額度 page (FR-A16).
+            store.selectedTab = .quotas
+        }
     }
 }
 

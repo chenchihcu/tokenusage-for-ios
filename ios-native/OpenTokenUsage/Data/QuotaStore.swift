@@ -136,6 +136,7 @@ final class QuotaStore {
             QuotaCache.save(result.items)
             WidgetCenter.shared.reloadAllTimelines()
             ResetAlerts.check(result.items)
+            QuotaAlerts.check(result.items)
             if !UserDefaults.standard.bool(forKey: SettingsKey.sampleData), !result.asked.isEmpty {
                 history.record(result.items)
                 UsageHistoryStore.save(history)

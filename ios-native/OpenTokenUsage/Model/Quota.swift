@@ -147,6 +147,12 @@ struct PaceEstimate: Equatable {
         }
     }
 
+    /// "3小時 20分鐘"-style text, at least one minute. Used by 用量分析 and quota alerts.
+    static func span(_ seconds: TimeInterval) -> String {
+        Duration.seconds(max(seconds, 60))
+            .formatted(.units(allowed: [.days, .hours, .minutes], width: .abbreviated, maximumUnitCount: 2))
+    }
+
     /// Below this share of the window, one burst would swing the projection wildly.
     static let minElapsedPercent = 5.0
     /// Projected use at reset from which the pace counts as 偏快.

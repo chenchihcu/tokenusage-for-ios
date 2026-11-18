@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var signingOut: DirectProvider?
     @State private var signedIn: Set<DirectProvider> = []
     @AppStorage(ResetAlerts.enabledKey) private var resetAlerts = false
+    @AppStorage(QuotaAlerts.enabledKey) private var quotaAlerts = false
     @State private var notificationsDenied = false
 
     var body: some View {
@@ -68,6 +69,16 @@ struct SettingsView: View {
                             resetAlerts = false
                         }
                     }))
+                    Toggle("額度警示通知", isOn: Binding(get: { quotaAlerts }, set: { on in
+                        if on {
+                            Task {
+                                let granted = await QuotaAlerts.requestPermission()
+                                notificationsDenied = !granted
+                            }
+                        } else {
+                            quotaAlerts = false
+                        }
+                    }))
                 } footer: {
                     if notificationsDenied {
                         VStack(alignment: .leading, spacing: 6) {
@@ -80,7 +91,7 @@ struct SettingsView: View {
                             .font(.footnote.weight(.semibold))
                         }
                     } else {
-                        Text("Codex 或 Claude Code 出現免費重置時通知你。背景檢查的時間由 iOS 決定。")
+                        Text("免費重置：Codex 或 Claude Code 出現免費重置時通知你。額度警示：任一週期用到 80%、95%，或照目前速度會在重置前用完時通知你，每個週期各一次。背景檢查的時間由 iOS 決定。")
                     }
                 }
 
