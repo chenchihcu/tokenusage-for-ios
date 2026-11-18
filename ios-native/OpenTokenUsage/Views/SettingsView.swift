@@ -19,6 +19,34 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Signing in is what makes the app useful, so it comes first.
+                Section {
+                    ForEach(DirectProvider.allCases) { provider in
+                        if signedIn.contains(provider) {
+                            LabeledContent {
+                                Button("登出", role: .destructive) { signingOut = provider }
+                            } label: {
+                                VendorLabel(id: provider.rawValue, name: provider.name)
+                            }
+                        } else {
+                            LabeledContent {
+                                Button("登入") { signingIn = provider }
+                            } label: {
+                                VendorLabel(id: provider.rawValue, name: provider.name)
+                            }
+                        }
+                    }
+                    LabeledContent {
+                        Text("暫不支援手機登入").foregroundStyle(.secondary)
+                    } label: {
+                        VendorLabel(id: "antigravity", name: "Google Antigravity")
+                    }
+                } header: {
+                    Text("帳號")
+                } footer: {
+                    Text("登入在各服務的官方頁面進行。這些登入方式並非官方公開介面，服務更新後可能失效。")
+                }
+
                 Section {
                     Picker("自動更新", selection: $refreshInterval) {
                         ForEach(AppSettings.intervalOptions) { option in
@@ -42,7 +70,15 @@ struct SettingsView: View {
                     }))
                 } footer: {
                     if notificationsDenied {
-                        Text("通知已關閉，可到 iOS「設定」›「通知」開啟。")
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("通知已關閉，需要到 iOS「設定」開啟。")
+                            Button("開啟設定") {
+                                if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                                    UIApplication.shared.open(url)
+                                }
+                            }
+                            .font(.footnote.weight(.semibold))
+                        }
                     } else {
                         Text("Codex 或 Claude Code 出現免費重置時通知你。背景檢查的時間由 iOS 決定。")
                     }
@@ -58,27 +94,6 @@ struct SettingsView: View {
                     }
                 } footer: {
                     Text("各代理會新增或淘汰模型。App 依此頻率下載最新的模型清單與 API 牌價（LiteLLM 公開價格表），只下載公開資料，不傳送你的任何資訊。")
-                }
-
-                Section {
-                    ForEach(DirectProvider.allCases) { provider in
-                        if signedIn.contains(provider) {
-                            LabeledContent(provider.name) {
-                                Button("登出", role: .destructive) { signingOut = provider }
-                            }
-                        } else {
-                            LabeledContent(provider.name) {
-                                Button("登入") { signingIn = provider }
-                            }
-                        }
-                    }
-                    LabeledContent("Google Antigravity") {
-                        Text("暫不支援手機登入").foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("帳號")
-                } footer: {
-                    Text("登入在各服務的官方頁面進行。這些登入方式並非官方公開介面，服務更新後可能失效。")
                 }
 
                 Section {

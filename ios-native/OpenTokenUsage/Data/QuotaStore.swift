@@ -51,7 +51,7 @@ final class QuotaStore {
     /// Fast-path filter: only agents with 20 % or less remaining.
     var alertsOnly = false
     /// Providers with no sign-in yet; shown as 「未設定」 rows, never as numbers.
-    private(set) var missingProviders: [DirectProvider] = DirectProvider.allCases.filter { $0.token == nil }
+    private(set) var missingProviders: [DirectProvider] = QuotaStore.unconfiguredProviders()
 
     /// Earliest time each provider may be asked again (its floor, or a 429 back-off).
     private var floorUntil: [DirectProvider: Date] = [:]
@@ -78,12 +78,11 @@ final class QuotaStore {
         monitor.start(queue: DispatchQueue(label: "opentokenusage.path"))
     }
 
-    /// Exactly what the vendors last reported, most urgent first. Nothing is inferred.
+    /// Exactly what the vendors last reported. Nothing is inferred. Not ranked by urgency:
+    /// rows keep a fixed provider order so they don't jump around between refreshes
+    /// (fetches finish in any order).
     var displayItems: [ProviderQuota] {
-        items.sorted { lhs, rhs in
-            if lhs.level != rhs.level { return lhs.level < rhs.level }
-            return lhs.remainingPercent < rhs.remainingPercent
-        }
+        ProviderStyle.vendorOrdered(items, id: \.providerId)
     }
 
     var visibleItems: [ProviderQuota] {
@@ -100,6 +99,14 @@ final class QuotaStore {
         return displayItems.first { $0.id == selectedID }
     }
 
+    /// Providers to list under 「未設定」. With demo data on every provider already shows sample
+    /// numbers, so none is listed as missing.
+    nonisolated static func unconfiguredProviders(
+        sampleData: Bool = UserDefaults.standard.bool(forKey: SettingsKey.sampleData)
+    ) -> [DirectProvider] {
+        sampleData ? [] : DirectProvider.allCases.filter { $0.token == nil }
+    }
+
     var alertCount: Int { displayItems.filter { $0.level == .exhausted }.count }
 
     var isLoading: Bool { state == .loading }
@@ -108,7 +115,7 @@ final class QuotaStore {
     /// but still honours a 429 back-off.
     func refresh(force: Bool = false) async {
         guard state != .loading else { return }
-        missingProviders = DirectProvider.allCases.filter { $0.token == nil }
+        missingProviders = Self.unconfiguredProviders()
         let now = Date()
         let skipping = Set(DirectProvider.allCases.filter { provider in
             if let until = blockedUntil[provider], now < until { return true }

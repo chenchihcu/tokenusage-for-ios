@@ -17,7 +17,10 @@ struct UsageDay: Codable, Hashable, Identifiable {
     var consumed: Double
 
     var id: String { "\(key)@\(day.timeIntervalSince1970)" }
-    var seriesName: String { "\(providerName) · \(poolName)" }
+    /// 「Claude Code · Opus」; a pool named after its provider (「Codex 用量」) reads just 「Codex」.
+    var seriesName: String {
+        poolName.hasPrefix(providerName) ? providerName : "\(providerName) · \(poolName)"
+    }
 }
 
 struct UsageHistory: Codable, Equatable {

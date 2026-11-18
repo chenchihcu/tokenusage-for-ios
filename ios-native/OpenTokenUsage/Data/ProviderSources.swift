@@ -144,7 +144,10 @@ enum QuotaParser {
         func window(_ key: String, id: String, label: String) -> QuotaTier? {
             guard let dict = json[key] as? [String: Any],
                   let used = number(dict["utilization"]) else { return nil }
-            return tier(id: id, label: label, used: used, resetsAt: dict["resets_at"] as? String)
+            // Fixed by the vendor: `five_hour` is 5 hours, every `seven_day*` key is 7 days.
+            let seconds: Double = key == "five_hour" ? 5 * 3600 : 7 * 86_400
+            return tier(id: id, label: label, used: used, resetsAt: dict["resets_at"] as? String,
+                        windowSeconds: seconds)
         }
         var pools: [PoolDraft] = []
         let shared = [window("five_hour", id: "5h", label: "5 小時"),
@@ -178,7 +181,8 @@ enum QuotaParser {
             } else if let after = number(dict["reset_after_seconds"]) {
                 reset = iso.string(from: now.addingTimeInterval(after))
             }
-            return tier(id: key, label: windowLabel(seconds: seconds), used: used, resetsAt: reset)
+            return tier(id: key, label: windowLabel(seconds: seconds), used: used, resetsAt: reset,
+                        windowSeconds: seconds > 0 ? seconds : nil)
         }
         guard !tiers.isEmpty else { return nil }
         var metrics: [QuotaMetric] = []
@@ -199,21 +203,37 @@ enum QuotaParser {
             total = used / limit * 100
         }
         let reset = json["billingCycleEnd"] as? String
+        // The cycle length comes from the start date when sent; otherwise assume one month.
+        var cycleSeconds: Double?
+        var cycleIsEstimate: Bool?
+        if let end = reset.flatMap(QuotaDate.parse) {
+            if let start = (json["billingCycleStart"] as? String).flatMap(QuotaDate.parse), start < end {
+                cycleSeconds = end.timeIntervalSince(start)
+            } else if let start = Calendar.current.date(byAdding: .month, value: -1, to: end) {
+                cycleSeconds = end.timeIntervalSince(start)
+                cycleIsEstimate = true
+            }
+        }
+        func cycleTier(id: String, used: Double) -> QuotaTier {
+            var t = tier(id: id, label: "本期", used: used, resetsAt: reset, windowSeconds: cycleSeconds)
+            t.windowIsEstimate = cycleIsEstimate
+            return t
+        }
         var pools: [PoolDraft] = []
         if let auto = number(plan["autoPercentUsed"]) {
             pools.append(PoolDraft(id: "cursor_auto", name: "Auto + Composer", description: "Auto 模式與 Composer 模型。",
-                                   tiers: [tier(id: "auto", label: "本期", used: auto, resetsAt: reset)]))
+                                   tiers: [cycleTier(id: "auto", used: auto)]))
         }
         if let api = number(plan["apiPercentUsed"]) {
             pools.append(PoolDraft(id: "cursor_api", name: "API 模型", description: "手動指定的模型，例如 Claude、GPT。",
-                                   tiers: [tier(id: "api", label: "本期", used: api, resetsAt: reset)]))
+                                   tiers: [cycleTier(id: "api", used: api)]))
         }
         var metrics: [QuotaMetric] = []
         if pools.isEmpty {
             // Older accounts report only the combined figure: that is then the one pool.
             guard let total else { return nil }
             pools.append(PoolDraft(id: "cursor_plan", name: "方案用量", description: nil,
-                                   tiers: [tier(id: "total", label: "本期", used: total, resetsAt: reset)]))
+                                   tiers: [cycleTier(id: "total", used: total)]))
         } else if let total {
             metrics.append(QuotaMetric(label: "方案總用量", used: min(max(total, 0), 100), limit: 100))
         }
@@ -229,19 +249,12 @@ enum QuotaParser {
 
     // MARK: - Building blocks
 
-    static func tier(id: String, label: String, used: Double, resetsAt: String?) -> QuotaTier {
-        let clamped = min(max(used, 0), 100)
-        return QuotaTier(id: id, label: label, used: clamped, limit: 100, remaining: 100 - clamped,
-                         resetsAt: resetsAt, resetDurationText: nil, isGoverning: nil)
+    static func tier(id: String, label: String, used: Double, resetsAt: String?,
+                     windowSeconds: Double? = nil) -> QuotaTier {
+        QuotaAssembly.tier(id: id, label: label, used: used, resetsAt: resetsAt, windowSeconds: windowSeconds)
     }
 
-    /// A pool before its bottleneck is worked out.
-    struct PoolDraft {
-        var id: String
-        var name: String
-        var description: String?
-        var tiers: [QuotaTier]
-    }
+    typealias PoolDraft = QuotaAssembly.PoolDraft
 
     /// One pool (providers that meter every model together, such as Codex).
     static func make(_ provider: DirectProvider, plan: String, poolName: String,
@@ -251,29 +264,10 @@ enum QuotaParser {
              metrics: metrics, now: now)
     }
 
-    /// Each pool's remaining share is its tightest window (RFC-003). The provider headline is
-    /// its tightest pool, so a model that has run out is never hidden behind one that has not.
     static func make(_ provider: DirectProvider, plan: String, pools drafts: [PoolDraft],
                      metrics: [QuotaMetric], now: Date) -> ProviderQuota {
-        let pools = drafts.map { draft -> TokenPool in
-            var tiers = draft.tiers
-            let worst = tiers.indices.min { tiers[$0].remaining < tiers[$1].remaining }
-            if let worst { tiers[worst].isGoverning = true }
-            let remaining = worst.map { tiers[$0].remaining } ?? 100
-            return TokenPool(id: draft.id, name: draft.name, description: draft.description,
-                             effectiveRemaining: remaining, effectiveUsed: 100 - remaining,
-                             primaryResetTime: worst.flatMap { tiers[$0].resetsAt },
-                             isCritical: remaining <= 5, tiers: tiers)
-        }
-        let worstPool = pools.min { $0.effectiveRemaining < $1.effectiveRemaining }
-        let remaining = worstPool?.effectiveRemaining ?? 100
-        let reset = worstPool?.primaryResetTime
-        return ProviderQuota(
-            providerId: provider.rawValue, name: provider.name, planName: plan,
-            totalQuota: 100, usedQuota: 100 - remaining, remainingPercent: remaining,
-            resetTime: reset ?? "", status: remaining <= 5 ? "warning" : "active",
-            tokenPoolsJson: encode(pools), metricsJson: metrics.isEmpty ? nil : encode(metrics),
-            fetchedAt: iso.string(from: now))
+        QuotaAssembly.make(id: provider.rawValue, name: provider.name, plan: plan, pools: drafts,
+                           metrics: metrics, now: now)
     }
 
     private static func windowLabel(seconds: Double) -> String {
@@ -293,9 +287,6 @@ enum QuotaParser {
         return nil
     }
 
-    private static func encode<T: Encodable>(_ value: T) -> String? {
-        (try? JSONEncoder().encode(value)).flatMap { String(data: $0, encoding: .utf8) }
-    }
 }
 
 /// Reads several tokens pasted at once, in the labelled text the Mac helper writes:
@@ -329,32 +320,9 @@ enum TokenImport {
 
 /// Bundled figures for checking layouts without any account (Settings → 示範資料).
 enum SampleData {
+    /// The same rows the widget gallery uses (Shared/SampleQuotas.swift).
     static func items(now: Date = Date()) -> [ProviderQuota] {
-        func at(_ hours: Double) -> String {
-            ISO8601DateFormatter().string(from: now.addingTimeInterval(hours * 3600))
-        }
-        return [
-            QuotaParser.make(.cursor, plan: "Pro", pools: [
-                .init(id: "cursor_auto", name: "Auto + Composer", description: "Auto 模式與 Composer 模型。",
-                      tiers: [QuotaParser.tier(id: "auto", label: "本期", used: 100, resetsAt: at(90))]),
-                .init(id: "cursor_api", name: "API 模型", description: "手動指定的模型，例如 Claude、GPT。",
-                      tiers: [QuotaParser.tier(id: "api", label: "本期", used: 0, resetsAt: at(90))]),
-            ], metrics: [QuotaMetric(label: "方案總用量", used: 62, limit: 100)], now: now),
-            QuotaParser.make(.claude, plan: "訂閱方案", pools: [
-                .init(id: "claude_all", name: "所有模型", description: "每個模型都計入這些限制。", tiers: [
-                    QuotaParser.tier(id: "5h", label: "5 小時", used: 42, resetsAt: at(2.5)),
-                    QuotaParser.tier(id: "weekly", label: "每週", used: 81, resetsAt: at(60)),
-                ]),
-                .init(id: "claude_opus", name: "Opus", description: "Opus 另有的每週限制，同時受「所有模型」限制。",
-                      tiers: [QuotaParser.tier(id: "weekly_opus", label: "每週", used: 12, resetsAt: at(60))]),
-                .init(id: "claude_sonnet", name: "Sonnet", description: "Sonnet 另有的每週限制，同時受「所有模型」限制。",
-                      tiers: [QuotaParser.tier(id: "weekly_sonnet", label: "每週", used: 55, resetsAt: at(60))]),
-            ], metrics: [], now: now),
-            QuotaParser.make(.codex, plan: "Plus", poolName: "Codex 用量", tiers: [
-                QuotaParser.tier(id: "primary_window", label: "5 小時", used: 8, resetsAt: at(4)),
-                QuotaParser.tier(id: "secondary_window", label: "每週", used: 35, resetsAt: at(120)),
-            ], metrics: [QuotaMetric(label: "Credits", value: "0")], now: now),
-        ]
+        SampleQuotas.items(now: now)
     }
 
     /// Eight weeks of made-up daily use for the charts. Never stored.

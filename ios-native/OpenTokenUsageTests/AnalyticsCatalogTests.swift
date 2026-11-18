@@ -35,6 +35,19 @@ final class AnalyticsCatalogTests: XCTestCase {
         XCTAssertEqual(opus?.seriesName, "Claude Code · Opus")
     }
 
+    func testSeriesNameDropsRepeatedProvider() {
+        let day = Date(timeIntervalSince1970: 1_794_800_000)
+        let codex = UsageDay(day: day, key: "codex/codex_main", providerName: "Codex", poolName: "Codex 用量", consumed: 1)
+        XCTAssertEqual(codex.seriesName, "Codex")
+        let cursor = UsageDay(day: day, key: "cursor/api", providerName: "Cursor", poolName: "API 模型", consumed: 1)
+        XCTAssertEqual(cursor.seriesName, "Cursor · API 模型")
+    }
+
+    @MainActor
+    func testDemoDataListsNoProviderAsUnconfigured() {
+        XCTAssertEqual(QuotaStore.unconfiguredProviders(sampleData: true), [])
+    }
+
     func testTotalsByPeriod() {
         var history = UsageHistory()
         let start = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_794_800_000))

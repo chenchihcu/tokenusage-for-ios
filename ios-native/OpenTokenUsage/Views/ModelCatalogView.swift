@@ -78,7 +78,7 @@ struct ModelCatalogView: View {
             }
             .disabled(store.isUpdatingCatalog)
             if let error = store.catalogError {
-                Text(error).font(.footnote).foregroundStyle(.orange)
+                Text(error).font(.footnote).foregroundStyle(Color.statusOrange)
             }
         } footer: {
             Text("價格是各家 API 的公開牌價（美元／每百萬 token），來自社群維護的 LiteLLM 價格表，不是訂閱方案的實際費用。Cursor 的 API 額度依這些牌價計費。已公布退役日期且已過期的模型會自動移除。")
@@ -127,7 +127,7 @@ private struct ModelPriceRow: View {
             if let retires = model.retires {
                 Label("預定退役 \(retires)", systemImage: "calendar.badge.exclamationmark")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.statusOrange)
             }
         }
         .padding(.vertical, 2)

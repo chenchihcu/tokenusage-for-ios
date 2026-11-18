@@ -7,9 +7,6 @@ struct QuotaListView: View {
     @AppStorage(SettingsKey.haptics) private var hapticsOn = true
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    private var attention: [ProviderQuota] { store.visibleItems.filter { $0.level != .healthy } }
-    private var healthy: [ProviderQuota] { store.visibleItems.filter { $0.level == .healthy } }
-
     var body: some View {
         List(selection: $store.selectedID) { sections }
             .listStyle(.insetGrouped)
@@ -45,11 +42,8 @@ struct QuotaListView: View {
                 }
             }
         }
-        if !attention.isEmpty {
-            Section("需要注意") { rows(attention) }
-        }
-        if !healthy.isEmpty {
-            Section("額度充足") { rows(healthy) }
+        if !store.visibleItems.isEmpty {
+            Section { rows(store.visibleItems) }
         }
         if store.alertsOnly, store.visibleItems.isEmpty {
             Section {
@@ -68,14 +62,18 @@ struct QuotaListView: View {
                     Button {
                         store.selectedTab = .settings
                     } label: {
-                        LabeledContent(provider.name) {
+                        LabeledContent {
                             Text("前往設定").foregroundStyle(.tint)
+                        } label: {
+                            VendorLabel(id: provider.rawValue, name: provider.name)
                         }
                     }
                     .foregroundStyle(.primary)
                 }
-                LabeledContent("Google Antigravity") {
+                LabeledContent {
                     Text("暫不支援手機登入").foregroundStyle(.secondary)
+                } label: {
+                    VendorLabel(id: "antigravity", name: "Google Antigravity")
                 }
             } header: {
                 Text("未設定")
@@ -124,7 +122,7 @@ struct ProblemBanner: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: error == .offline ? "wifi.slash" : "exclamationmark.triangle.fill")
-                .foregroundStyle(error == .offline ? Color.secondary : Color.orange)
+                .foregroundStyle(error == .offline ? Color.secondary : Color.statusOrange)
             VStack(alignment: .leading, spacing: 2) {
                 Text(error.localizedDescription).font(.subheadline.weight(.semibold))
                 Text(hasData && error.hint == "請稍後再試。" ? "目前顯示的是上次成功取得的資料。" : error.hint)
@@ -172,130 +170,57 @@ struct QuotaRow: View {
                 if quota.pools.count > 1 {
                     PoolSummary(pools: quota.pools)
                 }
+                // A healthy-looking figure can still run out before the reset; say so here
+                // instead of only on the 分析 page.
+                if let warning = paceWarning {
+                    HStack(spacing: 4) {
+                        Image(systemName: warning == .willRunOut ? "exclamationmark.triangle.fill" : "speedometer")
+                            .accessibilityHidden(true)
+                        Text(Self.warningText(warning))
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(warning.textTint)
+                }
                 if let reset = quota.resetDate {
                     ResetText(date: reset)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                if quota.reportsResetCredits {
-                    Label(quota.resetCreditsText, systemImage: "gift")
-                        .font(.caption)
-                        .foregroundStyle((quota.resetCredits ?? 0) > 0 ? Color.green : Color.secondary)
+                // Only when a free reset is waiting; 「不提供」 on every row was noise
+                // (the resets sheet still lists every provider's count).
+                if quota.reportsResetCredits, (quota.resetCredits ?? 0) > 0 {
+                    ResetCreditsLine(quota: quota).font(.caption)
                 }
             }
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityValue("剩餘 \(Int(quota.remainingPercent.rounded()))%，\(quota.level.label)")
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var accessibilityValue: String {
+        let base = "剩餘 \(Int(quota.remainingPercent.rounded()))%，\(quota.level.label)"
+        return paceWarning.map { "\(base)，\(Self.warningText($0))" } ?? base
+    }
+
+    /// The most urgent pace among this provider's windows (會用完 before 偏快); nil when every
+    /// window is on pace, already used up (the figure shows that) or can't be estimated.
+    private var paceWarning: PaceEstimate.Status? {
+        let statuses = quota.pools.flatMap(\.tiers).map { PaceEstimate(tier: $0).status }
+        if statuses.contains(.willRunOut) { return .willRunOut }
+        if statuses.contains(.fast) { return .fast }
+        return nil
+    }
+
+    static func warningText(_ status: PaceEstimate.Status) -> String {
+        status == .willRunOut ? "照目前速度，重置前會用完" : "用得比時間快"
     }
 
     private var percentText: some View {
         Text(quota.remainingPercent / 100, format: .percent.precision(.fractionLength(0)))
             .font(.headline.monospacedDigit())
-            .foregroundStyle(quota.level.tint)
+            .foregroundStyle(quota.level.textTint)
             .fixedSize()
-    }
-}
-
-/// Each separately metered model pool with what is left in it, so the row says which
-/// models still work when one pool has run out ("Opus 0% · Sonnet 80%").
-struct PoolSummary: View {
-    let pools: [TokenPool]
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                // One pool per line, free to wrap, so a long name never widens the row.
-                VStack(alignment: .leading, spacing: 2) { items(fixed: false) }
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) { items(fixed: true) }
-                    VStack(alignment: .leading, spacing: 2) { items(fixed: false) }
-                }
-            }
-        }
-        .font(.caption)
-    }
-
-    private func items(fixed: Bool) -> some View {
-        ForEach(pools) { pool in
-            (Text(pool.name).foregroundStyle(.secondary)
-             + Text(" ")
-             + Text(pool.effectiveRemaining / 100, format: .percent.precision(.fractionLength(0)))
-                .foregroundStyle(QuotaLevel(remaining: pool.effectiveRemaining).tint))
-                .monospacedDigit()
-                .fixedSize(horizontal: fixed, vertical: true)
-                .accessibilityElement(children: .combine)
-        }
-    }
-}
-
-struct ResetText: View {
-    let date: Date
-
-    var body: some View {
-        if date > Date() {
-            Text("\(date, style: .relative)後重置")
-        } else {
-            Text("重置時間已過 · \(date, format: .dateTime.month().day().hour().minute())")
-        }
-    }
-}
-
-/// The agent's own logo when its file is in the app (FR-38), so each one is recognised at a
-/// glance; otherwise the first letter on the brand colour.
-struct ProviderBadge: View {
-    let id: String
-    let name: String
-    /// Grows with the text so the letter or logo is never clipped.
-    @ScaledMetric(relativeTo: .headline) private var side: CGFloat = 36
-
-    var body: some View {
-        Group {
-            if let logo = ProviderStyle.logo(for: id) {
-                Image(uiImage: logo)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: side, height: side)
-                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            } else {
-                Text(String(name.prefix(1)))
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(width: side, height: side)
-                    .background(ProviderStyle.color(for: id), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-enum ProviderStyle {
-    /// Logo files you add under Resources/Logos: logo-claude.png, logo-codex.png,
-    /// logo-cursor.png, logo-antigravity.png (square PNG, at least 180 × 180 px).
-    static func logo(for id: String) -> UIImage? {
-        UIImage(named: "logo-\(id)")
-    }
-
-    static func color(for id: String) -> Color {
-        switch id {
-        case "cursor": return .teal
-        case "codex": return .green
-        case "antigravity": return .indigo
-        case "claude": return .orange
-        default: return .gray
-        }
-    }
-}
-
-extension QuotaLevel {
-    var tint: Color {
-        switch self {
-        case .exhausted: return .red
-        case .low: return .orange
-        case .healthy: return .green
-        }
     }
 }
 
@@ -356,8 +281,14 @@ struct ResetsView: View {
                 ForEach(store.displayItems) { quota in
                     Section(quota.name) {
                         if quota.reportsResetCredits {
-                            Label(quota.resetCreditsText, systemImage: "gift")
-                                .foregroundStyle((quota.resetCredits ?? 0) > 0 ? Color.green : Color.secondary)
+                            LabeledContent("免費重置") {
+                                if let credits = quota.resetCredits {
+                                    Text("\(credits) 次")
+                                        .foregroundStyle(credits > 0 ? Color.statusGreen : Color.secondary)
+                                } else {
+                                    Text("—").accessibilityLabel("不提供")
+                                }
+                            }
                         }
                         ForEach(quota.pools.flatMap { pool in
                             // Name the pool when there are several, e.g. 「Opus · 每週」.
@@ -388,5 +319,19 @@ struct ResetsView: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// 「🎁 免費重置 2 次」 with the symbol tight against the words (a List `Label` puts the
+/// symbol in its own wide column).
+struct ResetCreditsLine: View {
+    let quota: ProviderQuota
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "gift").accessibilityHidden(true)
+            Text(quota.resetCreditsText)
+        }
+        .foregroundStyle((quota.resetCredits ?? 0) > 0 ? Color.statusGreen : Color.secondary)
     }
 }

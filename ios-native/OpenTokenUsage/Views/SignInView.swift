@@ -159,7 +159,7 @@ struct SignInView: View {
                 case .done:
                     Section {
                         Label("已登入 \(model.provider.name)", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(Color.statusGreen)
                     }
                     Section {
                         Button("完成") { dismiss() }
@@ -167,7 +167,7 @@ struct SignInView: View {
                 case .failed(let message):
                     Section {
                         Label(message, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.statusOrange)
                     }
                     Section {
                         Button("再試一次") { model.start() }

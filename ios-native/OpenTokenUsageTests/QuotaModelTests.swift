@@ -1,3 +1,5 @@
+import SwiftUI
+import UIKit
 import XCTest
 @testable import OpenTokenUsage
 
@@ -217,5 +219,216 @@ final class QuotaModelTests: XCTestCase {
         XCTAssertEqual(ResetAlerts.increases(previous: ["codex": 1], current: ["codex": 2]), ["codex": 2])
         XCTAssertEqual(ResetAlerts.increases(previous: ["claude": 2], current: ["claude": 0]), [:])
         XCTAssertEqual(ResetAlerts.increases(previous: [:], current: ["claude": 0]), [:])
+    }
+}
+
+/// spec-usage-pace-charts.md, FR-P1…FR-P5.
+final class PaceEstimateTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+    private let day: TimeInterval = 86_400
+    private let week: TimeInterval = 7 * 86_400
+
+    private func tier(used: Double, resetIn: TimeInterval?, window: TimeInterval?) -> QuotaTier {
+        let reset = resetIn.map { ISO8601DateFormatter().string(from: now.addingTimeInterval($0)) }
+        return QuotaParser.tier(id: "w", label: "每週", used: used, resetsAt: reset, windowSeconds: window)
+    }
+
+    private func pace(used: Double, resetIn: TimeInterval?, window: TimeInterval?) -> PaceEstimate {
+        PaceEstimate(tier: tier(used: used, resetIn: resetIn, window: window), now: now)
+    }
+
+    func testHalfWayAtFortyPercentIsOnPace() throws {
+        let p = pace(used: 40, resetIn: 3.5 * day, window: week)
+        XCTAssertEqual(try XCTUnwrap(p.elapsed), 50, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(p.projected), 80, accuracy: 0.001)
+        XCTAssertEqual(p.status, .onPace)
+        XCTAssertNil(p.runOutDate)
+    }
+
+    func testNinetyPercentProjectedIsFast() {
+        XCTAssertEqual(pace(used: 45, resetIn: 3.5 * day, window: week).status, .fast)
+    }
+
+    func testFastPaceGivesRunOutBeforeReset() throws {
+        let p = pace(used: 70, resetIn: 3.5 * day, window: week)
+        XCTAssertEqual(p.status, .willRunOut)
+        XCTAssertEqual(try XCTUnwrap(p.projected), 140, accuracy: 0.001)
+        let runOut = try XCTUnwrap(p.runOutDate)
+        XCTAssertEqual(runOut.timeIntervalSince(now), 1.5 * day, accuracy: 1)
+        XCTAssertEqual(now.addingTimeInterval(3.5 * day).timeIntervalSince(runOut), 2 * day, accuracy: 1)
+    }
+
+    func testUsedUpIsExhaustedWithoutProjection() {
+        let p = pace(used: 100, resetIn: day, window: week)
+        XCTAssertEqual(p.status, .exhausted)
+        XCTAssertNil(p.projected)
+        XCTAssertNil(p.runOutDate)
+    }
+
+    func testJustResetIsTooEarly() {
+        let p = pace(used: 3, resetIn: 5 * 3600 - 600, window: 5 * 3600)
+        XCTAssertEqual(p.status, .unknown(.tooEarly))
+        XCTAssertNil(p.projected)
+    }
+
+    func testUnusedIsOnPace() {
+        let p = pace(used: 0, resetIn: day, window: week)
+        XCTAssertEqual(p.status, .onPace)
+        XCTAssertNil(p.projected)
+    }
+
+    func testMissingResetOrWindowOrStaleCannotEstimate() {
+        XCTAssertEqual(pace(used: 40, resetIn: nil, window: week).status, .unknown(.noResetDate))
+        XCTAssertEqual(pace(used: 40, resetIn: day, window: nil).status, .unknown(.noWindowLength))
+        XCTAssertEqual(pace(used: 40, resetIn: -60, window: week).status, .unknown(.stale))
+    }
+
+    func testParsersRecordWindowLengths() throws {
+        func json(_ text: String) -> Data { Data(text.utf8) }
+        let codex = try XCTUnwrap(DirectProvider.codex.parse(json(#"{"rate_limit":{"primary_window":{"used_percent":27,"limit_window_seconds":18000,"reset_after_seconds":60},"secondary_window":{"used_percent":5,"limit_window_seconds":604800,"reset_after_seconds":60}}}"#)))
+        XCTAssertEqual(codex.pools.flatMap(\.tiers).map(\.windowSeconds), [18_000, 604_800])
+
+        let claude = try XCTUnwrap(DirectProvider.claude.parse(json(#"{"five_hour":{"utilization":10,"resets_at":"2026-11-17T03:00:00Z"},"seven_day_opus":{"utilization":20,"resets_at":"2026-11-20T00:00:00Z"}}"#)))
+        XCTAssertEqual(claude.pools.flatMap(\.tiers).map(\.windowSeconds), [18_000, 604_800])
+
+        let withStart = try XCTUnwrap(DirectProvider.cursor.parse(json(#"{"billingCycleStart":"2026-11-01T00:00:00.000Z","billingCycleEnd":"2026-12-01T00:00:00.000Z","individualUsage":{"plan":{"autoPercentUsed":10,"apiPercentUsed":20}}}"#)))
+        let exact = try XCTUnwrap(withStart.pools.first?.tiers.first)
+        XCTAssertEqual(exact.windowSeconds, 30 * 86_400)
+        XCTAssertNil(exact.windowIsEstimate)
+
+        let withoutStart = try XCTUnwrap(DirectProvider.cursor.parse(json(#"{"billingCycleEnd":"2026-12-01T00:00:00.000Z","individualUsage":{"plan":{"autoPercentUsed":10}}}"#)))
+        let guessed = try XCTUnwrap(withoutStart.pools.first?.tiers.first)
+        XCTAssertNotNil(guessed.windowSeconds)
+        XCTAssertEqual(guessed.windowIsEstimate, true)
+    }
+
+    func testOldSnapshotTiersDecodeWithoutWindow() throws {
+        let old = #"{"id":"5h","label":"5h limit","used":69,"limit":100,"remaining":31,"resetsAt":"2026-11-02T16:54:00Z","isGoverning":true}"#
+        let tier = try JSONDecoder().decode(QuotaTier.self, from: Data(old.utf8))
+        XCTAssertNil(tier.windowSeconds)
+        XCTAssertEqual(PaceEstimate(tier: tier, now: now).status, .unknown(.stale))
+    }
+}
+
+/// spec-vendor-badges-app-icon.md, FR-B1, FR-B3, FR-B6.
+final class ProviderBadgeTests: XCTestCase {
+    private func channels(_ hex: UInt32) -> (Double, Double, Double) {
+        (Double((hex >> 16) & 0xFF) / 255, Double((hex >> 8) & 0xFF) / 255, Double(hex & 0xFF) / 255)
+    }
+
+    private func contrastWithWhite(_ hex: UInt32) -> Double {
+        func linear(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        let (r, g, b) = channels(hex)
+        let luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+        return 1.05 / (luminance + 0.05)
+    }
+
+    private func hue(_ hex: UInt32) -> (degrees: Double, chroma: Double) {
+        let (r, g, b) = channels(hex)
+        let maxC = max(r, g, b), minC = min(r, g, b), chroma = maxC - minC
+        guard chroma > 0.05 else { return (0, chroma) }
+        var h: Double
+        if maxC == r { h = ((g - b) / chroma).truncatingRemainder(dividingBy: 6) }
+        else if maxC == g { h = (b - r) / chroma + 2 }
+        else { h = (r - g) / chroma + 4 }
+        h *= 60
+        return (h < 0 ? h + 360 : h, chroma)
+    }
+
+    func testEveryVendorHasABadge() {
+        XCTAssertEqual(Set(ProviderStyle.known.keys), ["claude", "codex", "cursor", "antigravity"])
+        XCTAssertEqual(Set(ProviderStyle.known.values.map(\.code)).count, 4)
+        XCTAssertEqual(Set(ProviderStyle.known.values.compactMap(\.symbol)).count, 4, "symbols must differ in shape")
+    }
+
+    func testSymbolsExistOnThisSystem() {
+        for (id, style) in ProviderStyle.known {
+            let symbol = try? XCTUnwrap(style.symbol)
+            XCTAssertNotNil(symbol.flatMap { UIImage(systemName: $0) }, "\(id): \(symbol ?? "nil")")
+        }
+    }
+
+    func testWhiteSymbolsAreReadable() {
+        for (id, style) in ProviderStyle.known {
+            XCTAssertGreaterThanOrEqual(contrastWithWhite(style.hex), 4.5, id)
+        }
+    }
+
+    func testColouredBadgesAreFarApartInHue() {
+        let hues = ProviderStyle.known.values.map { hue($0.hex) }.filter { $0.chroma > 0.05 }.map(\.degrees)
+        XCTAssertEqual(hues.count, 3, "Codex is the one achromatic badge")
+        for (i, a) in hues.enumerated() {
+            for b in hues[(i + 1)...] {
+                let gap = min(abs(a - b), 360 - abs(a - b))
+                XCTAssertGreaterThanOrEqual(gap, 40)
+            }
+        }
+    }
+
+    func testUnknownVendorGetsGreyLetters() {
+        let style = ProviderStyle.style(for: "foo", name: "Foo AI")
+        XCTAssertEqual(style.code, "FO")
+        XCTAssertNil(style.symbol)
+    }
+}
+
+/// spec-widget-alignment.md, FR-W1…FR-W6.
+@MainActor
+final class WidgetAlignmentTests: XCTestCase {
+    func testVendorOrderMatchesTheList() {
+        let ids = ["codex", "foo", "cursor", "claude", "antigravity"]
+        let ordered: [String] = ProviderStyle.vendorOrdered(ids, id: { (id: String) in id })
+        XCTAssertEqual(ordered, ["claude", "codex", "cursor", "antigravity", "foo"])
+    }
+
+    func testOrderIgnoresRemainingPercent() {
+        let items = SampleData.items()
+        let ordered: [ProviderQuota] = ProviderStyle.vendorOrdered(items, id: { (item: ProviderQuota) in item.providerId })
+        XCTAssertEqual(ordered.map { $0.providerId }, ["claude", "codex", "cursor"])
+    }
+
+    func testPoolLineJoinsEveryPool() throws {
+        let claude = try XCTUnwrap(SampleData.items().first { $0.providerId == "claude" })
+        // Every pool, in order, with its % and the 「 · 」 separator (FR-W6). This is the text
+        // VoiceOver reads on the medium widget; the styled line is built from the same parts.
+        XCTAssertEqual(PoolSummary.plainLine(claude.pools), "所有模型 19% · Opus 88% · Sonnet 45%")
+        XCTAssertEqual(PoolSummary.plainLine([]), "")
+    }
+
+    /// The gallery and loading placeholder use these rows, so they must never be empty.
+    func testGalleryPreviewHasEveryVendorWithPools() {
+        XCTAssertEqual(SampleData.items().map { $0.providerId }, SampleQuotas.items().map { $0.providerId },
+                       "示範資料 and the widget gallery share one sample set")
+        let items = SampleQuotas.items()
+        XCTAssertEqual(items.map { $0.providerId }, ["claude", "codex", "cursor"])
+        XCTAssertEqual(items.map { $0.pools.count }, [3, 1, 2])
+        XCTAssertTrue(items.allSatisfy { $0.resetDate != nil })
+        XCTAssertEqual(items[2].remainingPercent, 0, accuracy: 0.001)
+    }
+
+    /// Renders both sizes to PNG when TEST_RENDER_DIR is set (xcodebuild: TEST_RUNNER_TEST_RENDER_DIR),
+    /// for a visual check without placing a widget on the home screen.
+    func testRenderWidgetSizes() throws {
+        let items = SampleQuotas.items()
+        let saved = Date().addingTimeInterval(-180)
+        for (size, name, width) in [(QuotaWidgetContent.Size.small, "small", 158.0),
+                                    (QuotaWidgetContent.Size.medium, "medium", 338.0)] {
+            for scheme in [ColorScheme.light, .dark] {
+                let view = QuotaWidgetContent(items: items, savedAt: saved, size: size)
+                    .padding(16)
+                    .frame(width: width, height: 158)
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .environment(\.colorScheme, scheme)
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 3
+                guard let image = renderer.uiImage else { return XCTFail("\(name) did not render") }
+                XCTAssertEqual(image.size.width, width, accuracy: 1)
+                if let dir = ProcessInfo.processInfo.environment["TEST_RENDER_DIR"] {
+                    let url = URL(fileURLWithPath: dir).appending(path: "widget-\(name)-\(scheme == .dark ? "dark" : "light").png")
+                    guard let png = image.pngData() else { return XCTFail("\(name) has no PNG data") }
+                    try png.write(to: url)
+                }
+            }
+        }
     }
 }
