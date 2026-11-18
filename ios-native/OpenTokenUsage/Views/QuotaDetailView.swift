@@ -31,7 +31,7 @@ struct QuotaDetailView: View {
                 ForEach(pools) { pool in
                     Section {
                         ForEach(pool.tiers) { tier in
-                            TierRow(tier: tier)
+                            TierRow(tier: tier, marksBottleneck: pool.tiers.count > 1)
                         }
                     } header: {
                         PoolHeader(pool: pool)
@@ -41,7 +41,16 @@ struct QuotaDetailView: View {
                         }
                     }
                 }
-            } else if !metrics.isEmpty {
+            }
+            // Figures beside the pools that do not limit anything themselves (Cursor's combined total).
+            let extra = metrics.filter { !$0.label.lowercased().hasPrefix("reset") }
+            if !pools.isEmpty, !extra.isEmpty {
+                Section("其他") {
+                    ForEach(Array(extra.enumerated()), id: \.offset) { _, metric in
+                        MetricRow(metric: metric)
+                    }
+                }
+            } else if pools.isEmpty, !metrics.isEmpty {
                 Section("用量明細") {
                     ForEach(Array(metrics.enumerated()), id: \.offset) { _, metric in
                         MetricRow(metric: metric)
@@ -65,20 +74,35 @@ struct QuotaDetailView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle(quota.name)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 8) {
+                    ProviderBadge(id: quota.providerId, name: quota.name, base: 24)
+                    Text(quota.name).font(.headline)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+            }
+        }
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 private struct SummaryHeader: View {
     let quota: ProviderQuota
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 16) {
+        // At accessibility text sizes the gauge goes above the text so nothing is squeezed.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 16))
+        layout {
+            // The ring only shows the share; 「剩餘 X%」 beside it already says the number.
             Gauge(value: min(max(quota.remainingPercent, 0), 100), in: 0...100) {
-                Text("剩餘")
+                EmptyView()
             } currentValueLabel: {
-                Text(quota.remainingPercent / 100, format: .percent.precision(.fractionLength(0)))
-                    .monospacedDigit()
+                EmptyView()
             }
             .gaugeStyle(.accessoryCircularCapacity)
             .tint(quota.level.tint)
@@ -91,16 +115,14 @@ private struct SummaryHeader: View {
                     .font(.title2.weight(.semibold).monospacedDigit())
                 Text(quota.level.label)
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(quota.level.tint)
+                    .foregroundStyle(quota.level.textTint)
                 if let reset = quota.resetDate {
                     ResetText(date: reset)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                if quota.reportsResetCredits {
-                    Label(quota.resetCreditsText, systemImage: "gift")
-                        .font(.subheadline)
-                        .foregroundStyle((quota.resetCredits ?? 0) > 0 ? Color.green : Color.secondary)
+                if quota.reportsResetCredits, quota.resetCredits != nil {
+                    ResetCreditsLine(quota: quota).font(.subheadline)
                 }
             }
             Spacer(minLength: 0)
@@ -119,30 +141,36 @@ private struct PoolHeader: View {
             Spacer()
             Text(pool.effectiveRemaining / 100, format: .percent.precision(.fractionLength(0)))
                 .monospacedDigit()
-                .foregroundStyle(QuotaLevel(remaining: pool.effectiveRemaining).tint)
+                .foregroundStyle(QuotaLevel(remaining: pool.effectiveRemaining).textTint)
         }
     }
 }
 
 private struct TierRow: View {
     let tier: QuotaTier
+    /// 「瓶頸」 only means something when the pool has more than one window.
+    var marksBottleneck = true
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        let header = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
+            header {
                 Text(tier.label)
-                if tier.isGoverning == true {
+                if marksBottleneck, tier.isGoverning == true {
                     Text("瓶頸")
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(.red.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.statusRed)
                 }
                 Spacer(minLength: 8)
                 Text("剩餘 \(Int(tier.remaining.rounded()))%")
                     .monospacedDigit()
-                    .foregroundStyle(QuotaLevel(remaining: tier.remaining).tint)
+                    .foregroundStyle(QuotaLevel(remaining: tier.remaining).textTint)
             }
             ProgressView(value: min(max(tier.remaining, 0), 100), total: 100)
                 .tint(QuotaLevel(remaining: tier.remaining).tint)
@@ -170,7 +198,7 @@ private struct MetricRow: View {
                     Spacer()
                     Text("已用 \(Int(used.rounded()))%")
                         .monospacedDigit()
-                        .foregroundStyle(QuotaLevel(remaining: 100 - used).tint)
+                        .foregroundStyle(QuotaLevel(remaining: 100 - used).textTint)
                 }
                 ProgressView(value: 100 - used, total: 100)
                     .tint(QuotaLevel(remaining: 100 - used).tint)

@@ -2,22 +2,52 @@ import SwiftUI
 import UIKit
 
 struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
+    /// Changes when the 設定 tab is tapped again.
+    var scrollToTopToken = 0
     @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
-    @AppStorage(SettingsKey.leftHanded) private var leftHanded = false
     @AppStorage(SettingsKey.haptics) private var haptics = true
     @AppStorage(SettingsKey.sampleData) private var sampleData = false
+    @AppStorage(SettingsKey.catalogSchedule) private var catalogSchedule = ModelCatalog.Schedule.weekly.rawValue
     @State private var tokens: [DirectProvider: String] = [:]
     @State private var importMessage: String?
     @State private var signingIn: DirectProvider?
     @State private var signingOut: DirectProvider?
     @State private var signedIn: Set<DirectProvider> = []
     @AppStorage(ResetAlerts.enabledKey) private var resetAlerts = false
+    @AppStorage(QuotaAlerts.enabledKey) private var quotaAlerts = false
     @State private var notificationsDenied = false
 
     var body: some View {
         NavigationStack {
             Form {
+                // Signing in is what makes the app useful, so it comes first.
+                Section {
+                    ForEach(DirectProvider.allCases) { provider in
+                        if signedIn.contains(provider) {
+                            LabeledContent {
+                                Button("登出", role: .destructive) { signingOut = provider }
+                            } label: {
+                                VendorLabel(id: provider.rawValue, name: provider.name)
+                            }
+                        } else {
+                            LabeledContent {
+                                Button("登入") { signingIn = provider }
+                            } label: {
+                                VendorLabel(id: provider.rawValue, name: provider.name)
+                            }
+                        }
+                    }
+                    LabeledContent {
+                        Text("暫不支援手機登入").foregroundStyle(.secondary)
+                    } label: {
+                        VendorLabel(id: "antigravity", name: "Google Antigravity")
+                    }
+                } header: {
+                    Text("帳號")
+                } footer: {
+                    Text("登入在各服務的官方頁面進行。這些登入方式並非官方公開介面，服務更新後可能失效。")
+                }
+
                 Section {
                     Picker("自動更新", selection: $refreshInterval) {
                         ForEach(AppSettings.intervalOptions) { option in
@@ -39,41 +69,42 @@ struct SettingsView: View {
                             resetAlerts = false
                         }
                     }))
+                    Toggle("額度警示通知", isOn: Binding(get: { quotaAlerts }, set: { on in
+                        if on {
+                            Task {
+                                let granted = await QuotaAlerts.requestPermission()
+                                notificationsDenied = !granted
+                            }
+                        } else {
+                            quotaAlerts = false
+                        }
+                    }))
                 } footer: {
                     if notificationsDenied {
-                        Text("通知已關閉，可到 iOS「設定」›「通知」開啟。")
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("通知已關閉，需要到 iOS「設定」開啟。")
+                            Button("開啟設定") {
+                                if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                                    UIApplication.shared.open(url)
+                                }
+                            }
+                            .font(.footnote.weight(.semibold))
+                        }
                     } else {
-                        Text("Codex 或 Claude Code 出現免費重置時通知你。背景檢查的時間由 iOS 決定。")
+                        Text("免費重置：Codex 或 Claude Code 出現免費重置時通知你。額度警示：任一週期用到 80%、95%，或照目前速度會在重置前用完時通知你，每個週期各一次。背景檢查的時間由 iOS 決定。")
                     }
                 }
 
                 Section {
-                    Picker("慣用手", selection: $leftHanded) {
-                        Text("右手").tag(false)
-                        Text("左手").tag(true)
-                    }
                     Toggle("觸覺回饋", isOn: $haptics)
                 }
 
                 Section {
-                    ForEach(DirectProvider.allCases) { provider in
-                        if signedIn.contains(provider) {
-                            LabeledContent(provider.name) {
-                                Button("登出", role: .destructive) { signingOut = provider }
-                            }
-                        } else {
-                            LabeledContent(provider.name) {
-                                Button("登入") { signingIn = provider }
-                            }
-                        }
+                    Picker("模型與價格更新", selection: $catalogSchedule) {
+                        ForEach(ModelCatalog.Schedule.allCases) { Text($0.title).tag($0.rawValue) }
                     }
-                    LabeledContent("Google Antigravity") {
-                        Text("暫不支援手機登入").foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("帳號")
                 } footer: {
-                    Text("登入在各服務的官方頁面進行。這些登入方式並非官方公開介面，服務更新後可能失效。")
+                    Text("各代理會新增或淘汰模型。App 依此頻率下載最新的模型清單與 API 牌價（LiteLLM 公開價格表），只下載公開資料，不傳送你的任何資訊。")
                 }
 
                 Section {
@@ -102,6 +133,7 @@ struct SettingsView: View {
                     LabeledContent("版本", value: Bundle.main.appVersion)
                 }
             }
+            .scrollsToTop(on: scrollToTopToken)
             .task {
                 notificationsDenied = await ResetAlerts.authorizationDenied()
             }
@@ -129,12 +161,6 @@ struct SettingsView: View {
                 Text("這支手機會刪除此服務的登入憑證。")
             }
             .navigationTitle("設定")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                }
-            }
         }
     }
 }

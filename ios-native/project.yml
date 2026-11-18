@@ -6,11 +6,16 @@ options:
   deploymentTarget:
     iOS: "27.1"
   createIntermediateGroups: true
+  # The UI is Traditional Chinese only. Without this the bundle defaults to English and the
+  # system formats relative dates, durations and chart axes in English ("7 hr, 33 min").
+  developmentLanguage: zh-Hant
 settings:
   base:
     SWIFT_VERSION: "5.10"
     MARKETING_VERSION: "3.0.0"
     CURRENT_PROJECT_VERSION: "1"
+    # Set in project.yml so `xcodegen generate` keeps device signing.
+    DEVELOPMENT_TEAM: QJ3VV82725
 targets:
   OpenTokenUsage:
     type: application
@@ -50,6 +55,7 @@ targets:
     sources:
       - path: Widget
       - path: OpenTokenUsage/Model
+      - path: OpenTokenUsage/Shared
     info:
       path: Widget/Info.plist
       properties:

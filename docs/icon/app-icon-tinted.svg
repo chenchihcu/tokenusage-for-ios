@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<!-- OpenTokenUsage app icon (docs/spec-vendor-badges-app-icon.md, FR-I1 to FR-I5). Arcs, left to right: Claude Code, Codex, Cursor, Antigravity. Export: swift scripts/render-app-icon.swift -->
+<rect width="1024" height="1024" fill="#000000"/><g fill="none" stroke-width="96" stroke-linecap="round"><path d="M 299.9 772.1 A 300 300 0 0 1 212.4 544.3" stroke="#FFFFFF" stroke-opacity="0.55"/><path d="M 249.6 414.6 A 300 300 0 0 1 444.5 267.7" stroke="#FFFFFF" stroke-opacity="0.7"/><path d="M 579.5 267.7 A 300 300 0 0 1 774.4 414.6" stroke="#FFFFFF" stroke-opacity="0.85"/><path d="M 811.6 544.3 A 300 300 0 0 1 724.1 772.1" stroke="#FFFFFF" stroke-opacity="1.0"/></g>
+<line x1="512" y1="560" x2="671.7" y2="448.2" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round"/>
+<circle cx="512" cy="560" r="54" fill="#FFFFFF"/>
+</svg>

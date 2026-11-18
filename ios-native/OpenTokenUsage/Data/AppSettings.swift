@@ -3,9 +3,9 @@ import Foundation
 /// Keys shared with the iOS Settings app (Settings.bundle) and the in-app sheet.
 enum SettingsKey {
     static let refreshInterval = "opentokenusage_refresh_interval"
-    static let leftHanded = "opentokenusage_left_handed"
     static let haptics = "opentokenusage_haptics_enabled"
     static let sampleData = "opentokenusage_sample_data"
+    static let catalogSchedule = "opentokenusage_catalog_schedule"
 }
 
 enum AppSettings {
@@ -13,9 +13,9 @@ enum AppSettings {
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
             SettingsKey.refreshInterval: 60,
-            SettingsKey.leftHanded: false,
             SettingsKey.haptics: true,
             SettingsKey.sampleData: false,
+            SettingsKey.catalogSchedule: ModelCatalog.Schedule.weekly.rawValue,
         ])
     }
 
