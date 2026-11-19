@@ -100,6 +100,22 @@ final class AnalyticsCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.removed, ["claude-opus-4-1"])   // retired
     }
 
+    func testCatalogCorrectionsDropAliasesAndFixContext() throws {
+        let json = #"""
+        {
+          "gpt-5.6": {"litellm_provider": "openai", "mode": "chat", "input_cost_per_token": 4e-06},
+          "gpt-5.6-sol": {"litellm_provider": "openai", "mode": "chat", "input_cost_per_token": 4e-06, "max_input_tokens": 922000},
+          "gpt-6-luna": {"litellm_provider": "openai", "mode": "chat", "input_cost_per_token": 1e-07, "max_input_tokens": 922000},
+          "gemini/gemini-3.5-flash": {"litellm_provider": "gemini", "mode": "chat", "input_cost_per_token": 1.5e-06},
+          "gemini/gemini-3.6-flash": {"litellm_provider": "gemini", "mode": "chat", "input_cost_per_token": 7.5e-07}
+        }
+        """#
+        let catalog = try XCTUnwrap(ModelCatalog.parse(Data(json.utf8), previous: ModelCatalog()))
+        XCTAssertEqual(Set(catalog.models.map(\.id)), ["gpt-5.6-sol", "gpt-6-luna", "gemini-3.6-flash"])
+        XCTAssertEqual(catalog.models.first { $0.id == "gpt-6-luna" }?.contextTokens, 1_050_000)
+        XCTAssertEqual(catalog.models.first { $0.id == "gpt-5.6-sol" }?.contextTokens, 922_000)   // no correction
+    }
+
     func testCatalogSchedule() {
         let now = Date(timeIntervalSince1970: 1_000_000_000)
         let catalog = ModelCatalog(models: [], fetchedAt: now.addingTimeInterval(-8 * 86_400))
