@@ -100,6 +100,34 @@ final class AnalyticsCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.removed, ["claude-opus-4-1"])   // retired
     }
 
+    func testCatalogCorrectionsDropAliasesAndFixContext() throws {
+        let json = #"""
+        {
+          "gpt-5.6": {"litellm_provider": "openai", "mode": "chat", "input_cost_per_token": 4e-06},
+          "gpt-5.6-sol": {"litellm_provider": "openai", "mode": "chat", "input_cost_per_token": 4e-06, "max_input_tokens": 922000},
+          "gpt-6-luna": {"litellm_provider": "openai", "mode": "chat", "input_cost_per_token": 1e-07, "max_input_tokens": 922000},
+          "gemini/gemini-3.5-flash": {"litellm_provider": "gemini", "mode": "chat", "input_cost_per_token": 1.5e-06},
+          "gemini/gemini-3.6-flash": {"litellm_provider": "gemini", "mode": "chat", "input_cost_per_token": 7.5e-07}
+        }
+        """#
+        let catalog = try XCTUnwrap(ModelCatalog.parse(Data(json.utf8), previous: ModelCatalog()))
+        XCTAssertEqual(Set(catalog.models.map(\.id)), ["gpt-5.6-sol", "gpt-6-luna", "gemini-3.6-flash"])
+        XCTAssertEqual(catalog.models.first { $0.id == "gpt-6-luna" }?.contextTokens, 1_050_000)
+        XCTAssertEqual(catalog.models.first { $0.id == "gpt-5.6-sol" }?.contextTokens, 922_000)   // no correction
+    }
+
+    func testStoredCatalogHidesRetiredModelsAndOldChanges() {
+        let fetched = ISO8601DateFormatter().date(from: "2026-11-01T12:00:00Z")!
+        let catalog = ModelCatalog(models: [
+            CatalogModel(id: "claude-sonnet-4-5", vendor: .anthropic, retires: "2026-11-30"),
+            CatalogModel(id: "claude-sonnet-5-5", vendor: .anthropic),
+        ], fetchedAt: fetched, added: ["claude-sonnet-5-5"])
+        XCTAssertEqual(catalog.activeModels(now: fetched).count, 2)
+        XCTAssertEqual(catalog.activeModels(now: fetched.addingTimeInterval(40 * 86_400)).map(\.id), ["claude-sonnet-5-5"])
+        XCTAssertTrue(catalog.showsChanges(now: fetched.addingTimeInterval(86_400)))
+        XCTAssertFalse(catalog.showsChanges(now: fetched.addingTimeInterval(20 * 86_400)))
+    }
+
     func testCatalogSchedule() {
         let now = Date(timeIntervalSince1970: 1_000_000_000)
         let catalog = ModelCatalog(models: [], fetchedAt: now.addingTimeInterval(-8 * 86_400))

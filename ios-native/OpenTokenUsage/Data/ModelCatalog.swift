@@ -66,6 +66,19 @@ struct ModelCatalog: Codable, Equatable {
         }
     }
 
+    /// Models not yet retired on `now`. The stored catalog can be weeks old (or never refreshed
+    /// on 僅手動), so a retirement date that has since passed must not still read as upcoming.
+    func activeModels(now: Date = Date()) -> [CatalogModel] {
+        let today = ISO8601DateFormatter.string(from: now, timeZone: .current, formatOptions: [.withFullDate])
+        return models.filter { ($0.retires ?? "9999") > today }
+    }
+
+    /// The last refresh's added and removed lists stop being news after a while.
+    func showsChanges(now: Date = Date()) -> Bool {
+        guard let fetchedAt, !(added.isEmpty && removed.isEmpty) else { return false }
+        return now.timeIntervalSince(fetchedAt) < 14 * 86_400
+    }
+
     func isDue(_ schedule: Schedule, now: Date = Date()) -> Bool {
         guard let interval = schedule.interval else { return false }
         guard let fetchedAt else { return true }
@@ -112,7 +125,7 @@ struct ModelCatalog: Codable, Equatable {
             if ids.contains(String(id[..<range.lowerBound])) { found[id] = nil }
         }
         guard !found.isEmpty else { return nil }
-        let models = found.values.sorted { ($0.vendor.rawValue, $1.id) < ($1.vendor.rawValue, $0.id) }
+        let models = CatalogCorrections.current.apply(to: Array(found.values)).sorted { ($0.vendor.rawValue, $1.id) < ($1.vendor.rawValue, $0.id) }
         let newIDs = Set(models.map(\.id))
         let oldIDs = Set(previous.models.map(\.id))
         let first = previous.models.isEmpty
@@ -150,6 +163,43 @@ struct ModelCatalog: Codable, Equatable {
     }
 }
 
+/// Fixes to LiteLLM's community data, checked by hand against the vendors' own model, pricing
+/// and deprecation pages. Applied after parsing and to the stored catalog, so a correction
+/// reaches people without waiting for the next refresh. Re-check when a vendor releases or
+/// retires models, and remove an entry once LiteLLM agrees with the vendor.
+struct CatalogCorrections {
+    /// Ids the vendor does not list as a model of its own: LiteLLM aliases, and models the
+    /// vendor no longer offers and silently routes to a newer one.
+    var dropped: Set<String>
+    /// Context windows that differ from the vendor's model page.
+    var contextTokens: [String: Int]
+
+    /// Checked 2026-11-19.
+    static let current = CatalogCorrections(
+        dropped: [
+            "gpt-5.6",            // OpenAI lists only gpt-5.6-sol, -terra and -luna
+            "gpt-5.5-cyber",      // OpenAI lists only gpt-5.5-cyber-preview
+            "gemini-3.5-flash",   // removed from AI Studio; requests route to gemini-3.6-flash
+            "gemini-3.7-flash",   // removed from AI Studio; requests route to gemini-3.8-flash
+        ],
+        contextTokens: [
+            // OpenAI's model page: 1.05M (LiteLLM: 922K)
+            "gpt-6.2-astra": 1_050_000,
+            "gpt-6.2-sol": 1_050_000,
+            "gpt-6.1-terra": 1_050_000,
+            "gpt-6-luna": 1_050_000,
+        ])
+
+    func apply(to models: [CatalogModel]) -> [CatalogModel] {
+        models.compactMap { model in
+            guard !dropped.contains(model.id) else { return nil }
+            var model = model
+            if let tokens = contextTokens[model.id] { model.contextTokens = tokens }
+            return model
+        }
+    }
+}
+
 enum ModelCatalogStore {
     private static var url: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -159,7 +209,8 @@ enum ModelCatalogStore {
 
     static func load() -> ModelCatalog {
         guard let data = try? Data(contentsOf: url),
-              let catalog = try? JSONDecoder().decode(ModelCatalog.self, from: data) else { return ModelCatalog() }
+              var catalog = try? JSONDecoder().decode(ModelCatalog.self, from: data) else { return ModelCatalog() }
+        catalog.models = CatalogCorrections.current.apply(to: catalog.models)
         return catalog
     }
 
