@@ -66,6 +66,19 @@ struct ModelCatalog: Codable, Equatable {
         }
     }
 
+    /// Models not yet retired on `now`. The stored catalog can be weeks old (or never refreshed
+    /// on 僅手動), so a retirement date that has since passed must not still read as upcoming.
+    func activeModels(now: Date = Date()) -> [CatalogModel] {
+        let today = ISO8601DateFormatter.string(from: now, timeZone: .current, formatOptions: [.withFullDate])
+        return models.filter { ($0.retires ?? "9999") > today }
+    }
+
+    /// The last refresh's added and removed lists stop being news after a while.
+    func showsChanges(now: Date = Date()) -> Bool {
+        guard let fetchedAt, !(added.isEmpty && removed.isEmpty) else { return false }
+        return now.timeIntervalSince(fetchedAt) < 14 * 86_400
+    }
+
     func isDue(_ schedule: Schedule, now: Date = Date()) -> Bool {
         guard let interval = schedule.interval else { return false }
         guard let fetchedAt else { return true }

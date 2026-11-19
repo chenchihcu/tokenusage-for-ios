@@ -116,6 +116,18 @@ final class AnalyticsCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.models.first { $0.id == "gpt-5.6-sol" }?.contextTokens, 922_000)   // no correction
     }
 
+    func testStoredCatalogHidesRetiredModelsAndOldChanges() {
+        let fetched = ISO8601DateFormatter().date(from: "2026-11-01T12:00:00Z")!
+        let catalog = ModelCatalog(models: [
+            CatalogModel(id: "claude-sonnet-4-5", vendor: .anthropic, retires: "2026-11-30"),
+            CatalogModel(id: "claude-sonnet-5-5", vendor: .anthropic),
+        ], fetchedAt: fetched, added: ["claude-sonnet-5-5"])
+        XCTAssertEqual(catalog.activeModels(now: fetched).count, 2)
+        XCTAssertEqual(catalog.activeModels(now: fetched.addingTimeInterval(40 * 86_400)).map(\.id), ["claude-sonnet-5-5"])
+        XCTAssertTrue(catalog.showsChanges(now: fetched.addingTimeInterval(86_400)))
+        XCTAssertFalse(catalog.showsChanges(now: fetched.addingTimeInterval(20 * 86_400)))
+    }
+
     func testCatalogSchedule() {
         let now = Date(timeIntervalSince1970: 1_000_000_000)
         let catalog = ModelCatalog(models: [], fetchedAt: now.addingTimeInterval(-8 * 86_400))

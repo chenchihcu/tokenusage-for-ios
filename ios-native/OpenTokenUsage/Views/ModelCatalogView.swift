@@ -16,7 +16,7 @@ struct ModelCatalogView: View {
         NavigationStack {
             List {
                 statusSection
-                if !catalog.added.isEmpty || !catalog.removed.isEmpty {
+                if catalog.showsChanges() {
                     changesSection
                 }
                 vendorSection
@@ -50,7 +50,7 @@ struct ModelCatalogView: View {
     }
 
     private func models(of vendor: CatalogModel.Vendor) -> [CatalogModel] {
-        catalog.models.filter { $0.vendor == vendor && matches($0) }
+        catalog.activeModels().filter { $0.vendor == vendor && matches($0) }
     }
 
     /// One vendor at a time, so its models compare side by side in one matrix.
@@ -161,12 +161,12 @@ struct ModelCatalogView: View {
                 Text(error).font(.footnote).foregroundStyle(Color.statusOrange)
             }
         } footer: {
-            Text("價格是各家 API 的公開牌價（美元／每百萬 token），來自社群維護的 LiteLLM 價格表，不是訂閱方案的實際費用。Cursor 的 API 額度依這些牌價計費。已公布退役日期且已過期的模型會自動移除。")
+            Text("價格是各家 API 的公開牌價（美元／每百萬 token），不是訂閱方案的實際費用。資料來自社群維護的 LiteLLM 價格表，並依各家官方模型清單校正；牌價可能在下次更新前調整。退役日期已過的模型不再顯示。")
         }
     }
 
     private var changesSection: some View {
-        Section("上次更新的變動") {
+        Section {
             if !catalog.added.isEmpty {
                 LabeledContent("新增") {
                     Text(catalog.added.joined(separator: "\n")).multilineTextAlignment(.trailing)
@@ -176,6 +176,10 @@ struct ModelCatalogView: View {
                 LabeledContent("移除") {
                     Text(catalog.removed.joined(separator: "\n")).multilineTextAlignment(.trailing)
                 }
+            }
+        } header: {
+            if let date = catalog.fetchedAt {
+                Text("\(date.formatted(.dateTime.month().day())) 更新的變動")
             }
         }
     }
