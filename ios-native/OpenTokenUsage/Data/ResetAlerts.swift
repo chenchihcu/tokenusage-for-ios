@@ -64,6 +64,7 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
     static let shared = NotificationRouter()
     static let openResets = Notification.Name("opentokenusage.openResets")
     static let openQuotas = Notification.Name("opentokenusage.openQuotas")
+    static let openAnalytics = Notification.Name("opentokenusage.openAnalytics")
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse) async {
@@ -72,6 +73,8 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate, @unc
             await MainActor.run { NotificationCenter.default.post(name: Self.openResets, object: nil) }
         case "quotas":
             await MainActor.run { NotificationCenter.default.post(name: Self.openQuotas, object: nil) }
+        case "analytics":
+            await MainActor.run { NotificationCenter.default.post(name: Self.openAnalytics, object: nil) }
         default:
             break
         }

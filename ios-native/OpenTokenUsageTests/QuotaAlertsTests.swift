@@ -105,19 +105,21 @@ final class QuotaAlertsTests: XCTestCase {
         XCTAssertTrue(alert.identifier.hasPrefix("quota-80-claude|all|5h|"))
     }
 
-    func testCheckDoesNothingWithDemoData() {
+    func testCheckDoesNothingWithDemoData() async {
         let defaults = UserDefaults.standard
         let saved = (defaults.object(forKey: QuotaAlerts.enabledKey), defaults.object(forKey: SettingsKey.sampleData),
-                     defaults.object(forKey: QuotaAlerts.sentKey))
+                     defaults.object(forKey: QuotaAlerts.sentKey), defaults.object(forKey: AlertCenter.limitResetKey))
         defer {
             defaults.set(saved.0, forKey: QuotaAlerts.enabledKey)
             defaults.set(saved.1, forKey: SettingsKey.sampleData)
             defaults.set(saved.2, forKey: QuotaAlerts.sentKey)
+            defaults.set(saved.3, forKey: AlertCenter.limitResetKey)
         }
         defaults.set(true, forKey: QuotaAlerts.enabledKey)
+        defaults.set(true, forKey: AlertCenter.limitResetKey)
         defaults.set(true, forKey: SettingsKey.sampleData)
         defaults.removeObject(forKey: QuotaAlerts.sentKey)
-        QuotaAlerts.check([provider(used: 99, resetIn: 1800)], now: now)
+        await AlertCenter.sync([provider(used: 99, resetIn: 1800)], now: now)
         XCTAssertNil(defaults.object(forKey: QuotaAlerts.sentKey))
     }
 

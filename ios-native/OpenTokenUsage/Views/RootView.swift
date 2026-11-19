@@ -53,6 +53,17 @@ struct RootView: View {
             // A quota warning opens the 額度 page (FR-A16).
             store.selectedTab = .quotas
         }
+        .onReceive(NotificationCenter.default.publisher(for: NotificationRouter.openAnalytics)) { _ in
+            // The weekly summary opens 用量分析 (FR-37).
+            store.selectedTab = .analytics
+        }
+        .onOpenURL { url in
+            // Widgets and the Live Activity: opentokenusage://quotas or ://settings (FR-13).
+            switch url.host() {
+            case "settings": store.selectedTab = .settings
+            default: store.selectedTab = .quotas
+            }
+        }
     }
 }
 

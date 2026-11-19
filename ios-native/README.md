@@ -24,7 +24,10 @@ A manual token field remains under Settings › 帳號 › 進階 as a fallback.
 
 - **Refresh** follows the chosen interval (15 s … 15 min, or manual) while the app is open. Each service has a floor (Claude Code 5 min, Codex and Cursor 1 min), and a 429 reply backs that service off. In the background iOS decides when to refresh.
 - **Free resets**: shown only when the vendor reports them; otherwise 「免費重置：不提供」. Turn on 「免費重置通知」 to get one notification when Codex or Claude Code credits appear or increase.
-- **Widget** (small, medium): remaining usage from the app's last refresh.
+- **Each provider row** shows when it last updated, or why it failed (sign in again, rate limited, response changed, offline) with its last figures marked 「上次資料」. Long-press a row for 「只更新這個服務」.
+- **Widgets**: Home Screen (small, medium; all services or one service's pools) and Lock Screen (inline, circular, rectangular; one window, by default the tightest). Figures older than an hour are dimmed.
+- **重置倒數 Live Activity**: 「在鎖定畫面追蹤」 on a window's detail starts a Lock Screen / Dynamic Island countdown (one at a time, about 8 hours at most). Also from the Control Center control 「追蹤下次重置」 or Siri (「用 OpenTokenUsage 追蹤下次重置」); 「用 OpenTokenUsage 查額度」 reads each service's tightest window.
+- **Notifications** (Settings › 通知): free resets, level alerts (80/95 %, or 50/80/95 %), 用完與重置, 未用完提醒 (weekly windows, 12 h before reset), 每週摘要 (Monday 09:00), and 勿擾時段 that holds them and drops ones that are no longer true. See [`docs/spec-competitive-gap-v3.1.md`](../docs/spec-competitive-gap-v3.1.md).
 - **示範資料** in Settings shows sample figures for checking layouts; they are not your usage.
 
 ## Build and install

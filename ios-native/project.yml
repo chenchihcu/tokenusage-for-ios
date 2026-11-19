@@ -12,7 +12,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.10"
-    MARKETING_VERSION: "3.0.0"
+    MARKETING_VERSION: "3.1.0"
     CURRENT_PROJECT_VERSION: "1"
     # Set in project.yml so `xcodegen generate` keeps device signing.
     DEVELOPMENT_TEAM: QJ3VV82725
@@ -29,6 +29,11 @@ targets:
           - com.chihfu.opentokenusage.refresh
         UIBackgroundModes:
           - fetch
+        NSSupportsLiveActivities: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.chihfu.opentokenusage
+            CFBundleURLSchemes:
+              - opentokenusage
     entitlements:
       path: OpenTokenUsage/OpenTokenUsage.entitlements
       properties:

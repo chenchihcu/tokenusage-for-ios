@@ -318,6 +318,9 @@ extension ProviderQuota {
         return nil
     }
 
+    /// FR-7: the vendor answered, but nothing in it is a window or figure we can show.
+    var isUnsupportedPlan: Bool { pools.isEmpty && metrics.isEmpty }
+
     var resetCreditsText: String {
         resetCredits.map { "免費重置 \($0) 次" } ?? "免費重置：不提供"
     }

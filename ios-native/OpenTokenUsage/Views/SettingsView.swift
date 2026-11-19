@@ -15,6 +15,13 @@ struct SettingsView: View {
     @State private var signedIn: Set<DirectProvider> = []
     @AppStorage(ResetAlerts.enabledKey) private var resetAlerts = false
     @AppStorage(QuotaAlerts.enabledKey) private var quotaAlerts = false
+    @AppStorage(AlertCenter.timingKey) private var alertTiming = "standard"
+    @AppStorage(AlertCenter.limitResetKey) private var limitResetAlerts = false
+    @AppStorage(AlertCenter.unusedKey) private var unusedReminders = false
+    @AppStorage(AlertCenter.weeklyKey) private var weeklySummary = false
+    @AppStorage(AlertCenter.quietKey) private var quietHours = false
+    @AppStorage(AlertCenter.quietStartKey) private var quietStart = QuietHours.defaultStart
+    @AppStorage(AlertCenter.quietEndKey) private var quietEnd = QuietHours.defaultEnd
     @State private var notificationsDenied = false
 
     var body: some View {
@@ -59,26 +66,19 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("免費重置通知", isOn: Binding(get: { resetAlerts }, set: { on in
-                        if on {
-                            Task {
-                                let granted = await ResetAlerts.requestPermission()
-                                notificationsDenied = !granted
-                            }
-                        } else {
-                            resetAlerts = false
+                    Toggle("免費重置通知", isOn: permissionBinding($resetAlerts))
+                    Toggle("額度警示通知", isOn: permissionBinding($quotaAlerts))
+                    if quotaAlerts {
+                        Picker("提醒時機", selection: $alertTiming) {
+                            Text("標準（80%、95%）").tag("standard")
+                            Text("提早（50%、80%、95%）").tag("early")
                         }
-                    }))
-                    Toggle("額度警示通知", isOn: Binding(get: { quotaAlerts }, set: { on in
-                        if on {
-                            Task {
-                                let granted = await QuotaAlerts.requestPermission()
-                                notificationsDenied = !granted
-                            }
-                        } else {
-                            quotaAlerts = false
-                        }
-                    }))
+                    }
+                    Toggle("用完與重置", isOn: permissionBinding($limitResetAlerts))
+                    Toggle("未用完提醒", isOn: permissionBinding($unusedReminders))
+                    Toggle("每週摘要", isOn: permissionBinding($weeklySummary))
+                } header: {
+                    Text("通知")
                 } footer: {
                     if notificationsDenied {
                         VStack(alignment: .leading, spacing: 6) {
@@ -91,8 +91,20 @@ struct SettingsView: View {
                             .font(.footnote.weight(.semibold))
                         }
                     } else {
-                        Text("免費重置：Codex 或 Claude Code 出現免費重置時通知你。額度警示：任一週期用到 80%、95%，或照目前速度會在重置前用完時通知你，每個週期各一次。背景檢查的時間由 iOS 決定。")
+                        Text("免費重置：Codex 或 Claude Code 出現免費重置時通知你。額度警示：任一週期用到設定的比例，或照目前速度會在重置前用完時通知你。用完與重置：週期用完時通知，用到 80% 以上的週期重置時再通知一次。未用完提醒：每週額度重置前 12 小時仍用不到一半時提醒。每週摘要：週一早上 9 點。每個週期各通知一次；背景檢查的時間由 iOS 決定。")
                     }
+                }
+
+                Section {
+                    Toggle("勿擾時段", isOn: $quietHours)
+                    if quietHours {
+                        DatePicker("開始", selection: minutesBinding($quietStart, other: quietEnd),
+                                   displayedComponents: .hourAndMinute)
+                        DatePicker("結束", selection: minutesBinding($quietEnd, other: quietStart),
+                                   displayedComponents: .hourAndMinute)
+                    }
+                } footer: {
+                    Text("這段時間內的額度通知會留到結束時才送出；到時已不正確的（例如週期已重置）就不送。開始與結束不能相同。")
                 }
 
                 Section {
@@ -137,6 +149,13 @@ struct SettingsView: View {
             .task {
                 notificationsDenied = await ResetAlerts.authorizationDenied()
             }
+            // Any notification choice re-plans what is pending from the cached figures.
+            .onChange(of: [quotaAlerts, limitResetAlerts, unusedReminders, weeklySummary, quietHours]) {
+                Task { await AlertCenter.resync() }
+            }
+            .onChange(of: [alertTiming, String(quietStart), String(quietEnd)]) {
+                Task { await AlertCenter.resync() }
+            }
             .onAppear {
                 for provider in DirectProvider.allCases { tokens[provider] = Keychain.get(provider.keychainKey) ?? "" }
                 reloadSignedIn()
@@ -166,6 +185,36 @@ struct SettingsView: View {
 }
 
 private extension SettingsView {
+    /// Turning a notification switch on asks for permission first (FR-A2); denied leaves it off.
+    func permissionBinding(_ value: Binding<Bool>) -> Binding<Bool> {
+        Binding {
+            value.wrappedValue
+        } set: { on in
+            guard on else {
+                value.wrappedValue = false
+                return
+            }
+            Task {
+                let granted = await ResetAlerts.askNotificationPermission()
+                value.wrappedValue = granted
+                notificationsDenied = !granted
+            }
+        }
+    }
+
+    /// Minutes after midnight as a time of day. A time equal to the other end is refused, so
+    /// quiet hours can never be empty (§6).
+    func minutesBinding(_ minutes: Binding<Int>, other: Int) -> Binding<Date> {
+        Binding {
+            Calendar.current.date(byAdding: .minute, value: minutes.wrappedValue,
+                                  to: Calendar.current.startOfDay(for: Date())) ?? Date()
+        } set: { date in
+            let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+            let value = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+            if value != other { minutes.wrappedValue = value }
+        }
+    }
+
     func reloadSignedIn() {
         signedIn = Set(DirectProvider.allCases.filter(\.isSignedIn))
     }
