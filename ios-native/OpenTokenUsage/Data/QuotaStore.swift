@@ -16,6 +16,10 @@ final class QuotaStore {
     private(set) var lastUpdated: Date?
     private(set) var state: LoadState = .idle
     private(set) var isOnline = true
+    /// Each provider's last success and last problem (FR-1, FR-2).
+    private(set) var providerStatus: [String: ProviderStatus] = ProviderStatusStore.load()
+    /// Providers being refreshed on their own (FR-6).
+    private(set) var refreshingOne: Set<DirectProvider> = []
     /// Bumped on every successful refresh so views can play haptics.
     private(set) var refreshCount = 0
     /// Daily use per model pool, kept on the phone for the charts (FR-34).
@@ -111,42 +115,79 @@ final class QuotaStore {
 
     var isLoading: Bool { state == .loading }
 
+    /// Earliest time this provider may be asked again (its floor or a 429 back-off);
+    /// nil when it can be asked now (FR-6).
+    func nextAllowed(_ provider: DirectProvider, now: Date = Date()) -> Date? {
+        let until = [floorUntil[provider], blockedUntil[provider]].compactMap { $0 }.max()
+        return until.flatMap { $0 > now ? $0 : nil }
+    }
+
+    func status(for providerId: String) -> ProviderStatus? { providerStatus[providerId] }
+
     /// `force` is a person asking (pull, button): it ignores the per-provider floor
-    /// but still honours a 429 back-off.
-    func refresh(force: Bool = false) async {
-        guard state != .loading else { return }
+    /// but still honours a 429 back-off. `only` refreshes one provider and keeps its floor (FR-6).
+    func refresh(force: Bool = false, only: DirectProvider? = nil) async {
+        if let only {
+            guard state != .loading, !refreshingOne.contains(only), nextAllowed(only) == nil else { return }
+        } else {
+            guard state != .loading, refreshingOne.isEmpty else { return }
+        }
         missingProviders = Self.unconfiguredProviders()
         let now = Date()
         let skipping = Set(DirectProvider.allCases.filter { provider in
+            if let only { return provider != only }
             if let until = blockedUntil[provider], now < until { return true }
             if !force, let until = floorUntil[provider], now < until { return true }
             return false
         })
-        state = .loading
+        if let only { refreshingOne.insert(only) } else { state = .loading }
+        defer { if let only { refreshingOne.remove(only) } }
         do {
             let result = try await client.fetchQuotas(previous: items, skipping: skipping)
             for provider in result.asked {
                 floorUntil[provider] = now.addingTimeInterval(provider.minimumInterval)
                 blockedUntil[provider] = result.retryAfter[provider].map { now.addingTimeInterval($0) }
             }
+            recordStatus(result, at: now)
             items = result.items
             if !result.asked.isEmpty { lastUpdated = Date() }
-            state = result.firstError.map { .failed($0) } ?? .idle
+            // One failing provider shows on its own row (FR-4); the banner is for "nothing worked".
+            if only == nil {
+                state = result.succeeded.isEmpty ? result.firstError.map { .failed($0) } ?? .idle : .idle
+            }
             refreshCount += 1
             QuotaCache.save(result.items)
             WidgetCenter.shared.reloadAllTimelines()
+            ControlCenter.shared.reloadAllControls()
             ResetAlerts.check(result.items)
-            QuotaAlerts.check(result.items)
+            await AlertCenter.sync(result.items)
+            await ResetActivity.update(with: result.items)
             if !UserDefaults.standard.bool(forKey: SettingsKey.sampleData), !result.asked.isEmpty {
                 history.record(result.items)
                 UsageHistoryStore.save(history)
             }
         } catch let error as QuotaClientError {
             if error == .notConfigured { items = [] }
-            state = .failed(error)
+            if only == nil { state = .failed(error) }
         } catch {
-            state = .failed(.badResponse)
+            if only == nil { state = .failed(.badResponse) }
         }
+    }
+
+    /// FR-1/FR-2: a success sets the time and clears the problem; a failure keeps the last
+    /// success so the row can say how old its figures are.
+    private func recordStatus(_ result: QuotaClient.Result, at now: Date) {
+        guard !result.asked.isEmpty else { return }
+        for provider in result.succeeded {
+            providerStatus[provider.rawValue] = ProviderStatus(lastSuccess: now, problem: nil, retryAt: nil)
+        }
+        for (provider, error) in result.errors {
+            var status = providerStatus[provider.rawValue] ?? ProviderStatus()
+            status.problem = error.providerProblem
+            status.retryAt = result.retryAfter[provider].map { now.addingTimeInterval($0) }
+            providerStatus[provider.rawValue] = status
+        }
+        ProviderStatusStore.save(providerStatus)
     }
 
     /// Tapping the current tab again brings that page back to its start, the usual iPhone way

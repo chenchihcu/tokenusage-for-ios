@@ -6,6 +6,7 @@ struct QuotaAlert: Equatable {
     enum Kind: Equatable {
         case level(Int)   // used % reached this level
         case pace         // current pace runs out before the reset
+        case limit        // used up (spec-competitive-gap-v3.1.md, FR-28)
     }
 
     var providerId: String
@@ -22,6 +23,7 @@ struct QuotaAlert: Equatable {
         switch kind {
         case .level(let level): return String(level)
         case .pace: return QuotaAlerts.paceMark
+        case .limit: return QuotaAlerts.limitMark
         }
     }
 
@@ -33,12 +35,13 @@ struct QuotaAlert: Equatable {
         switch kind {
         case .level(let level): return "\(providerName) · \(poolName) 已用 \(level)%"
         case .pace: return "\(providerName) · \(poolName) 照目前速度會用完"
+        case .limit: return "\(providerName) · \(poolName) 已用完"
         }
     }
 
     func body(now: Date = Date()) -> String {
         switch kind {
-        case .level:
+        case .level, .limit:
             if let reset = resetDate {
                 return "\(tierLabel)，\(PaceEstimate.span(reset.timeIntervalSince(now))) 後重置。"
             }
@@ -62,6 +65,9 @@ enum QuotaAlerts {
     /// FR-A5 levels, lowest first.
     static let levels = [80, 95]
     static let paceMark = "pace"
+    static let limitMark = "100"
+    /// FR-29 「提早」: also at 50 %.
+    static let earlyLevels = [50, 80, 95]
 
     /// What has been sent: window key → marks ("80", "95", "pace").
     typealias Sent = [String: [String]]
@@ -84,7 +90,7 @@ enum QuotaAlerts {
     /// close counts as the same window.
     static let sameWindowTolerance: TimeInterval = 10 * 60
 
-    static func matchingKey(_ key: String, resetDate: Date?, in sent: Sent) -> String {
+    static func matchingKey<Value>(_ key: String, resetDate: Date?, in sent: [String: Value]) -> String {
         guard sent[key] == nil, let resetDate else { return key }
         let prefix = key.split(separator: "|").dropLast().joined(separator: "|") + "|"
         return sent.keys.first { other in
@@ -95,7 +101,11 @@ enum QuotaAlerts {
     }
 
     /// Which alerts are due, and the sent state afterwards. Pure, so it can be tested.
-    static func due(items: [ProviderQuota], sent: Sent, now: Date = Date()) -> (alerts: [QuotaAlert], sent: Sent) {
+    /// `levels` are the used-% levels to warn at (none when 額度警示通知 is off), `pace` the
+    /// run-out warning, `limit` the used-up alert of 用完與重置 (FR-28).
+    static func due(items: [ProviderQuota], sent: Sent, now: Date = Date(),
+                    levels: [Int] = QuotaAlerts.levels, pace: Bool = true,
+                    limit: Bool = false) -> (alerts: [QuotaAlert], sent: Sent) {
         // FR-A11: forget windows that have already reset.
         var sent = sent.filter { key, _ in
             guard let resets = key.split(separator: "|").last, resets != "none",
@@ -118,15 +128,19 @@ enum QuotaAlerts {
                     }
 
                     // FR-A5 / FR-A6: only the highest new level, and every crossed level counts as sent.
+                    // FR-28: used up replaces a level alert from the same refresh.
                     let crossed = levels.filter { tier.used >= Double($0) }
-                    if let highest = crossed.last, !marks.contains(String(highest)) {
+                    if limit, tier.used >= 100, !marks.contains(limitMark) {
+                        alerts.append(alert(.limit))
+                        marks.append(limitMark)
+                    } else if let highest = crossed.last, !marks.contains(String(highest)) {
                         alerts.append(alert(.level(highest)))
                     }
                     for level in crossed where !marks.contains(String(level)) { marks.append(String(level)) }
 
                     // FR-A7…FR-A9.
-                    if tier.windowIsEstimate != true,
-                       !marks.contains(String(levels.last!)), !marks.contains(paceMark) {
+                    if pace, tier.windowIsEstimate != true, !marks.contains("95"),
+                       !marks.contains(limitMark), !marks.contains(paceMark) {
                         let pace = PaceEstimate(tier: tier, now: now)
                         if pace.status == .willRunOut {
                             alerts.append(alert(.pace, runOut: pace.runOutDate))
@@ -138,23 +152,5 @@ enum QuotaAlerts {
             }
         }
         return (alerts, sent)
-    }
-
-    /// Sends what is due and remembers it. Does nothing while off or showing demo data (FR-A12).
-    static func check(_ items: [ProviderQuota], now: Date = Date()) {
-        guard isEnabled, !UserDefaults.standard.bool(forKey: SettingsKey.sampleData) else { return }
-        let stored = (UserDefaults.standard.dictionary(forKey: sentKey) as? Sent) ?? [:]
-        let result = due(items: items, sent: stored, now: now)
-        UserDefaults.standard.set(result.sent, forKey: sentKey)
-        for alert in result.alerts {
-            let content = UNMutableNotificationContent()
-            content.title = alert.title()
-            content.body = alert.body(now: now)
-            content.sound = .default
-            content.threadIdentifier = alert.providerId
-            content.userInfo = ["open": "quotas"]
-            let request = UNNotificationRequest(identifier: alert.identifier, content: content, trigger: nil)
-            UNUserNotificationCenter.current().add(request)
-        }
     }
 }

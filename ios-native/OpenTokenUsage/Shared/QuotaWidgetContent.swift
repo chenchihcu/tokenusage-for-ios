@@ -10,11 +10,45 @@ struct QuotaWidgetContent: View {
     let items: [ProviderQuota]
     let savedAt: Date?
     let size: Size
+    var now: Date = Date()
+    /// Rows already in the wanted order (one provider's pools), not the vendor order.
+    var keepOrder = false
 
     /// Three rows is what fits either height (FR-W5, FR-W6).
     static let maxRows = 3
+    /// Older figures are dimmed and labelled with their time (FR-14).
+    static let staleAfter: TimeInterval = 3600
+
+    static func isStale(savedAt: Date?, now: Date) -> Bool {
+        guard let savedAt else { return false }
+        return now.timeIntervalSince(savedAt) > staleAfter
+    }
+
+    /// One provider's pools as widget rows: same badge, the pool's name and tightest window.
+    static func poolRows(_ item: ProviderQuota) -> [ProviderQuota] {
+        let pools = item.pools
+        guard pools.count > 1 else { return [item] }
+        return pools.map { pool in
+            var row = item
+            row.name = pool.name
+            row.planName = item.name
+            row.remainingPercent = pool.effectiveRemaining
+            row.usedQuota = pool.effectiveUsed
+            row.resetTime = pool.primaryResetTime ?? ""
+            row.tokenPoolsJson = nil
+            row.metricsJson = nil
+            return row
+        }
+    }
 
     var body: some View {
+        let stale = Self.isStale(savedAt: savedAt, now: now)
+        content(stale: stale)
+            .opacity(stale ? 0.55 : 1)
+    }
+
+    @ViewBuilder
+    private func content(stale: Bool) -> some View {
         if items.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 Text("AI 額度").font(.headline)
@@ -22,9 +56,10 @@ struct QuotaWidgetContent: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
-            let rows = Array(ProviderStyle.vendorOrdered(items, id: \.providerId).prefix(Self.maxRows))
+            let ordered = keepOrder ? items : ProviderStyle.vendorOrdered(items, id: \.providerId)
+            let rows = Array(ordered.prefix(Self.maxRows))
             VStack(alignment: .leading, spacing: size == .small ? 10 : 7) {
-                ForEach(rows) { item in
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, item in
                     switch size {
                     case .small: SmallRow(quota: item)
                     case .medium: MediumRow(quota: item)
@@ -34,7 +69,8 @@ struct QuotaWidgetContent: View {
                 // The medium height has no room under three rows (FR-W8); the app and the
                 // small widget show freshness.
                 if size == .small, let savedAt {
-                    Text("更新於 \(savedAt, style: .relative)前")
+                    (stale ? Text("\(savedAt, format: .dateTime.hour().minute()) 的資料")
+                           : Text("更新於 \(savedAt, style: .relative)前"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

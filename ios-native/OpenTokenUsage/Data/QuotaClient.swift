@@ -32,6 +32,20 @@ enum QuotaClientError: LocalizedError, Equatable {
     }
 }
 
+extension QuotaClientError {
+    /// What one provider's row says about this failure (FR-4).
+    var providerProblem: ProviderProblem {
+        switch self {
+        case .unauthorized, .notConfigured: return .signIn
+        case .rateLimited: return .rateLimited
+        case .badResponse: return .badFormat
+        case .offline: return .offline
+        case .timedOut: return .timedOut
+        case .server(let status): return .server(status)
+        }
+    }
+}
+
 /// Asks each provider directly from the phone. No relay server in between.
 struct QuotaClient {
     struct Result {
@@ -41,6 +55,10 @@ struct QuotaClient {
         var asked: Set<DirectProvider> = []
         /// Seconds the provider asked us to wait (HTTP 429 Retry-After).
         var retryAfter: [DirectProvider: TimeInterval] = [:]
+        /// Providers that answered with usage we could read this round.
+        var succeeded: Set<DirectProvider> = []
+        /// Why each failed provider failed this round (FR-1).
+        var errors: [DirectProvider: QuotaClientError] = [:]
     }
 
     private enum Outcome {
@@ -84,8 +102,10 @@ struct QuotaClient {
                 switch outcome {
                 case .success(let quota):
                     result.items.append(quota)
+                    result.succeeded.insert(provider)
                 case .failure(let error, let retryAfter):
                     if result.firstError == nil { result.firstError = error }
+                    result.errors[provider] = error
                     if let retryAfter { result.retryAfter[provider] = retryAfter }
                     keepPrevious(provider)
                 }

@@ -87,7 +87,8 @@ struct QuotaListView: View {
         // In a split view's list, a value link selects the platform: unfolded it fills the
         // detail pane, folded it pushes the detail screen.
         ForEach(items) { item in
-            NavigationLink(value: item.id) { QuotaRow(quota: item) }
+            NavigationLink(value: item.id) { QuotaRow(quota: item, status: store.status(for: item.providerId)) }
+                .contextMenu { ProviderActions(store: store, providerId: item.providerId) }
         }
     }
 }
@@ -137,8 +138,68 @@ struct ProblemBanner: View {
     }
 }
 
+/// Per-provider actions (FR-6): refresh just this one, or sign in again after a 401.
+struct ProviderActions: View {
+    let store: QuotaStore
+    let providerId: String
+
+    var body: some View {
+        if let provider = DirectProvider(rawValue: providerId) {
+            if let next = store.nextAllowed(provider) {
+                // Inside the floor or a back-off: no request, and say when it is allowed.
+                Button {} label: {
+                    Label("只更新這個服務（\(next, style: .relative)後可更新）", systemImage: "arrow.clockwise")
+                }
+                .disabled(true)
+            } else {
+                Button {
+                    Task { await store.refresh(only: provider) }
+                } label: {
+                    Label("只更新這個服務", systemImage: "arrow.clockwise")
+                }
+            }
+            if store.status(for: providerId)?.problem == .signIn {
+                Button {
+                    store.selectedTab = .settings
+                } label: {
+                    Label("重新登入", systemImage: "person.crop.circle.badge.exclamationmark")
+                }
+            }
+        }
+    }
+}
+
+/// 「5 分鐘前更新」, or why the last try failed with the figures marked as old (FR-3…FR-5).
+struct ProviderStatusLine: View {
+    let status: ProviderStatus?
+
+    var body: some View {
+        if let status, let problem = status.problem {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Image(systemName: problem == .offline ? "wifi.slash" : "exclamationmark.triangle.fill")
+                        .accessibilityHidden(true)
+                    Text(problem.message(retryAt: status.retryAt))
+                }
+                .foregroundStyle(problem == .offline ? Color.secondary : Color.statusOrange)
+                .font(.caption.weight(.semibold))
+                if let last = status.lastSuccess {
+                    Text("上次資料 · \(last, style: .relative)前").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("上次資料").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        } else if let last = status?.lastSuccess {
+            Text("\(last, style: .relative)前更新")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 struct QuotaRow: View {
     let quota: ProviderQuota
+    var status: ProviderStatus? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
@@ -191,6 +252,11 @@ struct QuotaRow: View {
                 if quota.reportsResetCredits, (quota.resetCredits ?? 0) > 0 {
                     ResetCreditsLine(quota: quota).font(.caption)
                 }
+                // FR-7: a plan the parser read but could not turn into any window.
+                if quota.isUnsupportedPlan {
+                    Text("這個方案目前無法顯示額度").font(.caption).foregroundStyle(.secondary)
+                }
+                ProviderStatusLine(status: status)
             }
         }
         .padding(.vertical, 4)
