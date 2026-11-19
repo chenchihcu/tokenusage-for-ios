@@ -12,8 +12,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.10"
-    MARKETING_VERSION: "3.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "3.1.1"
+    CURRENT_PROJECT_VERSION: "2"
     # Set in project.yml so `xcodegen generate` keeps device signing.
     DEVELOPMENT_TEAM: QJ3VV82725
 targets:
@@ -25,6 +25,10 @@ targets:
     info:
       path: OpenTokenUsage/Info.plist
       properties:
+        # Version comes from MARKETING_VERSION / CURRENT_PROJECT_VERSION above, so the
+        # committed Info.plist, the built app, Settings › 版本 and the iOS Settings app agree.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         BGTaskSchedulerPermittedIdentifiers:
           - com.chihfu.opentokenusage.refresh
         UIBackgroundModes:
@@ -64,6 +68,8 @@ targets:
     info:
       path: Widget/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: AI 額度
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension

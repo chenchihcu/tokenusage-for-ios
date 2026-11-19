@@ -46,3 +46,12 @@ Artifacts and sign it with a free Apple ID (Xcode, or a sideloading tool on Wind
 Free-account builds expire after 7 days and must be reinstalled.
 
 `ios-simulator-screenshots.yml` runs the unit tests and captures both iPhone Duo displays.
+
+## Release checklist (every version)
+
+The version and the settings shown to the person must match the build. `SettingsAlignmentTests` fails when they drift.
+
+1. Bump `MARKETING_VERSION` **and** `CURRENT_PROJECT_VERSION` in `project.yml`. Nowhere else: both Info.plists read them.
+2. Align settings: every new or changed option appears in the app's 設定 page with an accurate footer; options that also live in the iOS Settings app (`OpenTokenUsage/Resources/Settings.bundle/Root.plist`) have the same key, default, choices and wording. Re-read every footer for statements the release made untrue.
+3. Run the unit tests; check 設定 › 版本 in the app and iOS 設定 › OpenTokenUsage › 版本 show the new `version (build)`.
+
