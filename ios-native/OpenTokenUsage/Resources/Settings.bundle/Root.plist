@@ -2,27 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>StringsTable</key>
-	<string>Root</string>
 	<key>PreferenceSpecifiers</key>
 	<array>
 		<dict>
-			<key>Type</key>
-			<string>PSGroupSpecifier</string>
+			<key>FooterText</key>
+			<string>App 開啟時依此頻率更新；在背景時由 iOS 決定何時更新。</string>
 			<key>Title</key>
 			<string>更新</string>
-			<key>FooterText</key>
-			<string>只在 App 開啟時更新，不會在背景使用網路。</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
 		</dict>
 		<dict>
-			<key>Type</key>
-			<string>PSMultiValueSpecifier</string>
-			<key>Title</key>
-			<string>自動更新</string>
-			<key>Key</key>
-			<string>opentokenusage_refresh_interval</string>
 			<key>DefaultValue</key>
 			<integer>60</integer>
+			<key>Key</key>
+			<string>opentokenusage_refresh_interval</string>
+			<key>Title</key>
+			<string>自動更新</string>
 			<key>Titles</key>
 			<array>
 				<string>15 秒</string>
@@ -32,6 +28,8 @@
 				<string>15 分鐘</string>
 				<string>僅手動</string>
 			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
 			<key>Values</key>
 			<array>
 				<integer>15</integer>
@@ -43,15 +41,35 @@
 			</array>
 		</dict>
 		<dict>
-			<key>Type</key>
-			<string>PSToggleSwitchSpecifier</string>
-			<key>Title</key>
-			<string>觸覺回饋</string>
-			<key>Key</key>
-			<string>opentokenusage_haptics_enabled</string>
 			<key>DefaultValue</key>
 			<true/>
+			<key>Key</key>
+			<string>opentokenusage_haptics_enabled</string>
+			<key>Title</key>
+			<string>觸覺回饋</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+		</dict>
+		<dict>
+			<key>FooterText</key>
+			<string>通知、勿擾時段、顯示方式與帳號登入在 App 內的「設定」頁。</string>
+			<key>Title</key>
+			<string>關於</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<string>—</string>
+			<key>Key</key>
+			<string>opentokenusage_app_version</string>
+			<key>Title</key>
+			<string>版本</string>
+			<key>Type</key>
+			<string>PSTitleValueSpecifier</string>
 		</dict>
 	</array>
+	<key>StringsTable</key>
+	<string>Root</string>
 </dict>
 </plist>

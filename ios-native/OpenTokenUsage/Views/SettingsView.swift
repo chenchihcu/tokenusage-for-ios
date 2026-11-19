@@ -142,7 +142,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    LabeledContent("版本", value: Bundle.main.appVersion)
+                    LabeledContent("版本", value: AppSettings.versionText())
                 }
             }
             .scrollsToTop(on: scrollToTopToken)
@@ -243,13 +243,5 @@ private extension SettingsView {
             tokens[provider] = value
             Keychain.set(value, for: provider.keychainKey)
         }
-    }
-}
-
-private extension Bundle {
-    var appVersion: String {
-        let version = infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
-        let build = infoDictionary?["CFBundleVersion"] as? String ?? "—"
-        return "\(version) (\(build))"
     }
 }
