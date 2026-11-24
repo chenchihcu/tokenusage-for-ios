@@ -240,6 +240,18 @@ export const ACTIVE_FRONTIER_MODELS: ModelCatalogItem[] = [
 ];
 
 
+/** Constant-time check of `Authorization: Bearer <secret>` (hashing first equalises lengths). */
+async function bearerMatches(request: Request, secret: string): Promise<boolean> {
+  const header = request.headers.get('Authorization') ?? '';
+  const given = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  const encoder = new TextEncoder();
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(given)),
+    crypto.subtle.digest('SHA-256', encoder.encode(secret)),
+  ]);
+  return given.length > 0 && crypto.subtle.timingSafeEqual(a, b);
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -297,6 +309,13 @@ export default {
 
     // 4. API 路由: 本機同步推播端點 (POST /api/quotas/sync)
     if (url.pathname === '/api/quotas/sync' && request.method === 'POST') {
+      // The phone shows whatever is stored here, so writes need the secret once it is set.
+      if (env.SYNC_TOKEN && !(await bearerMatches(request, env.SYNC_TOKEN))) {
+        return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...securityHeaders, 'Content-Type': 'application/json' }
+        });
+      }
       try {
         const payload = await request.json() as { quotas?: ProviderQuotaRecord[] };
         const items = payload.quotas || [];
