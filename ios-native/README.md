@@ -1,19 +1,35 @@
 # OpenTokenUsage — iPhone app
 
-SwiftUI app for iPhone Duo (iOS 27.1), no web view and no relay server. It asks each
-service for usage directly from the phone, over Wi-Fi or cellular.
+SwiftUI app for iPhone Duo (iOS 27.1), no web view. It asks Claude Code, Codex and Cursor
+for usage directly from the phone, over Wi-Fi or cellular. Google Antigravity cannot sign in
+on a phone, so its figures are relayed by your Mac through your Worker (below).
 
 | Service | Sign-in (Settings › 帳號) | Shows |
 |---|---|---|
 | Codex | Device code, approved on OpenAI's page | 5 h / weekly windows, free-reset count when reported |
 | Claude Code | Claude's page, then paste the code it shows | 5 h / weekly windows, free-reset count when reported |
 | Cursor | Cursor's page; the app detects when sign-in finishes | Plan usage |
-| Google Antigravity | Not supported on the phone yet | — |
+| Google Antigravity | No phone sign-in. Settings › 帳號 › Mac 轉送: your Mac reads usage with CodexBar and uploads it to your Worker | Gemini Models, Claude and GPT models, Gemini 4 Argon (5 h / weekly), with the Mac's data time |
 
 Sign-in happens on each vendor's own page; the app never sees a password. Credentials stay
 in the Keychain and are renewed on the phone. None of these sign-in or usage endpoints is a
 documented public API, so a vendor change can break one service without affecting the others.
 A manual token field remains under Settings › 帳號 › 進階 as a fallback.
+
+## Google Antigravity through your Mac
+
+Google does not allow signing in to Antigravity from the phone. Instead:
+
+1. On the Mac, sign in to Antigravity and to CodexBar (its `codexbar` command must print Antigravity usage).
+2. Deploy the Worker (`npm run worker:deploy`) and set a write secret: `npx wrangler secret put SYNC_TOKEN`.
+3. Install the relay, which runs every 5 minutes while you are logged in:
+   `SYNC_TOKEN=<same secret> scripts/install-antigravity-relay-mac.sh` (remove with `--uninstall`).
+4. On the phone: Settings › 帳號 › Google Antigravity › Mac 轉送, confirm the Worker address.
+
+The relay uploads nothing when CodexBar has no measured quota (for example "Antigravity CSRF
+token not found" while Antigravity is restarting), so the phone never shows invented figures.
+Figures more than an hour old are marked 「Mac 超過 1 小時未轉送」 with their real time.
+Log: `~/Library/Logs/opentokenusage-antigravity-relay.log`.
 
 ## Using it
 
