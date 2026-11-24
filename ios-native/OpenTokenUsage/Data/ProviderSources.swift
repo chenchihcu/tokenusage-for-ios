@@ -36,10 +36,12 @@ enum Keychain {
     }
 }
 
-/// Providers the phone can ask directly, with the person's own account token.
+/// Providers the phone asks for usage. Claude Code, Codex and Cursor are asked directly with the
+/// person's own account token. Google Antigravity cannot sign in on a phone, so its figures come
+/// from the person's Worker, uploaded there by their Mac (`AntigravityRelay`).
 /// None of these usage endpoints is officially documented; each parser is lenient.
 enum DirectProvider: String, CaseIterable, Identifiable {
-    case claude, codex, cursor
+    case claude, codex, cursor, antigravity
 
     var id: String { rawValue }
 
@@ -48,14 +50,19 @@ enum DirectProvider: String, CaseIterable, Identifiable {
         case .claude: return "Claude Code"
         case .codex: return "Codex"
         case .cursor: return "Cursor"
+        case .antigravity: return "Google Antigravity"
         }
     }
+
+    /// Read from the person's Worker (relayed by their Mac) instead of the vendor.
+    var isRelayed: Bool { self == .antigravity }
 
     var tokenTitle: String {
         switch self {
         case .claude: return "Claude 存取權杖"
         case .codex: return "Codex 存取權杖"
         case .cursor: return "Cursor 工作階段 Cookie"
+        case .antigravity: return "Antigravity 轉送網址"
         }
     }
 
@@ -64,6 +71,7 @@ enum DirectProvider: String, CaseIterable, Identifiable {
         case .claude: return "電腦上 ~/.claude/.credentials.json 的 accessToken。"
         case .codex: return "電腦上 ~/.codex/auth.json 的 tokens.access_token。"
         case .cursor: return "瀏覽器登入 cursor.com 後，Cookie「WorkosCursorSessionToken」的值。"
+        case .antigravity: return "Mac 轉送用的 Worker 網址。"
         }
     }
 
@@ -72,7 +80,8 @@ enum DirectProvider: String, CaseIterable, Identifiable {
     var minimumInterval: TimeInterval {
         switch self {
         case .claude: return 300
-        case .codex, .cursor: return 60
+        // Antigravity is read from the person's own Worker, which the Mac updates every 5 minutes.
+        case .codex, .cursor, .antigravity: return 60
         }
     }
 
@@ -87,6 +96,7 @@ enum DirectProvider: String, CaseIterable, Identifiable {
         case .claude: return "會開啟 Claude 官方登入頁。登入後頁面會顯示一組授權碼，複製後回到這裡貼上。"
         case .codex: return "App 會顯示一組代碼，並開啟 OpenAI 官方頁面。在該頁登入並輸入代碼即可。"
         case .cursor: return "會開啟 Cursor 官方登入頁。登入並同意後，回到這裡會自動完成。"
+        case .antigravity: return "Google 不允許在手機登入 Antigravity，請改用 Mac 轉送。"
         }
     }
 
@@ -112,6 +122,10 @@ enum DirectProvider: String, CaseIterable, Identifiable {
                 value = "\(user)%3A%3A\(value)"
             }
             request.setValue(name + value, forHTTPHeaderField: "Cookie")
+        case .antigravity:
+            // The "token" is the Worker's address; a bad one fails as a network error.
+            request = URLRequest(url: AntigravityRelay.quotasURL(base: token)
+                                 ?? URL(string: "https://invalid.invalid/api/quotas")!)
         }
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
@@ -120,11 +134,13 @@ enum DirectProvider: String, CaseIterable, Identifiable {
     }
 
     func parse(_ data: Data, now: Date = Date()) -> ProviderQuota? {
+        if self == .antigravity { return AntigravityRelay.parse(data) }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         switch self {
         case .claude: return QuotaParser.claude(json, now: now)
         case .codex: return QuotaParser.codex(json, now: now)
         case .cursor: return QuotaParser.cursor(json, now: now)
+        case .antigravity: return nil
         }
     }
 }
@@ -287,6 +303,80 @@ enum QuotaParser {
         return nil
     }
 
+}
+
+/// Google Antigravity figures relayed by the person's Mac. Google does not allow signing in to
+/// Antigravity from the phone, so `scripts/relay-antigravity-mac.py` reads usage on the Mac
+/// (through CodexBar) and uploads one row to the Worker; this reads that row back.
+enum AntigravityRelay {
+    static let defaultBaseURL = "https://opentokenusage-web.chihfu-chen-tw.workers.dev"
+    /// Written by the Mac relay. Rows without it (database seeds, placeholders) are never shown.
+    static let sourceLabel = "來源"
+    static let sourceValue = "Mac 轉送（CodexBar）"
+    /// Relayed figures older than this say the Mac has stopped relaying.
+    static let staleAfter: TimeInterval = 3600
+
+    enum Reading: Equatable {
+        case quota(ProviderQuota)
+        /// The Worker answered, but holds no relayed Antigravity row.
+        case nothingRelayed
+        /// Not a Worker quota list at all.
+        case unreadable
+    }
+
+    /// `https://…`, or `http://` to this machine only (local testing). Path and query are dropped.
+    static func normalizedBase(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(), let host = components.host, !host.isEmpty else { return nil }
+        let local = ["localhost", "127.0.0.1", "::1"].contains(host.lowercased())
+        guard scheme == "https" || (scheme == "http" && local) else { return nil }
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
+        return components.string
+    }
+
+    static func quotasURL(base: String) -> URL? {
+        normalizedBase(base).flatMap { URL(string: $0 + "/api/quotas") }
+    }
+
+    static func parse(_ data: Data) -> ProviderQuota? {
+        if case .quota(let quota) = read(data) { return quota }
+        return nil
+    }
+
+    /// Rebuilds the row with the phone's own pool rules, keeping the Mac's data time.
+    static func read(_ data: Data) -> Reading {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              json["success"] as? Bool == true, let rows = json["data"] as? [[String: Any]] else { return .unreadable }
+        // Only this row is decoded, so another provider's incomplete row cannot hide it.
+        guard let raw = rows.first(where: { $0["provider_id"] as? String == DirectProvider.antigravity.rawValue }),
+              let rowData = try? JSONSerialization.data(withJSONObject: raw),
+              let row = try? JSONDecoder().decode(ProviderQuota.self, from: rowData),
+              row.metrics.contains(where: { $0.label == sourceLabel && $0.value == sourceValue }),
+              let dataDate = row.fetchedDate else { return .nothingRelayed }
+        let drafts = row.pools.compactMap { pool -> QuotaAssembly.PoolDraft? in
+            // A measured quota window always has a length; anything else is a placeholder.
+            let tiers = pool.tiers.compactMap { tier -> QuotaTier? in
+                guard let seconds = tier.windowSeconds, seconds > 0 else { return nil }
+                return QuotaAssembly.tier(id: tier.id, label: tier.label, used: tier.used,
+                                          resetsAt: tier.resetsAt, windowSeconds: seconds)
+            }
+            return tiers.isEmpty ? nil : QuotaAssembly.PoolDraft(id: pool.id, name: pool.name,
+                                                                description: pool.description, tiers: tiers)
+        }
+        guard !drafts.isEmpty else { return .nothingRelayed }
+        return .quota(QuotaAssembly.make(
+            id: DirectProvider.antigravity.rawValue, name: DirectProvider.antigravity.name,
+            plan: row.planName, pools: drafts,
+            metrics: [QuotaMetric(label: sourceLabel, value: sourceValue)], now: dataDate))
+    }
+
+    static func isStale(_ quota: ProviderQuota, now: Date = Date()) -> Bool {
+        guard let date = quota.fetchedDate else { return true }
+        return now.timeIntervalSince(date) > staleAfter
+    }
 }
 
 /// Reads several tokens pasted at once, in the labelled text the Mac helper writes:

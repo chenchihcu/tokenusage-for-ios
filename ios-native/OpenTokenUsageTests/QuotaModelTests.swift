@@ -432,3 +432,77 @@ final class WidgetAlignmentTests: XCTestCase {
         }
     }
 }
+
+/// Google Antigravity cannot sign in on the phone; its figures are relayed by the person's Mac.
+final class AntigravityRelayTests: XCTestCase {
+    /// `GET /api/quotas` after `scripts/relay-antigravity-mac.py` uploaded (its output, verbatim),
+    /// next to another provider's row with missing fields.
+    private let relayed = #"""
+    {"success": true, "data": [{"provider_id": "grok", "name": "Grok", "plan_name": null, "total_quota": 100, "used_quota": 0, "remaining_percent": 100, "reset_time": null, "status": "active", "fetched_at": null}, {"provider_id": "antigravity", "name": "Google Antigravity", "plan_name": "Google AI Pro", "total_quota": 100.0, "used_quota": 31.3, "remaining_percent": 68.7, "reset_time": "2026-11-20T17:55:53Z", "status": "active", "metrics_json": "[{\"label\": \"來源\", \"value\": \"Mac 轉送（CodexBar）\"}]", "token_pools_json": "[{\"id\": \"antigravity_gemini\", \"name\": \"Gemini Models\", \"description\": \"Gemini 模型共用這些限制。\", \"effectiveRemaining\": 68.7, \"effectiveUsed\": 31.3, \"primaryResetTime\": \"2026-11-20T17:55:53Z\", \"isCritical\": false, \"tiers\": [{\"id\": \"5h\", \"label\": \"5 小時\", \"used\": 31.3, \"limit\": 100.0, \"remaining\": 68.7, \"resetsAt\": \"2026-11-20T17:55:53Z\", \"windowSeconds\": 18000.0, \"isGoverning\": true}, {\"id\": \"weekly\", \"label\": \"每週\", \"used\": 17.8, \"limit\": 100.0, \"remaining\": 82.2, \"resetsAt\": \"2026-11-25T01:06:22Z\", \"windowSeconds\": 604800.0, \"isGoverning\": null}]}, {\"id\": \"antigravity_3p\", \"name\": \"Claude and GPT models\", \"description\": \"Claude 與 GPT 模型共用這些限制。\", \"effectiveRemaining\": 100.0, \"effectiveUsed\": 0.0, \"primaryResetTime\": \"2026-11-20T21:25:46Z\", \"isCritical\": false, \"tiers\": [{\"id\": \"5h\", \"label\": \"5 小時\", \"used\": 0.0, \"limit\": 100.0, \"remaining\": 100.0, \"resetsAt\": \"2026-11-20T21:25:46Z\", \"windowSeconds\": 18000.0, \"isGoverning\": true}, {\"id\": \"weekly\", \"label\": \"每週\", \"used\": 0.0, \"limit\": 100.0, \"remaining\": 100.0, \"resetsAt\": \"2026-11-27T16:25:46Z\", \"windowSeconds\": 604800.0, \"isGoverning\": null}]}, {\"id\": \"antigravity_gemini_argon_wtu\", \"name\": \"Gemini 4 Argon\", \"description\": null, \"effectiveRemaining\": 100.0, \"effectiveUsed\": 0.0, \"primaryResetTime\": \"2026-11-27T16:25:46Z\", \"isCritical\": false, \"tiers\": [{\"id\": \"weekly\", \"label\": \"每週\", \"used\": 0.0, \"limit\": 100.0, \"remaining\": 100.0, \"resetsAt\": \"2026-11-27T16:25:46Z\", \"windowSeconds\": 604800.0, \"isGoverning\": true}]}]", "fetched_at": "2026-11-20T16:25:46Z"}]}
+    """#
+
+    func testRelayedAntigravityKeepsTheMacsPoolsAndDataTime() throws {
+        let quota = try XCTUnwrap(DirectProvider.antigravity.parse(Data(relayed.utf8)))
+        XCTAssertEqual(quota.providerId, "antigravity")
+        XCTAssertEqual(quota.name, "Google Antigravity")
+        XCTAssertEqual(quota.planName, "Google AI Pro")
+        XCTAssertEqual(quota.pools.map(\.name), ["Gemini Models", "Claude and GPT models", "Gemini 4 Argon"])
+        XCTAssertEqual(quota.pools[0].tiers.map(\.id), ["5h", "weekly"])
+        XCTAssertEqual(quota.pools[0].tiers.map(\.windowSeconds), [18_000, 604_800])
+        XCTAssertEqual(quota.pools[0].tiers[0].isGoverning, true)
+        // Headline is the tightest pool, worked out on the phone like every other provider.
+        XCTAssertEqual(quota.remainingPercent, 68.7, accuracy: 0.0001)
+        XCTAssertEqual(quota.resetTime, "2026-11-20T17:55:53Z")
+        // The data time is the Mac's reading, not when the phone asked.
+        XCTAssertEqual(quota.fetchedDate, QuotaDate.parse("2026-11-20T16:25:46Z"))
+        XCTAssertEqual(quota.metrics.map(\.label), [AntigravityRelay.sourceLabel])
+        XCTAssertFalse(quota.reportsResetCredits)
+    }
+
+    func testAntigravityRowsNotFromTheRelayAreNeverShown() throws {
+        // The database's own seed row (migrations/0002) has no relay marker: never shown as real figures.
+        let seed = #"""
+        {"success":true,"data":[{"provider_id":"antigravity","name":"Google Antigravity","plan_name":"Google AI Pro",
+         "total_quota":100,"used_quota":8,"remaining_percent":92,"reset_time":"2026-10-30T23:29:29Z","status":"active",
+         "metrics_json":"[{\"label\":\"Session\",\"used\":8.0,\"limit\":100.0,\"kind\":\"percent\"}]",
+         "token_pools_json":"[{\"id\":\"gemini_models\",\"name\":\"Gemini Models\",\"effectiveRemaining\":31,\"effectiveUsed\":69,\"isCritical\":false,\"tiers\":[{\"id\":\"weekly\",\"label\":\"Weekly limit\",\"used\":69,\"limit\":100,\"remaining\":31}]}]",
+         "fetched_at":"2026-10-30T22:57:18.6093812Z"}]}
+        """#
+        XCTAssertEqual(AntigravityRelay.read(Data(seed.utf8)), .nothingRelayed)
+        XCTAssertNil(DirectProvider.antigravity.parse(Data(seed.utf8)))
+        XCTAssertEqual(AntigravityRelay.read(Data(#"{"success":true,"data":[]}"#.utf8)), .nothingRelayed)
+        // A relayed placeholder (CodexBar offline: no window length) is not a figure either.
+        let placeholder = #"""
+        {"success":true,"data":[{"provider_id":"antigravity","name":"Google Antigravity","plan_name":"offline",
+         "total_quota":100,"used_quota":0,"remaining_percent":100,"reset_time":"","status":"active",
+         "metrics_json":"[{\"label\": \"來源\", \"value\": \"Mac 轉送（CodexBar）\"}]",
+         "token_pools_json":"[{\"id\":\"antigravity_offline\",\"name\":\"Offline\",\"effectiveRemaining\":100,\"effectiveUsed\":0,\"isCritical\":false,\"tiers\":[{\"id\":\"conversations\",\"label\":\"用量\",\"used\":0,\"limit\":100,\"remaining\":100}]}]",
+         "fetched_at":"2026-11-24T05:54:47Z"}]}
+        """#
+        XCTAssertEqual(AntigravityRelay.read(Data(placeholder.utf8)), .nothingRelayed)
+        XCTAssertEqual(AntigravityRelay.read(Data(#"{"error":"nope"}"#.utf8)), .unreadable)
+        XCTAssertEqual(AntigravityRelay.read(Data("error code: 1042".utf8)), .unreadable)
+    }
+
+    func testRelayAddressMustBeHTTPSExceptOnThisMachine() {
+        XCTAssertEqual(AntigravityRelay.normalizedBase(" https://x.workers.dev/api/quotas?a=1 "), "https://x.workers.dev")
+        XCTAssertEqual(AntigravityRelay.normalizedBase("http://127.0.0.1:8787"), "http://127.0.0.1:8787")
+        XCTAssertNil(AntigravityRelay.normalizedBase("http://x.workers.dev"))
+        XCTAssertNil(AntigravityRelay.normalizedBase("x.workers.dev"))
+        XCTAssertNil(AntigravityRelay.normalizedBase(""))
+        XCTAssertEqual(DirectProvider.antigravity.request(token: "https://x.workers.dev/").url?.absoluteString,
+                       "https://x.workers.dev/api/quotas")
+        XCTAssertEqual(DirectProvider.antigravity.minimumInterval, 60)
+        XCTAssertTrue(DirectProvider.antigravity.isRelayed)
+        XCTAssertFalse(DirectProvider.allCases.filter { $0 != .antigravity }.contains(where: \.isRelayed))
+    }
+
+    func testRelayedFiguresGoStaleAfterAnHour() throws {
+        let quota = try XCTUnwrap(DirectProvider.antigravity.parse(Data(relayed.utf8)))
+        let data = try XCTUnwrap(quota.fetchedDate)
+        XCTAssertFalse(AntigravityRelay.isStale(quota, now: data.addingTimeInterval(59 * 60)))
+        XCTAssertTrue(AntigravityRelay.isStale(quota, now: data.addingTimeInterval(61 * 60)))
+        XCTAssertEqual(ProviderProblem.relayStale.message(retryAt: nil), "Mac 超過 1 小時未轉送")
+        XCTAssertEqual(QuotaClientError.relayEmpty.providerProblem, .relayEmpty)
+    }
+}

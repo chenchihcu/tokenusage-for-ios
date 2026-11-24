@@ -58,7 +58,7 @@ struct QuotaListView: View {
                 .padding(.vertical, 4)
             }
         }
-        if !store.alertsOnly {
+        if !store.alertsOnly, !store.missingProviders.isEmpty {
             Section {
                 ForEach(store.missingProviders) { provider in
                     Button {
@@ -71,11 +71,6 @@ struct QuotaListView: View {
                         }
                     }
                     .foregroundStyle(.primary)
-                }
-                LabeledContent {
-                    Text("暫不支援手機登入").foregroundStyle(.secondary)
-                } label: {
-                    VendorLabel(id: "antigravity", name: "Google Antigravity")
                 }
             } header: {
                 Text("未設定")
@@ -220,10 +215,14 @@ struct QuotaRow: View {
                     percentText
                 } else {
                     HStack(alignment: .firstTextBaseline) {
+                        // A long name ("Google Antigravity") keeps whole words in a narrow
+                        // column; the plan gives way and truncates instead.
                         Text(quota.name).font(.headline)
+                            .layoutPriority(1)
                         Text(quota.planName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                         Spacer(minLength: 8)
                         percentText
                     }

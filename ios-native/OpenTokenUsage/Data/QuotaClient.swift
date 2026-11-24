@@ -8,6 +8,8 @@ enum QuotaClientError: LocalizedError, Equatable {
     case notConfigured
     case unauthorized(provider: String)
     case rateLimited(provider: String)
+    /// The Worker answered, but the Mac has not relayed Antigravity figures to it.
+    case relayEmpty
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +20,7 @@ enum QuotaClientError: LocalizedError, Equatable {
         case .notConfigured: return "尚未登入任何服務"
         case .unauthorized(let provider): return "\(provider) 需要重新登入"
         case .rateLimited(let provider): return "\(provider) 暫時限制查詢"
+        case .relayEmpty: return "Mac 尚未轉送 Antigravity 資料"
         }
     }
 
@@ -27,6 +30,7 @@ enum QuotaClientError: LocalizedError, Equatable {
         case .notConfigured: return "到設定登入至少一個服務。"
         case .unauthorized: return "到設定重新登入這個服務。"
         case .rateLimited: return "稍後會自動再試，目前顯示上次的資料。"
+        case .relayEmpty: return "在 Mac 執行轉送程式，並確認 CodexBar 讀得到 Antigravity。"
         default: return "請稍後再試。"
         }
     }
@@ -42,6 +46,7 @@ extension QuotaClientError {
         case .offline: return .offline
         case .timedOut: return .timedOut
         case .server(let status): return .server(status)
+        case .relayEmpty: return .relayEmpty
         }
     }
 }
@@ -135,6 +140,9 @@ struct QuotaClient {
         }
         guard (200..<300).contains(http.statusCode) else {
             return .failure(.server(status: http.statusCode), retryAfter: nil)
+        }
+        if provider.isRelayed, AntigravityRelay.read(data) == .nothingRelayed {
+            return .failure(.relayEmpty, retryAfter: nil)
         }
         guard let quota = provider.parse(data) else { return .failure(.badResponse, retryAfter: nil) }
         return .success(quota)
