@@ -86,10 +86,7 @@ def push_to_edge(records):
     req = urllib.request.Request(
         REMOTE_API_URL,
         data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "User-Agent": "OpenTokenUsage-SyncDaemon/2.0"
-        },
+        headers=sync_core.upload_headers("OpenTokenUsage-SyncDaemon/2.0"),
         method="POST"
     )
     try:
