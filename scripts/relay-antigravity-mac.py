@@ -33,6 +33,9 @@ import urllib.error
 import urllib.request
 import urllib.parse
 
+RELAY_USER_AGENT = "OpenTokenUsage-antigravity-relay/1"
+CODEXBAR_TIMEOUT = 18
+UPLOAD_TIMEOUT = 12
 DEFAULT_SYNC_URL = "https://opentokenusage-web.chihfu-chen-tw.workers.dev/api/quotas/sync"
 TOKEN_FILE = os.path.expanduser("~/.config/opentokenusage/sync_token")
 CODEXBAR_CANDIDATES = (
@@ -227,7 +230,7 @@ def read_codexbar(binary, source=None):
     command = [binary, "usage", "--provider", "antigravity", "--format", "json"]
     if source:
         command += ["--source", source]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=90)
+    result = subprocess.run(command, capture_output=True, text=True, timeout=CODEXBAR_TIMEOUT)
     try:
         # A failed source still prints its reason as JSON on stdout (exit code 1).
         return json.loads(result.stdout)
@@ -291,10 +294,10 @@ def upload(record, url, token):
     body = json.dumps({"quotas": [record]}, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(url, data=body, method="POST")
     request.add_header("Content-Type", "application/json")
-    request.add_header("User-Agent", "OpenTokenUsage-antigravity-relay/1")
+    request.add_header("User-Agent", RELAY_USER_AGENT)
     if token:
         request.add_header("Authorization", "Bearer " + token)
-    with urllib.request.urlopen(request, timeout=20) as response:
+    with urllib.request.urlopen(request, timeout=UPLOAD_TIMEOUT) as response:
         return response.status, response.read().decode("utf-8", "replace")[:300]
 
 
@@ -312,7 +315,10 @@ def poll_refresh(url, token, state_path):
     requested = None
     if token:
         endpoint = urllib.parse.urljoin(url, "/api/antigravity/refresh")
-        request = urllib.request.Request(endpoint, headers={"Authorization": "Bearer " + token})
+        request = urllib.request.Request(endpoint, headers={
+            "Authorization": "Bearer " + token,
+            "User-Agent": RELAY_USER_AGENT,
+        })
         try:
             with urllib.request.urlopen(request, timeout=8) as response:
                 requested = json.load(response).get("requested_at")
