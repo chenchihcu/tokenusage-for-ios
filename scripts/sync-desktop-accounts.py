@@ -8,13 +8,35 @@ OpenTokenUsage 本機快取真實帳號同步腳本 (Desktop SSOT Sync) - 支援
 """
 
 import os
+import re
 import sys
 import json
+import math
 import urllib.request
 import urllib.error
 
 CACHE_PATH = os.path.expandvars(r"%APPDATA%\com.poweruserz.opentokenusage\usage-api-cache.json")
 REMOTE_API_URL = os.environ.get("SYNC_API_URL", "https://opentokenusage-web.chihfu-chen-tw.workers.dev/api/quotas/sync")
+
+# 所有數值只取自快取快照的 lines；缺少的數字或日期一律不補，整筆缺就不上傳該平台。
+
+# Google Antigravity 快照 lines 的標籤 (桌面端 OpenUsage AntigravityMetric) 與配額池對照。
+# 每個池只放快照裡真的有的週期；週期順序決定平手時由誰主導 (每週優先)。
+ANTIGRAVITY_POOLS = (
+    ("gemini_models", "Gemini Models", (
+        {"line": "Weekly", "id": "weekly", "label": "Weekly limit", "window": "每週", "metric": "Gemini (週)"},
+        {"line": "Session", "id": "5h", "label": "5h limit", "window": "5小時", "metric": "Gemini (5h)"},
+    )),
+    ("claude_gpt", "Claude and GPT models", (
+        {"line": "Claude Weekly", "id": "weekly", "label": "Weekly limit", "window": "每週", "metric": "Claude (週)"},
+        {"line": "Claude", "id": "5h", "label": "5h limit", "window": "5小時", "metric": "Claude (5h)"},
+    )),
+    ("gemini_4_argon", "Gemini 4 Argon", (
+        {"line": "Argon Weekly", "id": "weekly", "label": "Weekly limit", "window": "每週", "metric": "Argon"},
+    )),
+)
+# 次要實驗模型池：不參與平台主數值，避免 Argon 耗盡把整個平台顯示成 0%
+ANTIGRAVITY_SIDE_POOLS = {"gemini_4_argon"}
 
 def load_local_cache():
     if not os.path.exists(CACHE_PATH):
@@ -23,420 +45,366 @@ def load_local_cache():
     with open(CACHE_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def build_quota_records(cache_data):
-    if not cache_data or "snapshots" not in cache_data:
-        return []
-    
-    snapshots = cache_data["snapshots"]
-    results = []
+def _skip(provider, reason):
+    print(f"[略過] {provider}: {reason}，本次不上傳此平台", file=sys.stderr)
 
-    # 1. Cursor
-    if "cursor" in snapshots:
-        c = snapshots["cursor"]
-        lines = c.get("lines", [])
-        total_used = 100.0
-        resets_at = "2026-11-03T12:12:52.768Z"
-        metrics = []
+def _number(value):
+    """A finite JSON number, or None. Booleans and text are not usage figures."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    value = float(value)
+    return value if math.isfinite(value) else None
+
+def _percent_used(line):
+    """Used share of a progress line in percent, or None when the line lacks a usable used/limit pair."""
+    if not isinstance(line, dict):
+        return None
+    used = _number(line.get("used"))
+    limit = _number(line.get("limit"))
+    if used is None or limit is None or limit <= 0:
+        return None
+    return round(used / limit * 100.0, 2)
+
+def _remaining(used_pct):
+    return round(max(0.0, 100.0 - used_pct), 2)
+
+def _label(line):
+    value = line.get("label")
+    return value if isinstance(value, str) else ""
+
+def _reset_time(line):
+    value = line.get("resetsAt")
+    return value if isinstance(value, str) and value else None
+
+def _kind(line):
+    fmt = line.get("format")
+    kind = fmt.get("kind") if isinstance(fmt, dict) else None
+    return kind or "percent"
+
+def _governing_window(session, weekly):
+    """Tightest of the 5h and weekly windows, as (used %, resetsAt). On a tie the weekly window governs."""
+    windows = [w for w in (weekly, session) if w is not None]
+    return max(windows, key=lambda w: w[0]) if windows else None
+
+def _antigravity_pool(pool_id, name, tiers):
+    governing = min(tiers, key=lambda t: t["remaining"])
+    for t in tiers:
+        t["isGoverning"] = t is governing
+    return {
+        "id": pool_id,
+        "name": name,
+        "effectiveRemaining": governing["remaining"],
+        "effectiveUsed": max(t["used"] for t in tiers),
+        "primaryResetTime": governing["resetsAt"],
+        "isCritical": governing["remaining"] <= 5.0,
+        "tiers": tiers
+    }
+
+def _antigravity_record(c):
+    # 每個標籤取第一條有可用數值的 progress line
+    usable = {}
+    for l in c.get("lines") or []:
+        pct = _percent_used(l)
+        lbl = l.get("label") if isinstance(l, dict) else None
+        if pct is None or not isinstance(lbl, str) or not lbl or lbl in usable:
+            continue
+        usable[lbl] = (l, pct)
+
+    pools = []
+    metric_names = {}
+    for pool_id, pool_name, specs in ANTIGRAVITY_POOLS:
         tiers = []
-        for l in lines:
-            used_val = float(l.get("used", 0.0))
-            lbl = l.get("label", "")
+        for spec in specs:
+            metric_names[spec["line"]] = spec["metric"]
+            if spec["line"] not in usable:
+                continue
+            l, pct = usable[spec["line"]]
+            tiers.append({
+                "id": spec["id"],
+                "label": spec["label"],
+                "used": pct,
+                "limit": 100.0,
+                "remaining": _remaining(pct),
+                "resetsAt": _reset_time(l),
+                "resetDurationText": spec["window"]
+            })
+        if tiers:
+            pools.append(_antigravity_pool(pool_id, pool_name, tiers))
+
+    # 對照表以外的新標籤：各自成池，名稱沿用原標籤 (動態成池)
+    for lbl, (l, pct) in usable.items():
+        if lbl in metric_names:
+            continue
+        slug = re.sub(r"[^a-z0-9]+", "_", lbl.lower()).strip("_") or "pool"
+        pools.append(_antigravity_pool(f"antigravity_{slug}", lbl, [{
+            "id": "limit",
+            "label": lbl,
+            "used": pct,
+            "limit": 100.0,
+            "remaining": _remaining(pct),
+            "resetsAt": _reset_time(l),
+            "resetDurationText": None
+        }]))
+
+    if not pools:
+        return None
+
+    # 平台工作馬瓶頸：主力池 (Argon 以外) 中剩餘最少者；只有 Argon 時就用 Argon
+    main_pools = [p for p in pools if p["id"] not in ANTIGRAVITY_SIDE_POOLS] or pools
+    governing = min(main_pools, key=lambda p: p["effectiveRemaining"])
+    platform_remaining = governing["effectiveRemaining"]
+
+    metrics = [{
+        "label": metric_names.get(lbl, lbl),
+        "used": _number(l.get("used")),
+        "limit": _number(l.get("limit")),
+        "kind": _kind(l),
+        "isAlert": pct >= 90.0
+    } for lbl, (l, pct) in usable.items()]
+
+    return {
+        "provider_id": "antigravity",
+        "name": "Google Antigravity",
+        "plan_name": c.get("plan", "Google AI Pro"),
+        "total_quota": 100.0,
+        "used_quota": round(100.0 - platform_remaining, 2),
+        "remaining_percent": platform_remaining,
+        "reset_time": governing["primaryResetTime"],
+        "status": "active",
+        "metrics_json": json.dumps(metrics, ensure_ascii=False),
+        "token_pools_json": json.dumps(pools, ensure_ascii=False),
+        "fetched_at": c.get("fetchedAt", "")
+    }
+
+def _cursor_record(c):
+    total = None  # (used %, resetsAt) of the "Total usage" line
+    metrics = []
+    tiers = []
+    for l in c.get("lines") or []:
+        used_val = _percent_used(l)
+        if used_val is None:
+            continue
+        lbl = _label(l)
+        r_at = _reset_time(l)
+        metrics.append({
+            "label": lbl,
+            "used": _number(l.get("used")),
+            "limit": _number(l.get("limit")),
+            "kind": _kind(l),
+            "isAlert": used_val >= 90.0
+        })
+        tiers.append({
+            "id": lbl.lower().replace(" ", "_"),
+            "label": lbl,
+            "used": used_val,
+            "limit": 100.0,
+            "remaining": _remaining(used_val),
+            "resetsAt": r_at,
+            "resetDurationText": "週重置" if "Total" in lbl else "即時"
+        })
+        if lbl == "Total usage" and total is None:
+            total = (used_val, r_at)
+
+    if total is None:
+        return None
+    total_used, resets_at = total
+    remaining = _remaining(total_used)
+
+    pools = [{
+        "id": "cursor_main",
+        "name": "Composer & Agent",
+        "effectiveRemaining": remaining,
+        "effectiveUsed": total_used,
+        "primaryResetTime": resets_at,
+        "isCritical": remaining <= 5.0,
+        "tiers": tiers
+    }]
+
+    return {
+        "provider_id": "cursor",
+        "name": "Cursor",
+        "plan_name": c.get("plan", "Premium"),
+        "total_quota": 100.0,
+        "used_quota": total_used,
+        "remaining_percent": remaining,
+        "reset_time": resets_at,
+        "status": "active",
+        "metrics_json": json.dumps(metrics, ensure_ascii=False),
+        "token_pools_json": json.dumps(pools, ensure_ascii=False),
+        "fetched_at": c.get("fetchedAt", "")
+    }
+
+def _session_weekly_record(c, provider_id, name, default_plan, pool_id, pool_name, text_value=None):
+    """Codex and Claude Code: a 5h "Session" line and a "Weekly" line, governed by the tighter one."""
+    session = None  # (used %, resetsAt)
+    weekly = None
+    metrics = []
+    tiers = []
+    for l in c.get("lines") or []:
+        if not isinstance(l, dict):
+            continue
+        if l.get("type") == "progress":
+            used_val = _percent_used(l)
+            if used_val is None:
+                continue
+            lbl = _label(l)
+            r_at = _reset_time(l)
             metrics.append({
                 "label": lbl,
-                "used": used_val,
-                "limit": float(l.get("limit", 100.0)),
-                "kind": l.get("format", {}).get("kind", "percent"),
+                "used": _number(l.get("used")),
+                "limit": _number(l.get("limit")),
+                "kind": "percent",
                 "isAlert": used_val >= 90.0
             })
             tiers.append({
-                "id": lbl.lower().replace(" ", "_"),
-                "label": lbl,
+                "id": lbl.lower(),
+                "label": f"{lbl} limit",
                 "used": used_val,
                 "limit": 100.0,
-                "remaining": max(0.0, 100.0 - used_val),
-                "resetsAt": l.get("resetsAt", resets_at),
-                "resetDurationText": "週重置" if "Total" in lbl else "即時"
+                "remaining": _remaining(used_val),
+                "resetsAt": r_at,
+                "resetDurationText": "5小時" if lbl == "Session" else "每週"
             })
-            if lbl == "Total usage":
-                total_used = used_val
-                resets_at = l.get("resetsAt", resets_at)
-        
-        pools = [{
-            "id": "cursor_main",
-            "name": "Composer & Agent",
-            "effectiveRemaining": max(0.0, 100.0 - total_used),
-            "effectiveUsed": total_used,
-            "primaryResetTime": resets_at,
-            "isCritical": (100.0 - total_used) <= 5.0,
-            "tiers": tiers
-        }]
-        
-        results.append({
-            "provider_id": "cursor",
-            "name": "Cursor",
-            "plan_name": c.get("plan", "Premium"),
-            "total_quota": 100.0,
-            "used_quota": total_used,
-            "remaining_percent": max(0.0, 100.0 - total_used),
-            "reset_time": resets_at,
-            "status": "active",
-            "metrics_json": json.dumps(metrics, ensure_ascii=False),
-            "token_pools_json": json.dumps(pools, ensure_ascii=False),
-            "fetched_at": c.get("fetchedAt", "")
-        })
+            if lbl == "Session" and session is None:
+                session = (used_val, r_at)
+            elif lbl == "Weekly" and weekly is None:
+                weekly = (used_val, r_at)
+        elif l.get("type") == "text":
+            val = l.get("value", "")
+            metrics.append({
+                "label": l.get("label", ""),
+                "value": text_value(val) if text_value else val
+            })
 
-    # 2. Codex
-    if "codex" in snapshots:
-        c = snapshots["codex"]
-        lines = c.get("lines", [])
-        session_used = 0.0
-        weekly_used = 0.0
-        session_resets_at = None
-        weekly_resets_at = "2026-11-04T06:48:16.000Z"
-        metrics = []
-        tiers = []
-        for l in lines:
-            if l.get("type") == "progress":
-                used_val = float(l.get("used", 0.0))
-                lbl = l.get("label", "")
-                metrics.append({
-                    "label": lbl,
-                    "used": used_val,
-                    "limit": float(l.get("limit", 100.0)),
-                    "kind": "percent",
-                    "isAlert": used_val >= 90.0
-                })
-                r_at = l.get("resetsAt")
-                tiers.append({
-                    "id": lbl.lower(),
-                    "label": f"{lbl} limit",
-                    "used": used_val,
-                    "limit": 100.0,
-                    "remaining": max(0.0, 100.0 - used_val),
-                    "resetsAt": r_at,
-                    "resetDurationText": "5小時" if lbl == "Session" else "每週"
-                })
-                if lbl == "Session":
-                    session_used = used_val
-                    session_resets_at = r_at
-                elif lbl == "Weekly":
-                    weekly_used = used_val
-                    weekly_resets_at = r_at or weekly_resets_at
-            elif l.get("type") == "text":
-                val = l.get("value", "")
-                metrics.append({
-                    "label": l.get("label", ""),
-                    "value": val.replace("P", "•")
-                })
-        
-        # 最嚴格瓶頸優先 (Governing Bottleneck)
-        governing_used = max(session_used, weekly_used)
-        governing_remaining = max(0.0, 100.0 - governing_used)
-        primary_resets_at = weekly_resets_at if weekly_used >= session_used else (session_resets_at or weekly_resets_at)
-        
-        pools = [{
-            "id": "codex_standard",
-            "name": "ChatGPT Plus Quota",
-            "effectiveRemaining": governing_remaining,
-            "effectiveUsed": governing_used,
-            "primaryResetTime": primary_resets_at,
-            "isCritical": governing_remaining <= 5.0,
-            "tiers": tiers
-        }]
+    # 最嚴格瓶頸優先 (Governing Bottleneck)：只比較快照裡真的有的週期
+    governing = _governing_window(session, weekly)
+    if governing is None:
+        return None
+    governing_used, primary_resets_at = governing
+    governing_remaining = _remaining(governing_used)
 
-        results.append({
-            "provider_id": "codex",
-            "name": "Codex",
-            "plan_name": c.get("plan", "Plus"),
-            "total_quota": 100.0,
-            "used_quota": governing_used,
-            "remaining_percent": governing_remaining,
-            "reset_time": primary_resets_at,
-            "status": "active",
-            "metrics_json": json.dumps(metrics, ensure_ascii=False),
-            "token_pools_json": json.dumps(pools, ensure_ascii=False),
-            "fetched_at": c.get("fetchedAt", "")
-        })
+    pools = [{
+        "id": pool_id,
+        "name": pool_name,
+        "effectiveRemaining": governing_remaining,
+        "effectiveUsed": governing_used,
+        "primaryResetTime": primary_resets_at,
+        "isCritical": governing_remaining <= 5.0,
+        "tiers": tiers
+    }]
 
-    # 3. Google Antigravity (多配額池智能分組：Gemini Models, Claude & GPT, Gemini 4 Argon)
-    if "antigravity" in snapshots:
-        c = snapshots["antigravity"]
-        lines = c.get("lines", [])
-        
-        # 建立 3 大真實配額池結構 (對齊實機截圖)
-        # 1. Gemini Models
-        gemini_tiers = [
+    return {
+        "provider_id": provider_id,
+        "name": name,
+        "plan_name": c.get("plan", default_plan),
+        "total_quota": 100.0,
+        "used_quota": governing_used,
+        "remaining_percent": governing_remaining,
+        "reset_time": primary_resets_at,
+        "status": "active",
+        "metrics_json": json.dumps(metrics, ensure_ascii=False),
+        "token_pools_json": json.dumps(pools, ensure_ascii=False),
+        "fetched_at": c.get("fetchedAt", "")
+    }
+
+def _codex_text(value):
+    return value.replace("P", "•") if isinstance(value, str) else value
+
+def _grok_record(c):
+    weekly = None  # (used %, resetsAt) of the last progress line
+    metrics = []
+    for l in c.get("lines") or []:
+        if not isinstance(l, dict):
+            continue
+        if l.get("type") == "progress":
+            used_val = _percent_used(l)
+            if used_val is None:
+                continue
+            metrics.append({
+                "label": l.get("label", ""),
+                "used": _number(l.get("used")),
+                "limit": _number(l.get("limit")),
+                "kind": "percent",
+                "isAlert": used_val >= 90.0
+            })
+            weekly = (used_val, _reset_time(l))
+        elif l.get("type") == "badge":
+            metrics.append({
+                "label": l.get("label", ""),
+                "value": l.get("text", "")
+            })
+
+    if weekly is None:
+        return None
+    weekly_used, resets_at = weekly
+    remaining = _remaining(weekly_used)
+    metrics.append({
+        "label": "Bonded Sync",
+        "value": "Cursor Linked"
+    })
+
+    pools = [{
+        "id": "supergrok",
+        "name": "SuperGrok Quota",
+        "effectiveRemaining": remaining,
+        "effectiveUsed": weekly_used,
+        "primaryResetTime": resets_at,
+        "isCritical": remaining <= 5.0,
+        "tiers": [
             {
                 "id": "weekly",
                 "label": "Weekly limit",
-                "used": 69.0,
+                "used": weekly_used,
                 "limit": 100.0,
-                "remaining": 31.0,
-                "resetsAt": "2026-11-02T16:54:00Z",
-                "resetDurationText": "2d 9h",
-                "isGoverning": True
-            },
-            {
-                "id": "5h",
-                "label": "5h limit",
-                "used": 5.0,
-                "limit": 100.0,
-                "remaining": 95.0,
-                "resetsAt": "2026-10-31T12:31:00Z",
-                "resetDurationText": "4h 37m",
-                "isGoverning": False
+                "remaining": remaining,
+                "resetsAt": resets_at,
+                "resetDurationText": "每週"
             }
         ]
-        
-        # 2. Claude and GPT models
-        claude_tiers = [
-            {
-                "id": "weekly",
-                "label": "Weekly limit",
-                "used": 54.0,
-                "limit": 100.0,
-                "remaining": 46.0,
-                "resetsAt": "2026-11-02T16:54:00Z",
-                "resetDurationText": "2d 9h",
-                "isGoverning": True
-            },
-            {
-                "id": "5h",
-                "label": "5h limit",
-                "used": 0.0,
-                "limit": 100.0,
-                "remaining": 100.0,
-                "resetsAt": None,
-                "resetDurationText": "100% left",
-                "isGoverning": False
-            }
-        ]
+    }]
 
-        # 3. Gemini 4 Argon (完全耗盡 0% 剩餘)
-        argon_tiers = [
-            {
-                "id": "weekly",
-                "label": "Weekly limit",
-                "used": 100.0,
-                "limit": 100.0,
-                "remaining": 0.0,
-                "resetsAt": "2026-11-02T15:54:00Z",
-                "resetDurationText": "2d 8h",
-                "isGoverning": True
-            }
-        ]
+    return {
+        "provider_id": "grok",
+        "name": "Grok (bonded with Cursor)",
+        "plan_name": c.get("plan", "SuperGrok"),
+        "total_quota": 100.0,
+        "used_quota": weekly_used,
+        "remaining_percent": remaining,
+        "reset_time": resets_at,
+        "status": "active",
+        "metrics_json": json.dumps(metrics, ensure_ascii=False),
+        "token_pools_json": json.dumps(pools, ensure_ascii=False),
+        "fetched_at": c.get("fetchedAt", "")
+    }
 
-        # 若快照中有即時數值，進行動態校準
-        for l in lines:
-            lbl = l.get("label", "")
-            u_val = float(l.get("used", 0.0))
-            if lbl == "Session":
-                gemini_tiers[1]["used"] = u_val
-                gemini_tiers[1]["remaining"] = max(0.0, 100.0 - u_val)
-                if l.get("resetsAt"):
-                    gemini_tiers[1]["resetsAt"] = l.get("resetsAt")
-            elif lbl == "Claude":
-                claude_tiers[1]["used"] = u_val
-                claude_tiers[1]["remaining"] = max(0.0, 100.0 - u_val)
-            elif lbl == "Claude Weekly":
-                claude_tiers[0]["used"] = u_val
-                claude_tiers[0]["remaining"] = max(0.0, 100.0 - u_val)
-                if l.get("resetsAt"):
-                    claude_tiers[0]["resetsAt"] = l.get("resetsAt")
+# 上傳順序與各平台「沒有可用數據」時的略過原因
+PROVIDER_BUILDERS = (
+    ("cursor", _cursor_record, "快照沒有可用的 Total usage line"),
+    ("codex", lambda c: _session_weekly_record(c, "codex", "Codex", "Plus", "codex_standard", "ChatGPT Plus Quota", _codex_text),
+     "快照沒有可用的 Session／Weekly line"),
+    ("antigravity", _antigravity_record, "快照沒有可用的額度 lines"),
+    ("claude", lambda c: _session_weekly_record(c, "claude", "Claude Code", "Pro", "claude_pro", "Claude Pro Quota"),
+     "快照沒有可用的 Session／Weekly line"),
+    ("grok", _grok_record, "快照沒有可用的 progress line"),
+)
 
-        gemini_pool = {
-            "id": "gemini_models",
-            "name": "Gemini Models",
-            "effectiveRemaining": min(t["remaining"] for t in gemini_tiers),
-            "effectiveUsed": max(t["used"] for t in gemini_tiers),
-            "primaryResetTime": "2026-11-02T16:54:00Z",
-            "isCritical": min(t["remaining"] for t in gemini_tiers) <= 5.0,
-            "tiers": gemini_tiers
-        }
+def build_quota_records(cache_data):
+    if not cache_data or "snapshots" not in cache_data:
+        return []
+    snapshots = cache_data["snapshots"]
+    if not isinstance(snapshots, dict):
+        return []
 
-        claude_pool = {
-            "id": "claude_gpt",
-            "name": "Claude and GPT models",
-            "effectiveRemaining": min(t["remaining"] for t in claude_tiers),
-            "effectiveUsed": max(t["used"] for t in claude_tiers),
-            "primaryResetTime": "2026-11-02T16:54:00Z",
-            "isCritical": min(t["remaining"] for t in claude_tiers) <= 5.0,
-            "tiers": claude_tiers
-        }
-
-        argon_pool = {
-            "id": "gemini_4_argon",
-            "name": "Gemini 4 Argon",
-            "effectiveRemaining": 0.0,
-            "effectiveUsed": 100.0,
-            "primaryResetTime": "2026-11-02T15:54:00Z",
-            "isCritical": True,
-            "tiers": argon_tiers
-        }
-
-        antigravity_pools = [gemini_pool, claude_pool, argon_pool]
-
-        # 平台工作馬瓶頸演算法 (Workhorse Governing Bottleneck)：取日常主力模型 (Gemini 與 Claude) 之最小值
-        # 避免次要實驗模型 (Argon 0%) 誤殺整個平台造成 0% 報廢紅屏
-        workhorse_pools = [gemini_pool, claude_pool]
-        platform_remaining = min(p["effectiveRemaining"] for p in workhorse_pools)
-        platform_used = 100.0 - platform_remaining
-        platform_resets_at = "2026-11-02T16:54:00Z"
-
-        metrics = [
-            {"label": "Gemini (5h)", "used": gemini_tiers[1]["used"], "limit": 100.0, "kind": "percent"},
-            {"label": "Gemini (週)", "used": gemini_tiers[0]["used"], "limit": 100.0, "kind": "percent"},
-            {"label": "Claude (週)", "used": claude_tiers[0]["used"], "limit": 100.0, "kind": "percent"},
-            {"label": "Argon", "used": 100.0, "limit": 100.0, "kind": "percent", "isAlert": True}
-        ]
-
-        results.append({
-            "provider_id": "antigravity",
-            "name": "Google Antigravity",
-            "plan_name": c.get("plan", "Google AI Pro"),
-            "total_quota": 100.0,
-            "used_quota": platform_used,
-            "remaining_percent": platform_remaining,
-            "reset_time": platform_resets_at,
-            "status": "active",
-            "metrics_json": json.dumps(metrics, ensure_ascii=False),
-            "token_pools_json": json.dumps(antigravity_pools, ensure_ascii=False),
-            "fetched_at": c.get("fetchedAt", "")
-        })
-
-    # 4. Claude Code
-    if "claude" in snapshots:
-        c = snapshots["claude"]
-        lines = c.get("lines", [])
-        session_used = 0.0
-        weekly_used = 0.0
-        session_resets_at = None
-        weekly_resets_at = "2026-11-02T12:59:59.805Z"
-        metrics = []
-        tiers = []
-        for l in lines:
-            if l.get("type") == "progress":
-                used_val = float(l.get("used", 0.0))
-                lbl = l.get("label", "")
-                metrics.append({
-                    "label": lbl,
-                    "used": used_val,
-                    "limit": float(l.get("limit", 100.0)),
-                    "kind": "percent",
-                    "isAlert": used_val >= 90.0
-                })
-                r_at = l.get("resetsAt")
-                tiers.append({
-                    "id": lbl.lower(),
-                    "label": f"{lbl} limit",
-                    "used": used_val,
-                    "limit": 100.0,
-                    "remaining": max(0.0, 100.0 - used_val),
-                    "resetsAt": r_at,
-                    "resetDurationText": "5小時" if lbl == "Session" else "每週"
-                })
-                if lbl == "Session":
-                    session_used = used_val
-                    session_resets_at = r_at
-                elif lbl == "Weekly":
-                    weekly_used = used_val
-                    weekly_resets_at = r_at or weekly_resets_at
-            elif l.get("type") == "text":
-                metrics.append({
-                    "label": l.get("label", ""),
-                    "value": l.get("value", "")
-                })
-
-        governing_used = max(session_used, weekly_used)
-        governing_remaining = max(0.0, 100.0 - governing_used)
-        primary_resets_at = weekly_resets_at if weekly_used >= session_used else (session_resets_at or weekly_resets_at)
-
-        pools = [{
-            "id": "claude_pro",
-            "name": "Claude Pro Quota",
-            "effectiveRemaining": governing_remaining,
-            "effectiveUsed": governing_used,
-            "primaryResetTime": primary_resets_at,
-            "isCritical": governing_remaining <= 5.0,
-            "tiers": tiers
-        }]
-
-        results.append({
-            "provider_id": "claude",
-            "name": "Claude Code",
-            "plan_name": c.get("plan", "Pro"),
-            "total_quota": 100.0,
-            "used_quota": governing_used,
-            "remaining_percent": governing_remaining,
-            "reset_time": primary_resets_at,
-            "status": "active",
-            "metrics_json": json.dumps(metrics, ensure_ascii=False),
-            "token_pools_json": json.dumps(pools, ensure_ascii=False),
-            "fetched_at": c.get("fetchedAt", "")
-        })
-
-    # 5. Grok (bonded with Cursor)
-    if "grok" in snapshots:
-        c = snapshots["grok"]
-        lines = c.get("lines", [])
-        weekly_used = 100.0
-        resets_at = "2026-11-03T12:12:52.768Z"
-        metrics = []
-        for l in lines:
-            if l.get("type") == "progress":
-                metrics.append({
-                    "label": l.get("label", ""),
-                    "used": l.get("used", 100.0),
-                    "limit": l.get("limit", 100.0),
-                    "kind": "percent",
-                    "isAlert": True
-                })
-                weekly_used = l.get("used", 100.0)
-                resets_at = l.get("resetsAt", resets_at)
-            elif l.get("type") == "badge":
-                metrics.append({
-                    "label": l.get("label", ""),
-                    "value": l.get("text", "")
-                })
-        metrics.append({
-            "label": "Bonded Sync",
-            "value": "Cursor Linked"
-        })
-
-        pools = [{
-            "id": "supergrok",
-            "name": "SuperGrok Quota",
-            "effectiveRemaining": max(0.0, 100.0 - weekly_used),
-            "effectiveUsed": weekly_used,
-            "primaryResetTime": resets_at,
-            "isCritical": True,
-            "tiers": [
-                {
-                    "id": "weekly",
-                    "label": "Weekly limit",
-                    "used": weekly_used,
-                    "limit": 100.0,
-                    "remaining": max(0.0, 100.0 - weekly_used),
-                    "resetsAt": resets_at,
-                    "resetDurationText": "每週"
-                }
-            ]
-        }]
-
-        results.append({
-            "provider_id": "grok",
-            "name": "Grok (bonded with Cursor)",
-            "plan_name": c.get("plan", "SuperGrok"),
-            "total_quota": 100.0,
-            "used_quota": weekly_used,
-            "remaining_percent": max(0.0, 100.0 - weekly_used),
-            "reset_time": resets_at,
-            "status": "active",
-            "metrics_json": json.dumps(metrics, ensure_ascii=False),
-            "token_pools_json": json.dumps(pools, ensure_ascii=False),
-            "fetched_at": c.get("fetchedAt", "")
-        })
-
+    results = []
+    for provider_id, build, reason in PROVIDER_BUILDERS:
+        if provider_id not in snapshots:
+            continue
+        c = snapshots[provider_id] if isinstance(snapshots[provider_id], dict) else {}
+        record = build(c)
+        if record is None:
+            _skip(provider_id, reason)
+        else:
+            results.append(record)
     return results
 
 def main():
@@ -455,7 +423,7 @@ def main():
                 pools_info = f" | 配額池: {len(p_list)} 個 ({', '.join(p['name'] + ': ' + str(int(p['effectiveRemaining'])) + '%' for p in p_list)})"
             except:
                 pass
-        print(f"  • {q['name']} ({q['plan_name']}): 剩餘 {q['remaining_percent']}% | 重置: {q['reset_time']}{pools_info}")
+        print(f"  • {q['name']} ({q['plan_name']}): 剩餘 {q['remaining_percent']}% | 重置: {q['reset_time'] or '未知'}{pools_info}")
     
     # 若提供 API 網址，推播至邊緣服務
     if "--push" in sys.argv or os.environ.get("PUSH_TO_EDGE") == "true":
