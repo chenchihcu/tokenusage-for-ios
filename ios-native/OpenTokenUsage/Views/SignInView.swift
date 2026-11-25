@@ -206,6 +206,7 @@ struct SignInView: View {
 /// (`scripts/relay-antigravity-mac.py`) and the phone reads it from there. This sheet saves the
 /// Worker's address once it has answered with a quota list.
 struct RelaySetupView: View {
+    let onVerified: () async -> Void
     enum Check: Equatable {
         /// Saved; the Mac's latest figures are from this time.
         case relayed(Date)
