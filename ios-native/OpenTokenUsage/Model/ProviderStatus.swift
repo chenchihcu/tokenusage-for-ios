@@ -9,6 +9,10 @@ enum ProviderProblem: Codable, Equatable, Hashable {
     case offline
     case timedOut
     case server(Int)
+    /// Google Antigravity (relayed by the person's Mac): nothing relayed yet.
+    case relayEmpty
+    /// Google Antigravity: the Mac's latest figures are over an hour old.
+    case relayStale
 
     /// FR-4 wording. `retryAt` is only used for a rate limit.
     func message(retryAt: Date?, now: Date = Date()) -> String {
@@ -21,6 +25,8 @@ enum ProviderProblem: Codable, Equatable, Hashable {
         case .offline: return "沒有網路"
         case .timedOut: return "連線逾時"
         case .server(let code): return "服務暫時出錯（\(code)）"
+        case .relayEmpty: return "Mac 尚未轉送資料"
+        case .relayStale: return "Mac 超過 1 小時未轉送"
         }
     }
 }

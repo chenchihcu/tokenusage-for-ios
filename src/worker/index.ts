@@ -240,6 +240,18 @@ export const ACTIVE_FRONTIER_MODELS: ModelCatalogItem[] = [
 ];
 
 
+/** Constant-time check of `Authorization: Bearer <secret>` (hashing first equalises lengths). */
+async function bearerMatches(request: Request, secret: string): Promise<boolean> {
+  const header = request.headers.get('Authorization') ?? '';
+  const given = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  const encoder = new TextEncoder();
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(given)),
+    crypto.subtle.digest('SHA-256', encoder.encode(secret)),
+  ]);
+  return given.length > 0 && crypto.subtle.timingSafeEqual(a, b);
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -252,6 +264,37 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: securityHeaders });
+    }
+
+    if (url.pathname === '/api/antigravity/refresh' && ['GET', 'POST'].includes(request.method)) {
+      const js = (body: object, status = 200) => new Response(JSON.stringify(body), {
+        status,
+        headers: { ...securityHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      });
+      if (!env.ANTIGRAVITY_REFRESH_TOKEN || !env.SYNC_TOKEN || !env.DB) {
+        return js({ error: 'Refresh unavailable' }, 503);
+      }
+      const phone = request.method === 'POST';
+      const secret = phone ? env.ANTIGRAVITY_REFRESH_TOKEN : env.SYNC_TOKEN;
+      if (!(await bearerMatches(request, secret))) return js({ error: 'Unauthorized' }, 401);
+
+      try {
+        if (phone) {
+          const now = new Date();
+          const cutoff = new Date(now.getTime() - 60_000).toISOString();
+          await env.DB.prepare(`
+            INSERT INTO antigravity_refresh (singleton, requested_at) VALUES (1, ?)
+            ON CONFLICT(singleton) DO UPDATE SET requested_at = excluded.requested_at
+            WHERE antigravity_refresh.requested_at <= ?
+          `).bind(now.toISOString(), cutoff).run();
+        }
+        const row = await env.DB.prepare(
+          'SELECT requested_at FROM antigravity_refresh WHERE singleton = 1'
+        ).first<{ requested_at: string }>();
+        return js({ requested_at: row?.requested_at ?? null }, phone ? 202 : 200);
+      } catch {
+        return js({ error: 'Refresh unavailable' }, 503);
+      }
     }
 
     // 3. API 路由: 取得各 AI 平台額度清單 (GET /api/quotas)
@@ -297,6 +340,13 @@ export default {
 
     // 4. API 路由: 本機同步推播端點 (POST /api/quotas/sync)
     if (url.pathname === '/api/quotas/sync' && request.method === 'POST') {
+      // The phone shows whatever is stored here, so writes need the secret once it is set.
+      if (env.SYNC_TOKEN && !(await bearerMatches(request, env.SYNC_TOKEN))) {
+        return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...securityHeaders, 'Content-Type': 'application/json' }
+        });
+      }
       try {
         const payload = await request.json() as { quotas?: ProviderQuotaRecord[] };
         const items = payload.quotas || [];

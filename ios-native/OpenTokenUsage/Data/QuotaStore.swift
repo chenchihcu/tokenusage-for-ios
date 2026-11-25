@@ -179,7 +179,14 @@ final class QuotaStore {
     private func recordStatus(_ result: QuotaClient.Result, at now: Date) {
         guard !result.asked.isEmpty else { return }
         for provider in result.succeeded {
-            providerStatus[provider.rawValue] = ProviderStatus(lastSuccess: now, problem: nil, retryAt: nil)
+            var status = ProviderStatus(lastSuccess: now, problem: nil, retryAt: nil)
+            // Relayed figures are as old as the Mac's last upload, not this request.
+            if provider.isRelayed,
+               let quota = result.items.first(where: { $0.providerId == provider.rawValue }) {
+                status.lastSuccess = min(quota.fetchedDate ?? now, now)
+                if AntigravityRelay.isStale(quota, now: now) { status.problem = .relayStale }
+            }
+            providerStatus[provider.rawValue] = status
         }
         for (provider, error) in result.errors {
             var status = providerStatus[provider.rawValue] ?? ProviderStatus()

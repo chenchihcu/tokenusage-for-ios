@@ -18,6 +18,21 @@ import urllib.error
 CACHE_PATH = os.path.expandvars(r"%APPDATA%\com.poweruserz.opentokenusage\usage-api-cache.json")
 REMOTE_API_URL = os.environ.get("SYNC_API_URL", "https://opentokenusage-web.chihfu-chen-tw.workers.dev/api/quotas/sync")
 
+def upload_headers(user_agent):
+    headers = {"Content-Type": "application/json", "User-Agent": user_agent}
+    token = os.environ.get("SYNC_TOKEN", "").strip()
+    if not token:
+        try:
+            path = os.path.expanduser("~/.config/opentokenusage/sync_token")
+            with open(path, encoding="utf-8") as handle:
+                token = handle.read().strip()
+        except OSError:
+            pass
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    return headers
+
+
 # 所有數值只取自快取快照的 lines；缺少的數字或日期一律不補，整筆缺就不上傳該平台。
 
 # Google Antigravity 快照 lines 的標籤 (桌面端 OpenUsage AntigravityMetric) 與配額池對照。
@@ -432,10 +447,7 @@ def main():
             req = urllib.request.Request(
                 REMOTE_API_URL,
                 data=req_data,
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) OpenTokenUsage/2.0"
-                },
+                headers=upload_headers("Mozilla/5.0 (Windows NT 10.0; Win64; x64) OpenTokenUsage/2.0"),
                 method="POST"
             )
             with urllib.request.urlopen(req, timeout=10) as resp:

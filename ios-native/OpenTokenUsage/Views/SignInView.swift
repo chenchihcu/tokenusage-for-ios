@@ -65,6 +65,9 @@ final class SignInModel {
             task = Task {
                 await run { try await SignInService.cursorFinish(attempt) }
             }
+        case .antigravity:
+            // Settings opens RelaySetupView instead; there is no phone sign-in to start.
+            phase = .failed(provider.signInSummary)
         }
     }
 
@@ -195,6 +198,224 @@ struct SignInView: View {
     private var reopenSection: some View {
         Section {
             Button("重新開啟登入頁", systemImage: "safari") { model.start() }
+        }
+    }
+}
+
+/// Google Antigravity has no phone sign-in. The person's Mac relays its usage to their Worker
+/// (`scripts/relay-antigravity-mac.py`) and the phone reads it from there. This sheet saves the
+/// Worker's address once it has answered with a quota list.
+struct RelaySetupView: View {
+    let onVerified: () async -> Void
+    enum Check: Equatable {
+        /// Saved; the Mac's latest figures are from this time.
+        case relayed(Date)
+        /// Saved; the Worker answers but the Mac has not relayed anything yet.
+        case waitingForMac
+        /// Not saved.
+        case failed(String)
+    }
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var address = Keychain.get(DirectProvider.antigravity.keychainKey) ?? AntigravityRelay.defaultBaseURL
+    @State private var checking = false
+    @State private var check: Check?
+    @State private var refreshKey = ""
+    @State private var requesting = false
+    @State private var refreshMessage: String?
+    @State private var refreshTask: Task<Void, Never>?
+
+    private var saved: Bool {
+        switch check {
+        case .relayed, .waitingForMac: return true
+        default: return false
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Google 不允許在手機登入 Antigravity。改由你的 Mac 讀取用量（透過 CodexBar），每 5 分鐘上傳到你的 Worker，這支手機再從 Worker 讀取。")
+                    Text("Mac 關機或睡眠時不會更新；App 會標出資料是什麼時候的。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Section {
+                    TextField("https://…", text: $address)
+                        .keyboardType(.URL)
+                        .textContentType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    // Copied on the Mac, pasted here (Universal Clipboard). Same button as Claude's code.
+                    Button("貼上", systemImage: "doc.on.clipboard") {
+                        if let text = UIPasteboard.general.string {
+                            address = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                    }
+                } header: {
+                    Text("Worker 網址")
+                } footer: {
+                    Text("在 Mac 執行 scripts/install-antigravity-relay-mac.sh 後，Mac 會上傳到這個網址。")
+                }
+                Section {
+                    Button {
+                        Task { await verify() }
+                    } label: {
+                        if checking {
+                            HStack(spacing: 12) {
+                                ProgressView()
+                                Text("正在確認…")
+                            }
+                        } else {
+                            Text("確認並開啟")
+                        }
+                    }
+                    .disabled(checking || AntigravityRelay.normalizedBase(address) == nil)
+                }
+                if let base = AntigravityRelay.normalizedBase(address), base.hasPrefix("https://") {
+                    Section {
+                        SecureField("手機更新金鑰", text: $refreshKey)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button(requesting ? "等待 Mac 回覆…" : "請 Mac 立即更新") {
+                            refreshTask = Task { await requestRefresh(base: base) }
+                        }
+                        .disabled(requesting || checking || refreshKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        if let refreshMessage { Text(refreshMessage).font(.footnote) }
+                    } footer: {
+                        Text("Mac 必須開機、保持連線，並執行轉送程式。")
+                    }
+                    .task(id: base) {
+                        refreshKey = Keychain.get(Self.refreshKeyName(base)) ?? ""
+                        refreshMessage = nil
+                    }
+                }
+                if let check {
+                    Section { outcome(check) }
+                }
+            }
+            .navigationTitle("Antigravity 轉送")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(saved ? "完成" : "取消") { dismiss() }
+                }
+            }
+        }
+        .interactiveDismissDisabled(checking)
+        .onDisappear { refreshTask?.cancel() }
+    }
+
+    @ViewBuilder
+    private func outcome(_ check: Check) -> some View {
+        switch check {
+        case .relayed(let date):
+            Label {
+                Text("已開啟。Mac 上次轉送：\(date, style: .relative)前")
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+            }
+            .foregroundStyle(Color.statusGreen)
+        case .waitingForMac:
+            Label("已開啟。Worker 可以連線，但 Mac 還沒有轉送 Antigravity 資料。", systemImage: "clock.badge.exclamationmark")
+                .foregroundStyle(Color.statusOrange)
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.statusOrange)
+        }
+    }
+
+    private static func refreshKeyName(_ base: String) -> String {
+        "opentokenusage.antigravity.refresh:" + base
+    }
+
+    private func requestRefresh(base: String) async {
+        guard let url = URL(string: base + "/api/antigravity/refresh") else { return }
+        requesting = true
+        refreshMessage = nil
+        defer { requesting = false }
+        let key = refreshKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 12)
+            request.httpMethod = "POST"
+            request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
+            let (data, response) = try await URLSession.shared.data(for: request, delegate: NoRefreshRedirect())
+            switch (response as? HTTPURLResponse)?.statusCode {
+            case 202: break
+            case 401:
+                refreshMessage = "手機更新金鑰不正確。"
+                return
+            default:
+                refreshMessage = "Worker 尚未啟用立即更新。"
+                return
+            }
+
+            struct Ticket: Decodable { let requested_at: String }
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions.insert(.withFractionalSeconds)
+            guard let requested = formatter.date(from: try JSONDecoder().decode(Ticket.self, from: data).requested_at) else {
+                refreshMessage = "Worker 回傳的更新時間無法讀取。"
+                return
+            }
+            Keychain.set(key, for: Self.refreshKeyName(base))
+            let deadline = ContinuousClock.now + .seconds(75)
+            while ContinuousClock.now < deadline {
+                try await Task.sleep(for: .seconds(5))
+                let (snapshot, _) = try await URLSession.shared.data(for: DirectProvider.antigravity.request(token: base))
+                if let date = AntigravityRelay.parse(snapshot)?.fetchedDate, date >= requested {
+                    Keychain.set(base, for: DirectProvider.antigravity.keychainKey)
+                    check = .relayed(date)
+                    refreshMessage = "已收到新的額度資料。"
+                    await onVerified()
+                    return
+                }
+            }
+            refreshMessage = "尚未收到新資料。請確認 Mac 已開機並能讀取 Antigravity。"
+        } catch is CancellationError {
+            return
+        } catch {
+            refreshMessage = "無法連線到 Worker，請檢查網路後重試。"
+        }
+    }
+
+    private final class NoRefreshRedirect: NSObject, URLSessionTaskDelegate, Sendable {
+        func urlSession(_ session: URLSession, task: URLSessionTask,
+                        willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest,
+                        completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+            completionHandler(nil)
+        }
+    }
+
+    private func verify() async {
+        guard let base = AntigravityRelay.normalizedBase(address) else {
+            check = .failed("網址需要以 https:// 開頭。")
+            return
+        }
+        checking = true
+        defer { checking = false }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: DirectProvider.antigravity.request(token: base))
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200 else {
+                check = .failed("這個網址沒有回應額度資料（\(status)）。請確認網址正確、Worker 已部署。")
+                return
+            }
+            switch AntigravityRelay.read(data) {
+            case .quota(let quota):
+                Keychain.set(base, for: DirectProvider.antigravity.keychainKey)
+                address = base
+                check = .relayed(quota.fetchedDate ?? Date())
+            case .nothingRelayed:
+                Keychain.set(base, for: DirectProvider.antigravity.keychainKey)
+                address = base
+                check = .waitingForMac
+            case .unreadable:
+                check = .failed("這個網址不是 OpenTokenUsage 的 Worker。")
+            }
+        } catch {
+            check = .failed("無法連線到這個網址，請檢查網路與網址。")
         }
     }
 }

@@ -179,3 +179,13 @@ def test_script_has_no_hard_coded_dates_or_usage_figures():
     assert not re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", source)
     assert not re.search(r'"(used|remaining|effectiveRemaining|effectiveUsed)":\s*-?\d', source)
     assert not re.search(r"(total_used|weekly_used|session_used)\s*=\s*\d", source)
+
+def test_upload_key_resolution(monkeypatch, tmp_path):
+    token_path = tmp_path / "sync_token"
+    monkeypatch.setattr(sync.os.path, "expanduser", lambda _: str(token_path))
+    monkeypatch.delenv("SYNC_TOKEN", raising=False)
+    assert "Authorization" not in sync.upload_headers("test")
+    token_path.write_text(" file-key\n", encoding="utf-8")
+    assert sync.upload_headers("test")["Authorization"] == "Bearer file-key"
+    monkeypatch.setenv("SYNC_TOKEN", " environment-key ")
+    assert sync.upload_headers("test")["Authorization"] == "Bearer environment-key"

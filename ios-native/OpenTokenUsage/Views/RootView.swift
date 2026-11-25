@@ -33,7 +33,9 @@ struct RootView: View {
                 ModelCatalogView(store: store)
             }
             Tab("設定", systemImage: "gearshape", value: QuotaStore.Tab.settings) {
-                SettingsView(scrollToTopToken: store.scrollToTop[.settings, default: 0])
+                SettingsView(scrollToTopToken: store.scrollToTop[.settings, default: 0]) {
+                    await store.refresh(force: true)
+                }
                     // Sign-in or token changes take effect as soon as you leave Settings.
                     .onDisappear { Task { await store.refresh(force: true) } }
             }

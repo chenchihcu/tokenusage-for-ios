@@ -206,7 +206,7 @@ enum SignInService {
                 "scope": "openid profile email",
             ])
             return try self.credential(status: status, json: json, keepingRefresh: refresh)
-        case .cursor:
+        case .cursor, .antigravity:
             return nil
         }
     }

@@ -8,7 +8,7 @@
 |---|---|---|
 | **`ios-native/`** | **iPhone App（正式版）**：原生 SwiftUI，iPhone Duo / iOS 27.1；App 內登入各服務、直接用手機網路更新、免費重置通知、主畫面小工具 | GitHub Actions `build-ios.yml`（xcode-27）產生未簽名 `.ipa`，以免費 Apple ID 側載；見 [`ios-native/README.md`](ios-native/README.md) |
 | `src/` | 網站版（React）與 Cloudflare Worker API | `npm run build`、`npm run worker:deploy` |
-| `scripts/` | 電腦端同步腳本（只供網站版使用；iPhone App 不需要） | Python |
+| `scripts/` | 電腦端同步腳本：網站版資料，以及 iPhone App 的 Google Antigravity Mac 轉送（`relay-antigravity-mac.py`） | Python |
 | `docs/` | 計畫、規格、研究紀錄 | — |
 
 舊的 Capacitor 網頁外殼 App（`ios/`）已於 v1.4.0 移除，請只使用 `ios-native/`。
@@ -30,7 +30,7 @@
 
 已移除：Gemini Live 語音與麥克風權限、Grok、模型型錄、思維鏈預算滑桿。
 
-> **資料來源（網站版）**：Worker 的資料由電腦端 `scripts/sync-desktop-*.py` 上傳。iPhone App（`ios-native/`）不經過這條路徑，直接向各服務查詢。
+> **資料來源（網站版）**：Worker 的資料由電腦端 `scripts/sync-desktop-*.py` 上傳。iPhone App（`ios-native/`）直接向 Claude Code、Codex、Cursor 查詢；只有 Google Antigravity（手機無法登入）改讀 Mac 經 `scripts/relay-antigravity-mac.py` 上傳到 Worker 的資料。
 
 ---
 

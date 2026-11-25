@@ -4,6 +4,7 @@ import UIKit
 struct SettingsView: View {
     /// Changes when the 設定 tab is tapped again.
     var scrollToTopToken = 0
+    var refreshRelay: () async -> Void = {}
     @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
     @AppStorage(SettingsKey.haptics) private var haptics = true
     @AppStorage(SettingsKey.sampleData) private var sampleData = false
@@ -32,27 +33,27 @@ struct SettingsView: View {
                     ForEach(DirectProvider.allCases) { provider in
                         if signedIn.contains(provider) {
                             LabeledContent {
-                                Button("登出", role: .destructive) { signingOut = provider }
+                                if provider.isRelayed {
+                                    Button("檢查轉送") { signingIn = provider }
+                                    Button("停用", role: .destructive) { signingOut = provider }
+                                } else {
+                                    Button("登出", role: .destructive) { signingOut = provider }
+                                }
                             } label: {
                                 VendorLabel(id: provider.rawValue, name: provider.name)
                             }
                         } else {
                             LabeledContent {
-                                Button("登入") { signingIn = provider }
+                                Button(provider.isRelayed ? "Mac 轉送" : "登入") { signingIn = provider }
                             } label: {
                                 VendorLabel(id: provider.rawValue, name: provider.name)
                             }
                         }
                     }
-                    LabeledContent {
-                        Text("暫不支援手機登入").foregroundStyle(.secondary)
-                    } label: {
-                        VendorLabel(id: "antigravity", name: "Google Antigravity")
-                    }
                 } header: {
                     Text("帳號")
                 } footer: {
-                    Text("登入在各服務的官方頁面進行。這些登入方式並非官方公開介面，服務更新後可能失效。")
+                    Text("登入在各服務的官方頁面進行。這些登入方式並非官方公開介面，服務更新後可能失效。Google Antigravity 不能在手機登入，改由你的 Mac 讀取用量後經 Worker 轉送。")
                 }
 
                 Section {
@@ -62,7 +63,7 @@ struct SettingsView: View {
                         }
                     }
                 } footer: {
-                    Text("App 開啟時依此頻率更新。Claude Code 最快每 5 分鐘、Codex 與 Cursor 最快每 1 分鐘查詢一次，避免被服務拒絕。")
+                    Text("App 開啟時依此頻率更新。Claude Code 最快每 5 分鐘、Codex 與 Cursor 最快每 1 分鐘查詢一次，避免被服務拒絕。Antigravity 最快每 1 分鐘讀取 Worker，但只有 Mac 轉送後（約每 5 分鐘）數字才會變。")
                 }
 
                 Section {
@@ -125,7 +126,7 @@ struct SettingsView: View {
                         if let importMessage {
                             Text(importMessage).font(.footnote).foregroundStyle(.secondary)
                         }
-                        ForEach(DirectProvider.allCases) { provider in
+                        ForEach(DirectProvider.allCases.filter { !$0.isRelayed }) { provider in
                             SecureField(provider.tokenTitle, text: tokenBinding(provider))
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
@@ -138,11 +139,12 @@ struct SettingsView: View {
                 Section {
                     Toggle("示範資料", isOn: $sampleData)
                 } footer: {
-                    Text("登入憑證只存在這支手機的鑰匙圈，App 直接向各服務查詢用量，不經過任何中繼伺服器。開啟示範資料時不會連線，顯示的不是你的真實用量。")
+                    Text("登入憑證只存在這支手機的鑰匙圈，App 直接向 Claude Code、Codex 與 Cursor 查詢用量，不經過中繼伺服器；只有 Google Antigravity 是讀取你的 Mac 上傳到 Worker 的資料。開啟示範資料時不會連線，顯示的不是你的真實用量。")
                 }
 
                 Section {
                     LabeledContent("版本", value: AppSettings.versionText())
+                    LabeledContent("更新時間", value: AppSettings.buildTimestampText())
                 }
             }
             .scrollsToTop(on: scrollToTopToken)
@@ -161,14 +163,18 @@ struct SettingsView: View {
                 reloadSignedIn()
             }
             .sheet(item: $signingIn, onDismiss: reloadSignedIn) { provider in
-                SignInView(provider: provider)
+                if provider.isRelayed {
+                    RelaySetupView(onVerified: refreshRelay)
+                } else {
+                    SignInView(provider: provider)
+                }
             }
             .confirmationDialog(
-                "登出 \(signingOut?.name ?? "")？",
+                signingOut?.isRelayed == true ? "停用 \(signingOut?.name ?? "") 轉送？" : "登出 \(signingOut?.name ?? "")？",
                 isPresented: Binding(get: { signingOut != nil }, set: { if !$0 { signingOut = nil } }),
                 titleVisibility: .visible
             ) {
-                Button("登出", role: .destructive) {
+                Button(signingOut?.isRelayed == true ? "停用" : "登出", role: .destructive) {
                     if let provider = signingOut {
                         CredentialStore.delete(provider)
                         tokens[provider] = ""
@@ -177,7 +183,7 @@ struct SettingsView: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("這支手機會刪除此服務的登入憑證。")
+                Text(signingOut?.isRelayed == true ? "這支手機會停止讀取 Mac 轉送的資料。" : "這支手機會刪除此服務的登入憑證。")
             }
             .navigationTitle("設定")
         }
