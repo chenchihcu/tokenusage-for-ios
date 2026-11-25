@@ -257,14 +257,14 @@ def why_empty(entry):
 SOURCES = (None, "oauth")
 
 
-def read_live(read):
+def read_live(read, sources=SOURCES):
     """(record, reasons, read_failed) from the first CodexBar source with live quota.
 
     `read(source)` returns CodexBar's JSON for that source. read_failed is True only when no
     source could be read at all (as opposed to read with nothing to upload)."""
     reasons = []
     read_any = False
-    for source in SOURCES:
+    for source in sources:
         name = source or "default"
         try:
             entry = find_entry(read(source))
@@ -330,7 +330,7 @@ def poll_refresh(url, token, state_path):
     if not (due or pending):
         return 0
 
-    result = main([])
+    result = main(["--phone-request"] if pending else [])
     state["attempted_at"] = now
     if requested:
         state["attempted_request"] = requested
@@ -346,6 +346,7 @@ def main(argv=None):
     parser.add_argument("--dry-run", action="store_true", help="print the row instead of uploading")
     parser.add_argument("--from-file", help="read CodexBar JSON from this file instead of running CodexBar")
     parser.add_argument("--poll-state", help="check for phone refreshes and track scheduled attempts here")
+    parser.add_argument("--phone-request", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if args.poll_state:
         return poll_refresh(os.environ.get("SYNC_API_URL", DEFAULT_SYNC_URL), sync_token(), args.poll_state)
@@ -365,7 +366,9 @@ def main(argv=None):
         if not binary:
             print("%s CodexBar CLI not found; set CODEXBAR_BIN." % stamp, file=sys.stderr)
             return 1
-        record, reasons, read_failed = read_live(lambda source: read_codexbar(binary, source))
+        # The app source can take its full timeout while the OAuth source is responsive.
+        sources = ("oauth", None) if args.phone_request else SOURCES
+        record, reasons, read_failed = read_live(lambda source: read_codexbar(binary, source), sources)
 
     if record is None:
         if read_failed:
