@@ -225,6 +225,7 @@ class RefreshPollingTests(unittest.TestCase):
                     request = poll.call_args.args[0]
                     self.assertEqual(request.full_url, "https://example.com/api/antigravity/refresh")
                     self.assertEqual(request.get_header("Authorization"), "Bearer upload-key")
+                    self.assertEqual(request.get_header("User-agent"), relay.RELAY_USER_AGENT)
 
     def test_worker_outage_preserves_scheduled_measurement(self):
         from unittest.mock import patch
