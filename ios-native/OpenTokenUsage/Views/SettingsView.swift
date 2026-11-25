@@ -144,6 +144,11 @@ struct SettingsView: View {
                 Section {
                     LabeledContent("版本", value: AppSettings.versionText())
                 }
+
+                // TEMPORARY (spec-token-usage-codex-cursor.md §12, P1). Remove before release.
+                Section {
+                    NavigationLink("Cursor Token 測試（暫時）") { CursorTokenProbeView() }
+                }
             }
             .scrollsToTop(on: scrollToTopToken)
             .task {
