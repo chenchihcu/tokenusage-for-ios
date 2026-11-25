@@ -17,6 +17,7 @@ struct AnalyticsView: View {
             // Built once per update: one clock reading, pools decoded once per provider.
             let rows = paceRows(now: Date())
             List {
+                MainPageNavigation()
                 if !rows.isEmpty {
                     paceSections(rows)
                 }
@@ -34,6 +35,7 @@ struct AnalyticsView: View {
             .listStyle(.insetGrouped)
             .scrollsToTop(on: scrollToTopToken)
             .navigationTitle("用量分析")
+            .alignedMainPage()
         }
     }
 

@@ -1,9 +1,6 @@
 import SwiftUI
 
-/// The app's main pages in one standard tab bar (FR-39), so any page is one tap away and none
-/// needs a close button. On iPhone Duo the system places the bar for each display and pose
-/// (Apple HIG, Designing for iPhone Duo › Vertical controls); folding or unfolding keeps the
-/// current tab, the selected platform, the scroll position and any open sheet (FR-29).
+/// Keeps each main page’s navigation state when switching pages or folding the iPhone Duo.
 struct RootView: View {
     @Bindable var store: QuotaStore
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -38,6 +35,7 @@ struct RootView: View {
                     .onDisappear { Task { await store.refresh(force: true) } }
             }
         }
+        .environment(\.mainPageSelection, tabSelection)
         .sheet(item: $store.presentedSheet) { sheet in
             switch sheet {
             case .resets:
@@ -94,5 +92,44 @@ private struct QuotasSplitView: View {
                 store.selectedID = store.displayItems.first?.id
             }
         }
+    }
+}
+
+private struct MainPageSelectionKey: EnvironmentKey {
+    static let defaultValue: Binding<QuotaStore.Tab>? = nil
+}
+
+extension EnvironmentValues {
+    fileprivate var mainPageSelection: Binding<QuotaStore.Tab>? {
+        get { self[MainPageSelectionKey.self] }
+        set { self[MainPageSelectionKey.self] = newValue }
+    }
+}
+
+/// The same navigation row appears at the start of each main page.
+struct MainPageNavigation: View {
+    @Environment(\.mainPageSelection) private var selection
+
+    var body: some View {
+        if let selection {
+            Section {
+                Picker("頁面", selection: selection) {
+                    Label("額度", systemImage: "gauge.with.dots.needle.50percent").tag(QuotaStore.Tab.quotas)
+                    Label("用量分析", systemImage: "chart.xyaxis.line").tag(QuotaStore.Tab.analytics)
+                    Label("模型與費用", systemImage: "dollarsign.circle").tag(QuotaStore.Tab.catalog)
+                    Label("設定", systemImage: "gearshape").tag(QuotaStore.Tab.settings)
+                }
+                .pickerStyle(.menu)
+            }
+        }
+    }
+}
+
+extension View {
+    /// Shares the same title height and removes bar backgrounds on the main pages.
+    func alignedMainPage() -> some View {
+        navigationBarTitleDisplayMode(.inline)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+            .toolbarVisibility(.hidden, for: .tabBar)
     }
 }

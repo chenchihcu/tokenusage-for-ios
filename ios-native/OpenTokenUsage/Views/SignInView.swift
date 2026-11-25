@@ -176,6 +176,7 @@ struct SignInView: View {
             }
             .navigationTitle("登入 \(model.provider.name)")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(model.phase == .done ? "關閉" : "取消") {

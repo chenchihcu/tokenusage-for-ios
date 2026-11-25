@@ -29,6 +29,8 @@ struct CursorTokenProbeView: View {
             }
         }
         .navigationTitle("Cursor Token 測試")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
     }
 
     private func run() async {

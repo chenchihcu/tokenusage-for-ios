@@ -11,6 +11,7 @@ struct QuotaListView: View {
         List(selection: $store.selectedID) { sections }
             .listStyle(.insetGrouped)
             .navigationTitle("額度")
+            .alignedMainPage()
             .toolbar {
                 // Fast path (FR-17/18): standard toolbar items, never a custom bar. On iPhone Duo
                 // the system puts them on the vertical bar beside the outer camera, and on the
@@ -35,6 +36,7 @@ struct QuotaListView: View {
 
     @ViewBuilder
     private var sections: some View {
+        MainPageNavigation()
         if case .failed(let error) = store.state, error != .notConfigured {
             Section {
                 ProblemBanner(error: error, hasData: !store.items.isEmpty) {
@@ -378,6 +380,7 @@ struct ResetsView: View {
             }
             .navigationTitle("免費重置與重置時間")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }

@@ -27,6 +27,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                MainPageNavigation()
                 // Signing in is what makes the app useful, so it comes first.
                 Section {
                     ForEach(DirectProvider.allCases) { provider in
@@ -143,6 +144,7 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("版本", value: AppSettings.versionText())
+                    LabeledContent("更新時間", value: AppSettings.buildTimestampText())
                 }
 
                 // TEMPORARY (spec-token-usage-codex-cursor.md §12, P1). Remove before release.
@@ -185,6 +187,7 @@ struct SettingsView: View {
                 Text("這支手機會刪除此服務的登入憑證。")
             }
             .navigationTitle("設定")
+            .alignedMainPage()
         }
     }
 }

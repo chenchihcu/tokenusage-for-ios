@@ -15,6 +15,7 @@ struct ModelCatalogView: View {
     var body: some View {
         NavigationStack {
             List {
+                MainPageNavigation()
                 statusSection
                 if catalog.showsChanges() {
                     changesSection
@@ -26,6 +27,7 @@ struct ModelCatalogView: View {
             .scrollsToTop(on: store.scrollToTop[.catalog, default: 0])
             .searchable(text: $search, prompt: "搜尋模型")
             .navigationTitle("模型與費用")
+            .alignedMainPage()
             .overlay {
                 if catalog.models.isEmpty {
                     if store.isUpdatingCatalog {
