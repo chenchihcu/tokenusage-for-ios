@@ -221,11 +221,22 @@ class RefreshPollingTests(unittest.TestCase):
                 with patch.object(relay.urllib.request, "urlopen", side_effect=[io.BytesIO(ticket), io.BytesIO(ticket)]) as poll:
                     self.assertEqual(relay.poll_refresh(url, "upload-key", state), 0)
                     self.assertEqual(relay.poll_refresh(url, "upload-key", state), 0)
-                    measure.assert_called_once_with([])
+                    measure.assert_called_once_with(["--phone-request"])
                     request = poll.call_args.args[0]
                     self.assertEqual(request.full_url, "https://example.com/api/antigravity/refresh")
                     self.assertEqual(request.get_header("Authorization"), "Bearer upload-key")
                     self.assertEqual(request.get_header("User-agent"), relay.RELAY_USER_AGENT)
+
+    def test_phone_refresh_prioritizes_oauth_and_keeps_fallback(self):
+        sources = []
+
+        def read(source):
+            sources.append(source)
+            return CODEXBAR_OUTPUT if source is None else []
+
+        record, _, _ = relay.read_live(read, ("oauth", None))
+        self.assertIsNotNone(record)
+        self.assertEqual(sources, ["oauth", None])
 
     def test_worker_outage_preserves_scheduled_measurement(self):
         from unittest.mock import patch
