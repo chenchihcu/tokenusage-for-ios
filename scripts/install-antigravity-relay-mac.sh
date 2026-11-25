@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs relay-antigravity-mac.py every 5 minutes while you are logged in to this Mac.
+# Checks for phone refreshes and uploads at least every five minutes while logged in.
 #
 #   scripts/install-antigravity-relay-mac.sh              install or update
 #   scripts/install-antigravity-relay-mac.sh --uninstall  remove
@@ -7,7 +7,7 @@
 # Optional environment when installing:
 #   SYNC_API_URL  upload endpoint (default: the project's Worker)
 #   SYNC_TOKEN    Worker write secret; saved to ~/.config/opentokenusage/sync_token (mode 600)
-#   INTERVAL      seconds between runs (default 300)
+#   INTERVAL      seconds between refresh checks (default 20)
 #
 # The script is copied to ~/Library/Application Support/OpenTokenUsage because launchd jobs
 # cannot read files in ~/Downloads, ~/Documents or ~/Desktop without extra privacy approval.
@@ -61,12 +61,14 @@ cat > "$PLIST" <<EOF
   <array>
     <string>/usr/bin/python3</string>
     <string>$SCRIPT</string>
+    <string>--poll-state</string>
+    <string>$APP_DIR/antigravity-refresh-state.json</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
 $ENV_ENTRIES
   </dict>
-  <key>StartInterval</key><integer>${INTERVAL:-300}</integer>
+  <key>StartInterval</key><integer>${INTERVAL:-20}</integer>
   <key>RunAtLoad</key><true/>
   <key>ProcessType</key><string>Background</string>
   <key>StandardOutPath</key><string>$LOG</string>
@@ -77,4 +79,4 @@ EOF
 
 launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
 launchctl bootstrap "$DOMAIN" "$PLIST"
-echo "Installed $LABEL: every ${INTERVAL:-300} s while you are logged in. Log: $LOG"
+echo "Installed $LABEL: every ${INTERVAL:-20} s while you are logged in. Log: $LOG"

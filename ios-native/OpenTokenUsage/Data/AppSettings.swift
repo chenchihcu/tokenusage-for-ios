@@ -30,6 +30,16 @@ enum AppSettings {
         return "\(version) (\(build))"
     }
 
+    /// Reads the UTC timestamp embedded by Xcode and formats it using the phone’s locale.
+    static func buildTimestampText(_ bundle: Bundle = .main) -> String {
+        guard let url = bundle.url(forResource: "BuildTimestamp", withExtension: "txt"),
+              let value = try? String(contentsOf: url, encoding: .utf8),
+              let date = ISO8601DateFormatter().date(from: value.trimmingCharacters(in: .whitespacesAndNewlines))
+        else { return "—" }
+
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
     /// Settings.bundle can't read the bundle version itself, so the app writes it on every launch.
     static func publishVersion(bundle: Bundle = .main, defaults: UserDefaults = .standard) {
         defaults.set(versionText(bundle), forKey: SettingsKey.appVersion)

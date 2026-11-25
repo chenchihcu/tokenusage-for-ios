@@ -219,6 +219,10 @@ struct RelaySetupView: View {
     @State private var address = Keychain.get(DirectProvider.antigravity.keychainKey) ?? AntigravityRelay.defaultBaseURL
     @State private var checking = false
     @State private var check: Check?
+    @State private var refreshKey = ""
+    @State private var requesting = false
+    @State private var refreshMessage: String?
+    @State private var refreshTask: Task<Void, Never>?
 
     private var saved: Bool {
         switch check {
@@ -268,6 +272,24 @@ struct RelaySetupView: View {
                     }
                     .disabled(checking || AntigravityRelay.normalizedBase(address) == nil)
                 }
+                if let base = AntigravityRelay.normalizedBase(address), base.hasPrefix("https://") {
+                    Section {
+                        SecureField("手機更新金鑰", text: $refreshKey)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button(requesting ? "等待 Mac 回覆…" : "請 Mac 立即更新") {
+                            refreshTask = Task { await requestRefresh(base: base) }
+                        }
+                        .disabled(requesting || checking || refreshKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        if let refreshMessage { Text(refreshMessage).font(.footnote) }
+                    } footer: {
+                        Text("Mac 必須開機、保持連線，並執行轉送程式。")
+                    }
+                    .task(id: base) {
+                        refreshKey = Keychain.get(Self.refreshKeyName(base)) ?? ""
+                        refreshMessage = nil
+                    }
+                }
                 if let check {
                     Section { outcome(check) }
                 }
@@ -281,6 +303,7 @@ struct RelaySetupView: View {
             }
         }
         .interactiveDismissDisabled(checking)
+        .onDisappear { refreshTask?.cancel() }
     }
 
     @ViewBuilder
@@ -299,6 +322,68 @@ struct RelaySetupView: View {
         case .failed(let message):
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(Color.statusOrange)
+        }
+    }
+
+    private static func refreshKeyName(_ base: String) -> String {
+        "opentokenusage.antigravity.refresh:" + base
+    }
+
+    private func requestRefresh(base: String) async {
+        guard let url = URL(string: base + "/api/antigravity/refresh") else { return }
+        requesting = true
+        refreshMessage = nil
+        defer { requesting = false }
+        let key = refreshKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 12)
+            request.httpMethod = "POST"
+            request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization")
+            let (data, response) = try await URLSession.shared.data(for: request, delegate: NoRefreshRedirect())
+            switch (response as? HTTPURLResponse)?.statusCode {
+            case 202: break
+            case 401:
+                refreshMessage = "手機更新金鑰不正確。"
+                return
+            default:
+                refreshMessage = "Worker 尚未啟用立即更新。"
+                return
+            }
+
+            struct Ticket: Decodable { let requested_at: String }
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions.insert(.withFractionalSeconds)
+            guard let requested = formatter.date(from: try JSONDecoder().decode(Ticket.self, from: data).requested_at) else {
+                refreshMessage = "Worker 回傳的更新時間無法讀取。"
+                return
+            }
+            Keychain.set(key, for: Self.refreshKeyName(base))
+            let deadline = ContinuousClock.now + .seconds(75)
+            while ContinuousClock.now < deadline {
+                try await Task.sleep(for: .seconds(5))
+                let (snapshot, _) = try await URLSession.shared.data(for: DirectProvider.antigravity.request(token: base))
+                if let date = AntigravityRelay.parse(snapshot)?.fetchedDate, date >= requested {
+                    Keychain.set(base, for: DirectProvider.antigravity.keychainKey)
+                    check = .relayed(date)
+                    refreshMessage = "已收到新的額度資料。"
+                    await onVerified()
+                    return
+                }
+            }
+            refreshMessage = "尚未收到新資料。請確認 Mac 已開機並能讀取 Antigravity。"
+        } catch is CancellationError {
+            return
+        } catch {
+            refreshMessage = "無法連線到 Worker，請檢查網路後重試。"
+        }
+    }
+
+    private final class NoRefreshRedirect: NSObject, URLSessionTaskDelegate, Sendable {
+        func urlSession(_ session: URLSession, task: URLSessionTask,
+                        willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest,
+                        completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+            completionHandler(nil)
         }
     }
 

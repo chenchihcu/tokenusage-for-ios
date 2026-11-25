@@ -4,6 +4,13 @@ import XCTest
 /// Every release: the version and the settings shown in the iOS Settings app (Settings.bundle)
 /// must match the app itself. These tests fail when one side is changed without the other.
 final class SettingsAlignmentTests: XCTestCase {
+    func testBuildTimestampIsEmbeddedAndDisplayed() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "BuildTimestamp", withExtension: "txt"))
+        let value = try String(contentsOf: url, encoding: .utf8)
+        let date = try XCTUnwrap(ISO8601DateFormatter().date(from: value.trimmingCharacters(in: .whitespacesAndNewlines)))
+        XCTAssertEqual(AppSettings.buildTimestampText(), date.formatted(date: .abbreviated, time: .shortened))
+    }
+
     private var rootPlist: [[String: Any]] {
         guard let url = Bundle.main.url(forResource: "Root", withExtension: "plist", subdirectory: "Settings.bundle"),
               let data = try? Data(contentsOf: url),

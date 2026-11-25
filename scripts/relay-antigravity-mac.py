@@ -31,6 +31,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+import urllib.parse
 
 DEFAULT_SYNC_URL = "https://opentokenusage-web.chihfu-chen-tw.workers.dev/api/quotas/sync"
 TOKEN_FILE = os.path.expanduser("~/.config/opentokenusage/sync_token")
@@ -222,14 +223,57 @@ def find_codexbar():
     return None
 
 
-def read_codexbar(binary):
-    result = subprocess.run(
-        [binary, "usage", "--provider", "antigravity", "--format", "json"],
-        capture_output=True, text=True, timeout=90,
-    )
-    if result.returncode != 0:
-        raise RuntimeError("CodexBar exited %d: %s" % (result.returncode, result.stderr.strip()[-300:]))
-    return json.loads(result.stdout)
+def read_codexbar(binary, source=None):
+    command = [binary, "usage", "--provider", "antigravity", "--format", "json"]
+    if source:
+        command += ["--source", source]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=90)
+    try:
+        # A failed source still prints its reason as JSON on stdout (exit code 1).
+        return json.loads(result.stdout)
+    except ValueError:
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()[-300:]
+            raise RuntimeError("CodexBar exited %d: %s" % (result.returncode, detail))
+        raise
+
+
+def why_empty(entry):
+    """CodexBar's own reason for having no quota, without inventing one."""
+    entry = entry if isinstance(entry, dict) else {}
+    error = entry.get("error")
+    if isinstance(error, dict) and error.get("message"):
+        return str(error["message"])
+    return entry.get("diagnostic") or "no measured Antigravity quota windows"
+
+
+# CodexBar's default source reads the running Antigravity app. Antigravity 2.34 no longer
+# passes the token that reading needs (CodexBar issue #5164), so when the default source has
+# no live quota, try CodexBar's OAuth source, which works after signing in to Antigravity in
+# CodexBar.
+SOURCES = (None, "oauth")
+
+
+def read_live(read):
+    """(record, reasons, read_failed) from the first CodexBar source with live quota.
+
+    `read(source)` returns CodexBar's JSON for that source. read_failed is True only when no
+    source could be read at all (as opposed to read with nothing to upload)."""
+    reasons = []
+    read_any = False
+    for source in SOURCES:
+        name = source or "default"
+        try:
+            entry = find_entry(read(source))
+        except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
+            reasons.append("%s: %s" % (name, error))
+            continue
+        read_any = True
+        record = build_record(entry)
+        if record is not None:
+            return record, [], False
+        reasons.append("%s: %s" % (name, why_empty(entry)))
+    return None, reasons, not read_any
 
 
 def sync_token():
@@ -254,32 +298,74 @@ def upload(record, url, token):
         return response.status, response.read().decode("utf-8", "replace")[:300]
 
 
+def poll_refresh(url, token, state_path):
+    """Check for a queued phone request and retain the five-minute upload cadence."""
+    import time
+    import tempfile
+
+    try:
+        with open(state_path, encoding="utf-8") as handle:
+            state = json.load(handle)
+    except (OSError, ValueError):
+        state = {}
+    now = time.time()
+    requested = None
+    if token:
+        endpoint = urllib.parse.urljoin(url, "/api/antigravity/refresh")
+        request = urllib.request.Request(endpoint, headers={"Authorization": "Bearer " + token})
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                requested = json.load(response).get("requested_at")
+        except (OSError, ValueError):
+            # Keep scheduled uploads running when the refresh endpoint is unavailable.
+            pass
+    due = now - state.get("attempted_at", 0) >= 300
+    pending = requested and requested != state.get("attempted_request")
+    if not (due or pending):
+        return 0
+
+    result = main([])
+    state["attempted_at"] = now
+    if requested:
+        state["attempted_request"] = requested
+    directory = os.path.dirname(os.path.abspath(state_path))
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=directory, delete=False) as handle:
+        json.dump(state, handle)
+    os.replace(handle.name, state_path)
+    return result
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Relay Antigravity usage to the OpenTokenUsage Worker.")
     parser.add_argument("--dry-run", action="store_true", help="print the row instead of uploading")
     parser.add_argument("--from-file", help="read CodexBar JSON from this file instead of running CodexBar")
+    parser.add_argument("--poll-state", help="check for phone refreshes and track scheduled attempts here")
     args = parser.parse_args(argv)
+    if args.poll_state:
+        return poll_refresh(os.environ.get("SYNC_API_URL", DEFAULT_SYNC_URL), sync_token(), args.poll_state)
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    try:
-        if args.from_file:
+    if args.from_file:
+        try:
             with open(args.from_file, "r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-        else:
-            binary = find_codexbar()
-            if not binary:
-                print("%s CodexBar CLI not found; set CODEXBAR_BIN." % stamp, file=sys.stderr)
-                return 1
-            payload = read_codexbar(binary)
-    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
-        print("%s Could not read CodexBar: %s" % (stamp, error), file=sys.stderr)
-        return 1
+                entry = find_entry(json.load(handle))
+        except (OSError, ValueError) as error:
+            print("%s Could not read %s: %s" % (stamp, args.from_file, error), file=sys.stderr)
+            return 1
+        record = build_record(entry)
+        reasons, read_failed = ([] if record else [why_empty(entry)]), False
+    else:
+        binary = find_codexbar()
+        if not binary:
+            print("%s CodexBar CLI not found; set CODEXBAR_BIN." % stamp, file=sys.stderr)
+            return 1
+        record, reasons, read_failed = read_live(lambda source: read_codexbar(binary, source))
 
-    entry = find_entry(payload)
-    record = build_record(entry)
     if record is None:
-        why = (entry or {}).get("diagnostic") or "no measured Antigravity quota windows"
-        print("%s Nothing uploaded: %s" % (stamp, why), file=sys.stderr)
+        if read_failed:
+            print("%s Could not read CodexBar: %s" % (stamp, "; ".join(reasons)), file=sys.stderr)
+            return 1
+        print("%s Nothing uploaded: %s" % (stamp, "; ".join(reasons)), file=sys.stderr)
         return 2
 
     if args.dry_run:

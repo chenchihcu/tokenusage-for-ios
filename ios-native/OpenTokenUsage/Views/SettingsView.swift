@@ -4,6 +4,7 @@ import UIKit
 struct SettingsView: View {
     /// Changes when the 設定 tab is tapped again.
     var scrollToTopToken = 0
+    var refreshRelay: () async -> Void = {}
     @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
     @AppStorage(SettingsKey.haptics) private var haptics = true
     @AppStorage(SettingsKey.sampleData) private var sampleData = false
@@ -32,7 +33,12 @@ struct SettingsView: View {
                     ForEach(DirectProvider.allCases) { provider in
                         if signedIn.contains(provider) {
                             LabeledContent {
-                                Button(provider.isRelayed ? "停用" : "登出", role: .destructive) { signingOut = provider }
+                                if provider.isRelayed {
+                                    Button("檢查轉送") { signingIn = provider }
+                                    Button("停用", role: .destructive) { signingOut = provider }
+                                } else {
+                                    Button("登出", role: .destructive) { signingOut = provider }
+                                }
                             } label: {
                                 VendorLabel(id: provider.rawValue, name: provider.name)
                             }
@@ -138,6 +144,7 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("版本", value: AppSettings.versionText())
+                    LabeledContent("更新時間", value: AppSettings.buildTimestampText())
                 }
             }
             .scrollsToTop(on: scrollToTopToken)
@@ -157,7 +164,7 @@ struct SettingsView: View {
             }
             .sheet(item: $signingIn, onDismiss: reloadSignedIn) { provider in
                 if provider.isRelayed {
-                    RelaySetupView()
+                    RelaySetupView(onVerified: refreshRelay)
                 } else {
                     SignInView(provider: provider)
                 }

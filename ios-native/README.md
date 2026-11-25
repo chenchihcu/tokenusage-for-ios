@@ -63,6 +63,19 @@ Free-account builds expire after 7 days and must be reinstalled.
 
 `ios-simulator-screenshots.yml` runs the unit tests and captures both iPhone Duo displays.
 
+## Request an Antigravity update from the iPhone
+
+Apply the Worker D1 migrations before running this version. Configure separate Worker
+secrets: `SYNC_TOKEN` for the Mac uploader and `ANTIGRAVITY_REFRESH_TOKEN` for the
+phone. Use independent random values. Reinstall the Mac relay with
+`scripts/install-antigravity-relay-mac.sh` to enable polling every 20 seconds.
+Scheduled measurements continue every five minutes when the Worker cannot accept requests.
+
+On the iPhone, open 設定 › 帳號 › Google Antigravity › 檢查轉送. Enter the phone refresh
+key and choose 請 Mac 立即更新. The app waits up to about 75 seconds for a measured
+snapshot whose data timestamp is at or after the accepted request. The Mac must be awake,
+online, and able to read Antigravity usage. A timeout keeps the last available snapshot.
+
 ## Release checklist (every version)
 
 The version and the settings shown to the person must match the build. `SettingsAlignmentTests` fails when they drift.
