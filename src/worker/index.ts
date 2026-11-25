@@ -266,6 +266,37 @@ export default {
       return new Response(null, { headers: securityHeaders });
     }
 
+    if (url.pathname === '/api/antigravity/refresh' && ['GET', 'POST'].includes(request.method)) {
+      const js = (body: object, status = 200) => new Response(JSON.stringify(body), {
+        status,
+        headers: { ...securityHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      });
+      if (!env.ANTIGRAVITY_REFRESH_TOKEN || !env.SYNC_TOKEN || !env.DB) {
+        return js({ error: 'Refresh unavailable' }, 503);
+      }
+      const phone = request.method === 'POST';
+      const secret = phone ? env.ANTIGRAVITY_REFRESH_TOKEN : env.SYNC_TOKEN;
+      if (!(await bearerMatches(request, secret))) return js({ error: 'Unauthorized' }, 401);
+
+      try {
+        if (phone) {
+          const now = new Date();
+          const cutoff = new Date(now.getTime() - 60_000).toISOString();
+          await env.DB.prepare(`
+            INSERT INTO antigravity_refresh (singleton, requested_at) VALUES (1, ?)
+            ON CONFLICT(singleton) DO UPDATE SET requested_at = excluded.requested_at
+            WHERE antigravity_refresh.requested_at <= ?
+          `).bind(now.toISOString(), cutoff).run();
+        }
+        const row = await env.DB.prepare(
+          'SELECT requested_at FROM antigravity_refresh WHERE singleton = 1'
+        ).first<{ requested_at: string }>();
+        return js({ requested_at: row?.requested_at ?? null }, phone ? 202 : 200);
+      } catch {
+        return js({ error: 'Refresh unavailable' }, 503);
+      }
+    }
+
     // 3. API 路由: 取得各 AI 平台額度清單 (GET /api/quotas)
     if (url.pathname === '/api/quotas' && request.method === 'GET') {
       try {

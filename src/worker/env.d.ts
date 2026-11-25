@@ -5,6 +5,7 @@ export interface Env {
   ENCRYPTION_MASTER_KEY?: string;
   /** When set, POST /api/quotas/sync requires `Authorization: Bearer <SYNC_TOKEN>`. */
   SYNC_TOKEN?: string;
+  ANTIGRAVITY_REFRESH_TOKEN?: string;
 }
 
 export interface MetricItem {

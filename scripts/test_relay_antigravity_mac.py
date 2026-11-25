@@ -5,6 +5,8 @@ import importlib.util
 import json
 import os
 import unittest
+import tempfile
+from pathlib import Path
 
 _PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "relay-antigravity-mac.py")
 _SPEC = importlib.util.spec_from_file_location("relay_antigravity_mac", _PATH)
@@ -137,6 +139,102 @@ class BuildRecordTests(unittest.TestCase):
         pools = json.loads(record_for(payload)["token_pools_json"])
         self.assertEqual([p["name"] for p in pools], ["Gemini Models", "Claude and GPT"])
         self.assertEqual([len(p["tiers"]) for p in pools], [1, 1])
+
+
+OFFLINE_OUTPUT = [{
+    "provider": "antigravity", "source": "offline",
+    "diagnostic": "Live Antigravity usage is unavailable; showing offline data. "
+                  "Antigravity CSRF token not found. Restart Antigravity and retry.",
+    "usage": {"extraRateWindows": [{"id": "antigravity-offline-conversations", "usageKnown": False,
+                                    "window": {"usedPercent": 0}}],
+              "loginMethod": "offline", "updatedAt": "2026-11-24T08:03:39Z"},
+}]
+# What `--source oauth` prints (exit code 1) before signing in to Antigravity in CodexBar.
+OAUTH_SIGNED_OUT = [{
+    "provider": "antigravity", "source": "oauth",
+    "error": {"code": 1, "kind": "provider",
+              "message": "Antigravity Google auth not found. Use Antigravity login to authenticate."},
+}]
+
+
+def reader(outputs):
+    """A fake CodexBar: maps a source (None = default) to its output or an exception."""
+    calls = []
+
+    def read(source):
+        calls.append(source)
+        result = outputs[source]
+        if isinstance(result, Exception):
+            raise result
+        return copy.deepcopy(result)
+    return read, calls
+
+
+class ReadLiveTests(unittest.TestCase):
+    def test_default_source_with_live_quota_is_used_alone(self):
+        read, calls = reader({None: CODEXBAR_OUTPUT})
+        record, reasons, failed = relay.read_live(read)
+        self.assertEqual(record["remaining_percent"], 68.7)
+        self.assertEqual((reasons, failed, calls), ([], False, [None]))
+
+    def test_offline_default_falls_back_to_oauth(self):
+        oauth = copy.deepcopy(CODEXBAR_OUTPUT)
+        oauth[0]["source"] = "oauth"
+        read, calls = reader({None: OFFLINE_OUTPUT, "oauth": oauth})
+        record, reasons, failed = relay.read_live(read)
+        self.assertEqual(calls, [None, "oauth"])
+        self.assertEqual(record["remaining_percent"], 68.7)
+        self.assertEqual((reasons, failed), ([], False))
+
+    def test_nothing_live_reports_both_reasons(self):
+        read, _ = reader({None: OFFLINE_OUTPUT, "oauth": OAUTH_SIGNED_OUT})
+        record, reasons, failed = relay.read_live(read)
+        self.assertIsNone(record)
+        self.assertFalse(failed)
+        self.assertIn("CSRF token not found", reasons[0])
+        self.assertTrue(reasons[1].startswith("oauth: Antigravity Google auth not found"))
+
+    def test_unreadable_codexbar_is_a_read_failure(self):
+        read, _ = reader({None: RuntimeError("CodexBar exited 1: boom"), "oauth": OSError("gone")})
+        record, reasons, failed = relay.read_live(read)
+        self.assertIsNone(record)
+        self.assertTrue(failed)
+        self.assertEqual(len(reasons), 2)
+
+    def test_one_unreadable_source_is_not_a_read_failure(self):
+        read, _ = reader({None: OFFLINE_OUTPUT, "oauth": RuntimeError("timeout")})
+        _, _, failed = relay.read_live(read)
+        self.assertFalse(failed)
+
+
+class RefreshPollingTests(unittest.TestCase):
+    def test_request_triggers_a_single_early_measurement(self):
+        import io
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state.json"
+            state.write_text('{"attempted_at": 1000}')
+            url = "https://example.com/api/quotas/sync"
+            ticket = b'{"requested_at":"2026-11-25T13:40:00.000Z"}'
+            with patch("time.time", return_value=1020), patch.object(relay, "main", return_value=0) as measure:
+                with patch.object(relay.urllib.request, "urlopen", side_effect=[io.BytesIO(ticket), io.BytesIO(ticket)]) as poll:
+                    self.assertEqual(relay.poll_refresh(url, "upload-key", state), 0)
+                    self.assertEqual(relay.poll_refresh(url, "upload-key", state), 0)
+                    measure.assert_called_once_with([])
+                    request = poll.call_args.args[0]
+                    self.assertEqual(request.full_url, "https://example.com/api/antigravity/refresh")
+                    self.assertEqual(request.get_header("Authorization"), "Bearer upload-key")
+
+    def test_worker_outage_preserves_scheduled_measurement(self):
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state.json"
+            with patch.object(relay, "main", return_value=0) as measure:
+                with patch.object(relay.urllib.request, "urlopen", side_effect=OSError("offline")):
+                    self.assertEqual(relay.poll_refresh("https://example.com/api/quotas/sync", "key", state), 0)
+                    measure.assert_called_once_with([])
 
 
 if __name__ == "__main__":
