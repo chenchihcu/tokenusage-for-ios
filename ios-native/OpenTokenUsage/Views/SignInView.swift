@@ -207,6 +207,7 @@ struct SignInView: View {
 /// (`scripts/relay-antigravity-mac.py`) and the phone reads it from there. This sheet saves the
 /// Worker's address once it has answered with a quota list.
 struct RelaySetupView: View {
+    var onVerified: () async -> Void = {}
     enum Check: Equatable {
         /// Saved; the Mac's latest figures are from this time.
         case relayed(Date)
@@ -232,7 +233,7 @@ struct RelaySetupView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Google 不允許在手機登入 Antigravity。改由你的 Mac 讀取用量（透過 CodexBar），每 5 分鐘上傳到你的 Worker，這支手機再從 Worker 讀取。")
+                    Text("Google 不允許在手機登入 Antigravity。改由你的 Mac 讀取用量（透過 CodexBar），每 5 分鐘上傳到你的 Worker，這支手機可透過 Wi-Fi 或行動網路從 Worker 讀取最新快照。")
                     Text("Mac 關機或睡眠時不會更新；App 會標出資料是什麼時候的。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -264,7 +265,7 @@ struct RelaySetupView: View {
                                 Text("正在確認…")
                             }
                         } else {
-                            Text("確認並開啟")
+                            Text(check == nil ? "檢查並儲存" : "重新檢查")
                         }
                     }
                     .disabled(checking || AntigravityRelay.normalizedBase(address) == nil)
@@ -275,6 +276,7 @@ struct RelaySetupView: View {
             }
             .navigationTitle("Antigravity 轉送")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(saved ? "完成" : "取消") { dismiss() }
@@ -321,11 +323,13 @@ struct RelaySetupView: View {
             case .quota(let quota):
                 Keychain.set(base, for: DirectProvider.antigravity.keychainKey)
                 address = base
-                check = .relayed(quota.fetchedDate ?? Date())
+                if let date = quota.fetchedDate { check = .relayed(date) }
+                await onVerified()
             case .nothingRelayed:
                 Keychain.set(base, for: DirectProvider.antigravity.keychainKey)
                 address = base
                 check = .waitingForMac
+                await onVerified()
             case .unreadable:
                 check = .failed("這個網址不是 OpenTokenUsage 的 Worker。")
             }

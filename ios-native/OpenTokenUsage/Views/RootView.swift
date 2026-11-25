@@ -30,7 +30,9 @@ struct RootView: View {
                 ModelCatalogView(store: store)
             }
             Tab("設定", systemImage: "gearshape", value: QuotaStore.Tab.settings) {
-                SettingsView(scrollToTopToken: store.scrollToTop[.settings, default: 0])
+                SettingsView(scrollToTopToken: store.scrollToTop[.settings, default: 0]) {
+                    await store.refresh(force: true)
+                }
                     // Sign-in or token changes take effect as soon as you leave Settings.
                     .onDisappear { Task { await store.refresh(force: true) } }
             }
@@ -78,6 +80,15 @@ private struct QuotasSplitView: View {
         } detail: {
             if let id = store.selectedID {
                 QuotaDetailContainer(store: store, id: id)
+            } else if store.displayItems.isEmpty {
+                ContentUnavailableView {
+                    Label("尚無額度資料", systemImage: "gauge.with.dots.needle.50percent")
+                } description: {
+                    Text("連接服務後，就能在這裡查看用量與重置時間。")
+                } actions: {
+                    Button("前往設定") { store.selectedTab = .settings }
+                        .buttonStyle(.borderedProminent)
+                }
             } else {
                 ContentUnavailableView(
                     "選擇一個平台",

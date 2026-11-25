@@ -19,9 +19,6 @@ struct QuotaListView: View {
                 // iPhone Duo › Vertical controls. They stay in the bar ahead of Settings.
                 FastPathItems(store: store)
                     .visibilityPriority(.high)
-                ToolbarItem(placement: .status) {
-                    StatusLine(store: store)
-                }
             }
             .refreshable { await store.refresh(force: true) }
             .overlay {
@@ -37,6 +34,9 @@ struct QuotaListView: View {
     @ViewBuilder
     private var sections: some View {
         MainPageNavigation()
+        Section {
+            StatusLine(store: store)
+        }
         if case .failed(let error) = store.state, error != .notConfigured {
             Section {
                 ProblemBanner(error: error, hasData: !store.items.isEmpty) {
@@ -90,7 +90,7 @@ struct QuotaListView: View {
     }
 }
 
-/// Bottom-bar line: when data was last updated, or what is happening now.
+/// Inline status showing the latest refresh or connection state.
 struct StatusLine: View {
     let store: QuotaStore
 
@@ -108,7 +108,6 @@ struct StatusLine: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .lineLimit(1)
     }
 }
 
