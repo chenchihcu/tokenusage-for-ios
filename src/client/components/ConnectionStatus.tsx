@@ -1,17 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { CloudOff, RefreshCw, Smartphone, Wifi } from 'lucide-react';
+import { CloudOff, Smartphone, Wifi } from 'lucide-react';
 import type { StatusPresentation } from '../network/presentStatus';
 
 interface ConnectionStatusProps {
   status: StatusPresentation;
   busy: boolean;
-  onRetry: () => void;
 }
 
 export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   status,
   busy,
-  onRetry,
 }) => {
   const [spoken, setSpoken] = useState(status.live ?? '正在確認連線…');
 
@@ -30,18 +28,10 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
           {status.showProgress && busy ? <span className="text-xs text-slate-400">請稍候</span> : null}
         </p>
         {status.pathLabel ? (
-          <span className="text-xs font-medium text-slate-300 px-2 py-1 rounded-full border border-slate-700">
+          <span className="text-xs font-bold text-slate-300 px-2 py-1 rounded-full border border-slate-700">
             {status.pathLabel}
           </span>
         ) : null}
-        <button
-          type="button"
-          onClick={onRetry}
-          className="inline-flex items-center gap-1 min-h-[44px] min-w-[44px] px-3 rounded-xl border border-slate-700 text-sm text-slate-100"
-        >
-          <RefreshCw className={`w-4 h-4 ${busy ? 'animate-spin' : ''}`} aria-hidden="true" />
-          重試
-        </button>
       </div>
       {status.checkHint ? <p className="text-xs text-slate-400 pb-1 max-w-3xl">{status.checkHint}</p> : null}
     </div>

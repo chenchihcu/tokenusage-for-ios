@@ -186,7 +186,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             isFocusMode={false}
             onToggleFocus={() => {}}
             handedness={handedness}
-            connectionLabel={linkLabel}
           />
         </div>
       </div>
@@ -221,7 +220,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             isFocusMode={false}
             onToggleFocus={() => {}}
             handedness={handedness}
-            connectionLabel={linkLabel}
           />
         </div>
       </div>
@@ -285,7 +283,6 @@ className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-saf
             isFocusMode={isFocusMode}
             onToggleFocus={() => setIsFocusMode(!isFocusMode)}
             handedness={handedness}
-            connectionLabel={linkLabel}
           />
         </main>
       </div>
@@ -314,7 +311,6 @@ className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-saf
               isFocusMode={false}
               onToggleFocus={() => {}}
               handedness={handedness}
-              connectionLabel={linkLabel}
             />
           </div>
         </div>

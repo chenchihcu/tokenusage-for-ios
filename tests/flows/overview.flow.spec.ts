@@ -6,14 +6,14 @@ test('overview: four services load and a manual refresh re-fetches', async ({ pa
   let calls = 0;
   page.on('request', (r) => { if (new URL(r.url()).pathname === '/api/quotas') calls++; });
   await page.goto('/');
-  await expect(page.getByRole('status').filter({ hasText: '已同步' })).toBeVisible();
   for (const name of ['Codex', 'Claude Code', 'Cursor', 'Google Antigravity']) {
     await expect(page.getByRole('heading', { name, exact: true }).first()).toBeVisible();
   }
+  await expect(page.getByRole('button', { name: '重試' })).toHaveCount(0);
   const before = calls;
   await page.getByRole('navigation', { name: '快速操作' }).getByRole('button').filter({ hasText: '更新' }).click();
   await expect.poll(() => calls).toBeGreaterThan(before);
-  await expect(page.getByRole('status').filter({ hasText: '已同步' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Codex', exact: true }).first()).toBeVisible();
 });
 
 test('overview: an empty server shows the empty state and no numbers', async ({ page }) => {

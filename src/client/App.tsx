@@ -10,7 +10,8 @@ import {
 } from './components/FrequencySelector';
 import { ViewModeSelector, DashboardViewMode, HandednessMode } from './components/ViewModeSelector';
 import { ConnectionStatus } from './components/ConnectionStatus';
-import { ResetMonitorBar, MONITORED_RESET_IDS, creditsLabel } from './components/ResetMonitorBar';
+import { MONITORED_RESET_IDS, creditsLabel } from './components/ResetMonitorBar';
+import { isFailureStatus } from './network/presentStatus';
 import { PlatformIcon } from './components/PlatformIcon';
 import { Sheet } from './components/Sheet';
 import { SecureStorageService } from './services/storage';
@@ -163,9 +164,7 @@ export const App: React.FC = () => {
         ) : null}
       </header>
 
-      <ConnectionStatus status={net.status} busy={net.busy} onRetry={net.refresh} />
-
-      <ResetMonitorBar quotas={quotas} activePlatformId={selectedId} onSelectPlatform={setSelectedId} />
+      {isFailureStatus(net.status) ? <ConnectionStatus status={net.status} busy={net.busy} /> : null}
 
       <div id="app-content" className="flex-1 min-h-0 min-w-0 relative">
         {quotas.length === 0 ? (

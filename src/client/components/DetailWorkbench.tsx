@@ -11,14 +11,12 @@ interface DetailWorkbenchProps {
   isFocusMode: boolean;
   onToggleFocus: () => void;
   handedness?: HandednessMode;
-  connectionLabel?: string;
 }
 
 export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
   selectedItem,
   isFocusMode,
   onToggleFocus,
-  connectionLabel = '待確認',
 }) => {
   const usage = useMemo(() => (selectedItem ? buildAgentUsage(selectedItem) : null), [selectedItem]);
 
@@ -55,8 +53,6 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
         <h2 id="detail-title" tabIndex={-1} className="min-w-0 truncate text-base font-bold outline-none">
           {selectedItem.name}
         </h2>
-        <span className="shrink-0 text-xs text-slate-300">{selectedItem.planName}</span>
-        <span className="ml-auto shrink-0 text-xs text-slate-300 truncate">{connectionLabel}</span>
       </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-2 p-2">
@@ -67,10 +63,6 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
           </div>
         ))}
       </div>
-
-      <p className="shrink-0 px-3 h-8 flex items-center text-xs text-slate-300 tabular-nums">
-        已用 {percentText(usage.usedPercent)} · 剩餘 {percentText(usage.remainingPercent)}
-      </p>
     </div>
   );
 };

@@ -58,6 +58,19 @@ export function presentStatus(state: NetState, updatedLabel: string | null): Sta
   return { live: null, pathLabel, checkHint: null, showProgress: state.api === 'checking' };
 }
 
+/** True when the main screen should show the status sentence. Success and "checking" stay quiet. */
+export function isFailureStatus(status: StatusPresentation): boolean {
+  const live = status.live ?? '';
+  return (
+    status.checkHint !== null ||
+    live.startsWith('目前無法連線') ||
+    live === '登入已失效' ||
+    live === '沒有此項權限' ||
+    live === '服務忙碌，請稍後再試' ||
+    live === '無法連接服務，請稍後重試'
+  );
+}
+
 export function shortLinkLabel(state: NetState): string {
   if (state.path === 'none' || state.connectedHint === false) return '離線資料';
   if (state.writeState === 'pending') return '待確認';

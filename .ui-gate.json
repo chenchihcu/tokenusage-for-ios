@@ -27,10 +27,10 @@
     { "name": "duo-landscape", "width": 852, "height": 393, "isMobile": true, "hasTouch": true }
   ],
   "pages": [
-    { "name": "home", "path": "/", "ready": "[role=\"status\"]:has-text(\"已同步\")" },
-    { "name": "cockpit", "path": "/?view=cockpit", "ready": "[role=\"status\"]:has-text(\"已同步\")" },
-    { "name": "split", "path": "/?view=split", "ready": "[role=\"status\"]:has-text(\"已同步\")" },
-    { "name": "left-hand", "path": "/?handed=left", "ready": "[role=\"status\"]:has-text(\"已同步\")" },
+    { "name": "home", "path": "/", "ready": "text=Google Antigravity" },
+    { "name": "cockpit", "path": "/?view=cockpit", "ready": "text=Google Antigravity" },
+    { "name": "split", "path": "/?view=split", "ready": "text=Google Antigravity" },
+    { "name": "left-hand", "path": "/?handed=left", "ready": "text=Google Antigravity" },
     {
       "name": "empty",
       "path": "/",

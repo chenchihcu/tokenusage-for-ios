@@ -15,5 +15,6 @@ test('sync API: pushed quotas are stored and still shown after a reload', async 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Codex', exact: true }).first()).toBeVisible();
   await page.getByRole('navigation', { name: '快速操作' }).getByRole('button').filter({ hasText: '更新' }).click();
-  await expect(page.getByRole('status').filter({ hasText: '已同步' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Codex', exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: '重試' })).toHaveCount(0);
 });

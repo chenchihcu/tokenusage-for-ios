@@ -8,7 +8,7 @@ test('quick actions: left-hand mode moves the action bar to the left', async ({ 
   expect(nav).not.toBeNull();
   expect(nav!.x + nav!.width / 2).toBeLessThan(page.viewportSize()!.width / 2);
   await page.getByRole('navigation', { name: '快速操作' }).getByRole('button').filter({ hasText: '更新' }).click();
-  await expect(page.getByRole('status').filter({ hasText: '已同步' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Codex', exact: true }).first()).toBeVisible();
 });
 
 test('cockpit: "only alerts" keeps services at or below 20 %', async ({ page }) => {
@@ -22,7 +22,6 @@ test('cockpit: "only alerts" keeps services at or below 20 %', async ({ page }) 
 test('[AC-1] 打開全景，一屏看到四個服務且沒有整頁捲軸', async ({ page }) => {
   await serveQuotas(page);
   await page.goto('/?view=cockpit');
-  await expect(page.getByRole('status').filter({ hasText: '已同步' })).toBeVisible();
   for (const name of ['Codex', 'Claude Code', 'Cursor', 'Google Antigravity']) {
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   }
@@ -98,5 +97,10 @@ test('view switcher: wide screens can switch to split view and see details', asy
   const switcher = page.getByRole('navigation', { name: '視圖模式切換器' });
   await expect(switcher).toBeVisible();
   await switcher.getByRole('button').nth(1).click();
-  await expect(page.getByRole('main', { name: '服務詳情' })).toBeVisible();
+  const detail = page.getByRole('main', { name: '服務詳情' });
+  await expect(detail).toBeVisible();
+  await expect(detail.getByText('Codex CLI & Cloud')).toBeVisible();
+  await expect(detail.getByText('Plus')).toHaveCount(0);
+  await expect(detail.getByText('已用')).toHaveCount(0);
+  await expect(detail.getByText('剩餘')).toHaveCount(0);
 });

@@ -185,13 +185,14 @@ async function serveQuotas(page: Page, body: unknown = quotaPayload()) {
 }
 
 test.describe('2. 資料與狀態', () => {
-  test('只顯示四個服務（無 Grok），狀態列顯示已同步', async ({ page }) => {
+  test('只顯示四個服務（無 Grok），成功時不顯示連線列', async ({ page }) => {
     await serveQuotas(page);
     await page.goto('/');
-    await expect(page.getByRole('status').filter({ hasText: '已同步' })).toBeVisible();
     for (const name of ['Codex', 'Claude Code', 'Cursor', 'Google Antigravity']) {
       await expect(page.getByRole('heading', { name, exact: true }).first()).toBeVisible();
     }
+    await expect(page.getByText('已同步')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '重試' })).toHaveCount(0);
     await expect(page.getByText('Grok')).toHaveCount(0);
   });
 
@@ -202,12 +203,23 @@ test.describe('2. 資料與狀態', () => {
     await expect(page.getByText(/\d+%/)).toHaveCount(0);
   });
 
-  test('Codex 與 Claude Code 顯示免費重置次數', async ({ page }) => {
+  test('Codex 與 Claude Code 的免費重置次數在重置面板', async ({ page }) => {
     await serveQuotas(page);
     await page.goto('/');
-    const bar = page.getByRole('region', { name: /免費重置/ });
-    await expect(bar.getByText('免費重置 1 次')).toBeVisible();
-    await expect(bar.getByText('免費重置 0 次')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Codex', exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('region', { name: /免費重置/ })).toHaveCount(0);
+    await page.getByRole('button', { name: '免費重置，1 項可用' }).click();
+    const sheet = page.getByRole('dialog', { name: '免費重置與重置時間' });
+    await expect(sheet.getByText('免費重置 1 次')).toBeVisible();
+    await expect(sheet.getByText('免費重置 0 次')).toBeVisible();
+    await sheet.getByRole('button', { name: '完成' }).click();
+  });
+
+  test('服務忙碌時顯示原因，沒有重試按鈕', async ({ page }) => {
+    await page.route('**/api/quotas', (route) => route.fulfill({ status: 500, body: 'nope' }));
+    await page.goto('/');
+    await expect(page.getByText('服務忙碌，請稍後再試')).toBeVisible();
+    await expect(page.getByRole('button', { name: '重試' })).toHaveCount(0);
   });
 
   test('沒有語音功能（無麥克風按鈕、無語音字幕）', async ({ page }) => {
