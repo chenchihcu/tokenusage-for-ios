@@ -1,7 +1,7 @@
 import React from 'react';
 import { QuotaCardProps } from './QuotaCard';
 import { PlatformIcon } from './PlatformIcon';
-import { buildAgentUsage, percentText } from '../usage/usageFacts';
+import { percentText } from '../usage/usageFacts';
 
 interface MasterListProps {
   quotas: QuotaCardProps[];
@@ -30,7 +30,6 @@ export const MasterList: React.FC<MasterListProps> = ({ quotas, selectedId, onSe
           style={{ gridTemplateRows: `repeat(${quotas.length}, minmax(0, 1fr))` }}
         >
           {quotas.map((item) => {
-            const usage = buildAgentUsage(item);
             const selected = item.id === selectedId;
             return (
               <button
@@ -44,7 +43,7 @@ export const MasterList: React.FC<MasterListProps> = ({ quotas, selectedId, onSe
               >
                 <PlatformIcon id={item.id} className="w-4 h-4 shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-100">{item.name}</span>
-                <span className="shrink-0 text-xs tabular-nums text-slate-300">{percentText(usage.usedPercent)}</span>
+                <span className="shrink-0 text-xs tabular-nums text-slate-300">{percentText(item.usedQuota)}</span>
               </button>
             );
           })}

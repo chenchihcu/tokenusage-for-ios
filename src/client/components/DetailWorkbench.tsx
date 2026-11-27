@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { QuotaCardProps } from './QuotaCard';
 import { HandednessMode } from './ViewModeSelector';
 import { PlatformIcon } from './PlatformIcon';
@@ -20,7 +20,9 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
   onToggleFocus,
   connectionLabel = '待確認',
 }) => {
-  if (!selectedItem) {
+  const usage = useMemo(() => (selectedItem ? buildAgentUsage(selectedItem) : null), [selectedItem]);
+
+  if (!selectedItem || !usage) {
     return (
       <div className="flex h-full items-center justify-center p-4 text-sm text-slate-300">
         選擇一個服務
@@ -28,7 +30,6 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
     );
   }
 
-  const usage = buildAgentUsage(selectedItem);
   const cells = [
     { label: '模型', value: modelText(usage) },
     { label: '5 小時', value: percentText(usage.sessionUsed) },

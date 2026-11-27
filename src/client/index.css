@@ -96,9 +96,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .animate-ping,
   .animate-pulse,
-  .animate-spin,
-  .animate-photon-sweep,
-  .photon-beam {
+  .animate-spin {
     animation: none !important;
   }
 }
@@ -111,31 +109,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.glass-panel-interactive {
-  background: rgba(18, 24, 38, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.glass-panel-interactive:hover {
-  background: rgba(25, 33, 52, 0.85);
-  border-color: rgba(255, 255, 255, 0.18);
-  transform: translateY(-2px);
-}
-
 /* 流暢過渡 (Apple Ease) */
 .transition-apple {
   transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-/* 自訂霓虹流光背景 */
-.neon-ambient-glow {
-  background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, rgba(0, 242, 254, 0.05) 35%, transparent 70%);
-}
-
-/* 光子掃描射線 */
-.photon-beam {
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
 }
