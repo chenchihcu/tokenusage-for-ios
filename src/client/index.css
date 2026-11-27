@@ -77,6 +77,14 @@ body {
   [data-hand='left'] .fab-clearance {
     padding-left: 5.5rem !important;
   }
+  /* Rows above the scroll area (reset chips) only need the side clearance:
+     the bar's own offset (.fab-safe-left/right) + its ~70px width + a gap. */
+  [data-hand='right'] .fab-clearance-side {
+    padding-right: calc(max(1.5rem, env(safe-area-inset-right, 0px)) + 5rem) !important;
+  }
+  [data-hand='left'] .fab-clearance-side {
+    padding-left: calc(max(1.5rem, env(safe-area-inset-left, 0px)) + 5rem) !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
