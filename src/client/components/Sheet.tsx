@@ -36,10 +36,10 @@ export const Sheet: React.FC<SheetProps> = ({ title, open, onClose, children }) 
         aria-label={title}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg max-h-[85dvh] overflow-y-auto rounded-t-2xl bg-slate-900 border border-slate-700 pb-safe pl-safe-island pr-safe-island outline-none"
+        className="w-full max-w-lg max-h-[85dvh] overflow-hidden flex flex-col rounded-t-2xl bg-slate-900 border border-slate-700 pb-safe pl-safe-island pr-safe-island outline-none"
       >
-        <div className="sticky top-0 flex items-center justify-between gap-2 bg-slate-900 py-2 border-b border-slate-800">
-          <h2 className="text-base font-bold text-slate-100">{title}</h2>
+        <div className="shrink-0 flex items-center justify-between gap-2 bg-slate-900 h-11 border-b border-slate-800">
+          <h2 className="min-w-0 truncate text-base font-bold text-slate-100">{title}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -48,7 +48,7 @@ export const Sheet: React.FC<SheetProps> = ({ title, open, onClose, children }) 
             完成
           </button>
         </div>
-        <div className="py-3">{children}</div>
+        <div className="py-2 min-h-0 overflow-hidden">{children}</div>
       </div>
     </div>
   );

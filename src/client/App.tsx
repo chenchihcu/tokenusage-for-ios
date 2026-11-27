@@ -17,13 +17,13 @@ import { SecureStorageService } from './services/storage';
 import { useDirectInternet } from './hooks/useDirectInternet';
 import { decideColumns } from './network/layout';
 import { extractResetWindowSummary } from './utils/resetMonitor';
+import { TRACKED_AGENT_IDS } from './usage/usageFacts';
 
 export const STORAGE_KEY_VIEW_MODE = 'opentokenusage_view_mode';
 export const STORAGE_KEY_HANDEDNESS = 'opentokenusage_handedness';
 export const STORAGE_KEY_FILTER_ALERT = 'opentokenusage_filter_alert';
 
-/** The four tracked agents, in display order. Anything else from the server is ignored. */
-export const TRACKED_AGENT_IDS = ['codex', 'claude', 'cursor', 'antigravity'] as const;
+export { TRACKED_AGENT_IDS };
 
 function keepTrackedAgents(items: QuotaCardProps[]): QuotaCardProps[] {
   return TRACKED_AGENT_IDS.map((id) => items.find((q) => q.id === id)).filter(
@@ -147,7 +147,7 @@ export const App: React.FC = () => {
       data-hand={handedness}
       className="app-viewport relative w-full overflow-hidden bg-slate-950 text-slate-100 flex flex-col font-sans"
     >
-      <header className="w-full bg-slate-950 border-b border-slate-800/80 px-4 py-1.5 sm:px-6 pl-safe-island pr-safe-island flex items-center justify-between gap-2 shrink-0 z-30">
+      <header className="w-full h-11 bg-slate-950 border-b border-slate-800/80 px-4 sm:px-6 pl-safe-island pr-safe-island flex items-center justify-between gap-2 shrink-0 z-30">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-400 via-purple-500 to-pink-500 flex items-center justify-center shrink-0">
             <Sparkles className="w-4 h-4 text-slate-950" aria-hidden="true" />
@@ -167,7 +167,7 @@ export const App: React.FC = () => {
 
       <ResetMonitorBar quotas={quotas} activePlatformId={selectedId} onSelectPlatform={setSelectedId} />
 
-      <div id="app-content" className="flex-1 min-h-0 relative">
+      <div id="app-content" className="flex-1 min-h-0 min-w-0 relative">
         {quotas.length === 0 ? (
           <div role="status" className="h-full flex flex-col items-center justify-center gap-3 p-8 text-center">
             {net.busy ? (
@@ -224,27 +224,18 @@ export const App: React.FC = () => {
         {resetSummaries.length === 0 ? (
           <p className="text-sm text-slate-300">尚無資料。</p>
         ) : (
-          <ul className="space-y-2">
+          <ul>
             {resetSummaries.map(({ item, summary }) => {
               const monitored = (MONITORED_RESET_IDS as readonly string[]).includes(item.id);
               return (
-                <li key={item.id} className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-                  <div className="flex items-center gap-2 text-base font-bold text-slate-100">
-                    <PlatformIcon id={item.id} className="w-4 h-4" />
-                    {item.name}
-                  </div>
-                  {monitored ? (
-                    <p
-                      className={`mt-1 text-sm font-bold ${
-                        (summary.resetCredits ?? 0) > 0 ? 'text-emerald-300' : 'text-slate-300'
-                      }`}
-                    >
-                      {creditsLabel(summary.resetCredits)}
-                    </p>
-                  ) : null}
-                  <p className="mt-1 text-sm text-slate-300 tabular-nums">
-                    {summary.sessionText !== '--' ? `5 小時：${summary.sessionText} · ` : ''}每週：{summary.weeklyText}
-                  </p>
+                <li key={item.id} className="flex items-center gap-2 min-h-[44px] min-w-0 border-b border-slate-800">
+                  <PlatformIcon id={item.id} className="w-4 h-4 shrink-0" />
+                  <span className="text-sm font-bold text-slate-100 truncate">{item.name}</span>
+                  <span className="ml-auto min-w-0 text-xs text-slate-300 tabular-nums truncate">
+                    {monitored ? `${creditsLabel(summary.resetCredits)} · ` : ''}
+                    {summary.sessionText !== '--' ? `5 小時 ${summary.sessionText} · ` : ''}
+                    每週 {summary.weeklyText}
+                  </span>
                 </li>
               );
             })}
@@ -253,24 +244,27 @@ export const App: React.FC = () => {
       </Sheet>
 
       <Sheet title="設定" open={sheet === 'settings'} onClose={() => setSheet(null)}>
-        <fieldset className="space-y-1">
+        <fieldset>
           <legend className="text-sm font-bold text-slate-300 mb-1">更新頻率</legend>
-          {REFRESH_OPTIONS.map((o) => (
-            <label key={o.value} className="flex items-center gap-3 min-h-[44px] px-2 rounded-xl text-base text-slate-100">
-              <input
-                type="radio"
-                name="refresh-interval"
-                checked={refreshInterval === o.value}
-                onChange={() => handleChangeInterval(o.value)}
-                className="w-5 h-5 accent-cyan-400"
-              />
-              {o.label}
-            </label>
-          ))}
-          <p className="text-xs text-slate-400 px-2">App 在前景時依此頻率更新；背景更新時間由 iOS 決定。</p>
+          <div className="grid grid-cols-2 gap-1">
+            {REFRESH_OPTIONS.map((o) => (
+              <label key={o.value} className="flex items-center gap-2 min-h-[44px] px-2 rounded-xl text-sm text-slate-100">
+                <input
+                  type="radio"
+                  name="refresh-interval"
+                  checked={refreshInterval === o.value}
+                  onChange={() => handleChangeInterval(o.value)}
+                  className="w-5 h-5 accent-cyan-400"
+                />
+                {o.label}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-slate-400 px-2">前景依此更新。背景時間由 iOS 決定。</p>
         </fieldset>
-        <fieldset className="space-y-1 mt-4">
-          <legend className="text-sm font-bold text-slate-300 mb-1">慣用手（快速操作位置）</legend>
+        <fieldset className="mt-2">
+          <legend className="text-sm font-bold text-slate-300 mb-1">慣用手</legend>
+          <div className="grid grid-cols-2 gap-1">
           {(['right', 'left'] as const).map((h) => (
             <label key={h} className="flex items-center gap-3 min-h-[44px] px-2 rounded-xl text-base text-slate-100">
               <input
@@ -283,6 +277,7 @@ export const App: React.FC = () => {
               {h === 'right' ? '右手' : '左手'}
             </label>
           ))}
+          </div>
         </fieldset>
       </Sheet>
     </div>

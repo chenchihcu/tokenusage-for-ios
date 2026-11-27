@@ -215,7 +215,7 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
             compact={true}
           />
         </div>
-        <div className="h-1/2 overflow-y-auto">
+        <div className="h-1/2 min-h-0 overflow-hidden">
           <DetailWorkbench
             selectedItem={selectedItem}
             isFocusMode={false}
@@ -308,7 +308,7 @@ className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-saf
               返回清單
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <DetailWorkbench
               selectedItem={selectedItem}
               isFocusMode={false}
