@@ -1,0 +1,88 @@
+{
+  "$comment": "Web UI Acceptance Gate (spec 2026-11-27-03). Run: node ~/.agents/skills/validate-app-ui/scripts/ui-gate.mjs",
+  "watch": [
+    "src/client/**",
+    "src/worker/**",
+    "src/shared/**",
+    "src/types/**",
+    "index.html",
+    "public/**",
+    "migrations/**",
+    "tailwind.config.js",
+    "postcss.config.js",
+    "vite.config.ts",
+    "wrangler.jsonc"
+  ],
+  "build": { "command": "npx vite build", "outDir": "dist" },
+  "serve": {
+    "prepare": [
+      "for f in migrations/*.sql; do npx wrangler d1 execute opentokenusage-db --local --persist-to \"$STATE_DIR\" --file=\"$f\" >/dev/null || exit 1; done"
+    ],
+    "command": "npx wrangler dev --port $PORT --ip 127.0.0.1 --persist-to \"$STATE_DIR\" --var SYNC_TOKEN:ui-gate-token --show-interactive-dev-session=false",
+    "readyPath": "/api/quotas"
+  },
+  "clock": "2026-11-27T09:00:00+08:00",
+  "routes": [{ "url": "**/api/quotas", "module": "tests/ui-gate/fixtures.mjs", "export": "quotas" }],
+  "viewports": [
+    { "name": "duo-landscape", "width": 852, "height": 393, "isMobile": true, "hasTouch": true }
+  ],
+  "pages": [
+    { "name": "home", "path": "/", "ready": "[role=\"status\"]:has-text(\"已同步\")" },
+    { "name": "cockpit", "path": "/?view=cockpit", "ready": "[role=\"status\"]:has-text(\"已同步\")" },
+    { "name": "split", "path": "/?view=split", "ready": "[role=\"status\"]:has-text(\"已同步\")" },
+    { "name": "left-hand", "path": "/?handed=left", "ready": "[role=\"status\"]:has-text(\"已同步\")" },
+    {
+      "name": "empty",
+      "path": "/",
+      "ready": "text=尚無額度資料",
+      "routes": [{ "url": "**/api/quotas", "module": "tests/ui-gate/fixtures.mjs", "export": "empty" }]
+    }
+  ],
+  "mask": [],
+  "allowConsole": [],
+  "allowRequests": [],
+  "layoutIgnore": [],
+  "features": [
+    {
+      "name": "overview",
+      "paths": [
+        "src/client/App.tsx", "src/client/main.tsx", "src/client/index.css",
+        "src/client/components/QuotaCard.tsx", "src/client/components/MasterList.tsx",
+        "src/client/components/MiniRingChart.tsx", "src/client/components/PlatformIcon.tsx",
+        "src/client/components/ConnectionStatus.tsx", "src/client/network/**", "src/client/hooks/**",
+        "src/client/services/haptics.ts", "src/types/**", "index.html", "public/**",
+        "tailwind.config.js", "postcss.config.js", "vite.config.ts"
+      ],
+      "flows": ["tests/flows/overview.flow.spec.ts"],
+      "persists": false
+    },
+    {
+      "name": "reset-monitor",
+      "paths": ["src/client/components/ResetMonitorBar.tsx", "src/client/components/Sheet.tsx", "src/client/utils/**"],
+      "flows": ["tests/flows/reset.flow.spec.ts"],
+      "persists": false
+    },
+    {
+      "name": "settings",
+      "paths": ["src/client/components/FrequencySelector.tsx", "src/client/services/storage.ts"],
+      "flows": ["tests/flows/settings.flow.spec.ts"],
+      "persists": true
+    },
+    {
+      "name": "views-and-actions",
+      "paths": [
+        "src/client/components/FloatingActionToolbar.tsx", "src/client/components/ViewModeSelector.tsx",
+        "src/client/components/SplitViewContainer.tsx", "src/client/components/DetailWorkbench.tsx",
+        "src/client/components/CockpitOverview.tsx", "src/client/network/layout.ts"
+      ],
+      "flows": ["tests/flows/views.flow.spec.ts"],
+      "persists": false
+    },
+    {
+      "name": "sync-api",
+      "paths": ["src/worker/**", "src/shared/**", "migrations/**", "wrangler.jsonc"],
+      "flows": ["tests/flows/sync-api.flow.spec.ts"],
+      "persists": true
+    }
+  ]
+}

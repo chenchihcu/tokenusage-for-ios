@@ -35,7 +35,7 @@ export const ResetMonitorBar: React.FC<ResetMonitorBarProps> = ({ quotas, active
   return (
     <section
       aria-label="Codex 與 Claude Code 免費重置與重置時間"
-      className="w-full border-b border-slate-800/80 bg-slate-950/90 px-4 py-1.5 sm:px-6 pl-safe-island pr-safe-island shrink-0"
+      className="w-full border-b border-slate-800/80 bg-slate-950/90 px-4 py-1.5 sm:px-6 pl-safe-island pr-safe-island shrink-0 fab-clearance-side"
     >
       <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-2">
         {monitored.map((item) => {
