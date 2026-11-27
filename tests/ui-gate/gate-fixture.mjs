@@ -24,8 +24,7 @@ export const test = base.extend({
       const judged = !page.isClosed() && testInfo.status !== 'skipped' && page.url() !== 'about:blank';
       if (!judged) return;
       const g3 = await runLayout(page, rt, testInfo.project.use.isMobile);
-      const slug = testInfo.titlePath.join(' ').replace(/[^\w.-]+/g, '_').slice(0, 120);
-      fs.writeFileSync(path.join(rt.outDir, 'flows', `${testInfo.project.name}__${slug}.json`), JSON.stringify({ g2, g3 }));
+      fs.writeFileSync(path.join(rt.outDir, 'flows', `${testInfo.project.name}__${testInfo.testId}.json`), JSON.stringify({ g2, g3 }));
       expect(g2, 'G2 RUNTIME-CLEAN during this flow (pageerror / console.error / HTTP >= 400)').toEqual([]);
       expect(g3, 'G3 LAYOUT-INVARIANTS in the final state of this flow').toEqual([]);
     },
