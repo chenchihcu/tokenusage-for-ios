@@ -14,9 +14,11 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'npm run preview -- --port 3000',
+    // Build first and never reuse a server already on :3000, so tests can't pass against a stale dist/.
+    command: 'npm run build && npm run preview -- --port 3000 --strictPort',
     port: 3000,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
+    timeout: 180000,
   },
   projects: [
     {

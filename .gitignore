@@ -42,3 +42,6 @@ ios/App/build/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Web UI Acceptance Gate (run state and reports; baselines live in tests/ui-baseline)
+.ui-gate/
