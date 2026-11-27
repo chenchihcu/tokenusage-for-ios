@@ -73,7 +73,7 @@
       "paths": [
         "src/client/components/FloatingActionToolbar.tsx", "src/client/components/ViewModeSelector.tsx",
         "src/client/components/SplitViewContainer.tsx", "src/client/components/DetailWorkbench.tsx",
-        "src/client/components/CockpitOverview.tsx", "src/client/network/layout.ts"
+        "src/client/components/CockpitOverview.tsx", "src/client/usage/**", "src/client/network/layout.ts"
       ],
       "flows": ["tests/flows/views.flow.spec.ts"],
       "persists": false
