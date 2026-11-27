@@ -387,6 +387,20 @@ final class WidgetAlignmentTests: XCTestCase {
         XCTAssertEqual(ordered.map { $0.providerId }, ["claude", "codex", "cursor"])
     }
 
+    func testGlanceMarkNamesTheBottleneckWindow() {
+        let items = SampleQuotas.items()
+        let claude = items[0]
+        let codex = items[1]
+        let cursor = items[2]
+        XCTAssertEqual(Glance.bottleneck(claude)?.mark, "週")
+        XCTAssertEqual(Glance.bottleneck(codex)?.mark, "週")
+        XCTAssertEqual(Glance.bottleneck(cursor)?.mark, "Auto月")
+        XCTAssertEqual(Glance.detail(claude).count, 4)
+        XCTAssertEqual(Glance.windows(claude).map(\.mark), ["週", "Sonnet週", "5h", "Opus週"])
+        XCTAssertEqual(Glance.windows(codex).map(\.mark), ["週", "5h"])
+        XCTAssertEqual(Glance.windows(cursor).map(\.mark), ["Auto月", "API月"])
+    }
+
     func testPoolLineJoinsEveryPool() throws {
         let claude = try XCTUnwrap(SampleData.items().first { $0.providerId == "claude" })
         // Every pool, in order, with its % and the 「 · 」 separator (FR-W6). This is the text
@@ -452,6 +466,11 @@ final class AntigravityRelayTests: XCTestCase {
         XCTAssertEqual(quota.pools[0].tiers[0].isGoverning, true)
         // Headline is the tightest pool, worked out on the phone like every other provider.
         XCTAssertEqual(quota.remainingPercent, 68.7, accuracy: 0.0001)
+        XCTAssertEqual(Glance.bottleneck(quota)?.mark, "Gemini5h")
+        let slots = Glance.detail(quota)
+        XCTAssertEqual(slots.count, 4)
+        guard case .more(let count) = slots.last else { return XCTFail("expected a count") }
+        XCTAssertEqual(count, 2)
         XCTAssertEqual(quota.resetTime, "2026-11-20T17:55:53Z")
         // The data time is the Mac's reading, not when the phone asked.
         XCTAssertEqual(quota.fetchedDate, QuotaDate.parse("2026-11-20T16:25:46Z"))

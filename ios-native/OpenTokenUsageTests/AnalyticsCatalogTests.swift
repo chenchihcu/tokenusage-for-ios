@@ -44,8 +44,11 @@ final class AnalyticsCatalogTests: XCTestCase {
     }
 
     @MainActor
-    func testDemoDataListsNoProviderAsUnconfigured() {
-        XCTAssertEqual(QuotaStore.unconfiguredProviders(sampleData: true), [])
+    func testUnconfiguredProvidersAreThoseWithoutAToken() {
+        XCTAssertEqual(QuotaStore.unconfiguredProviders(hasToken: { _ in false }).map(\.rawValue),
+                       ["claude", "codex", "cursor", "antigravity"])
+        XCTAssertEqual(QuotaStore.unconfiguredProviders(hasToken: { $0 == .codex }).map(\.rawValue),
+                       ["claude", "cursor", "antigravity"])
     }
 
     func testTotalsByPeriod() {

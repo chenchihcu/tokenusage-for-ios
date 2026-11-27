@@ -6,6 +6,7 @@ struct QuotaListView: View {
 
     @AppStorage(SettingsKey.haptics) private var hapticsOn = true
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         List(selection: $store.selectedID) { sections }
@@ -23,6 +24,7 @@ struct QuotaListView: View {
                 }
             }
             .refreshable { await store.refresh(force: true) }
+            .scrollDisabled(!typeSize.isAccessibilitySize && !showsBanner)
             .overlay {
                 if store.items.isEmpty, store.isLoading {
                     ProgressView("正在載入額度…")
@@ -31,6 +33,19 @@ struct QuotaListView: View {
             .sensoryFeedback(.selection, trigger: store.selectedID) { _, _ in hapticsOn && sizeClass == .regular }
             .sensoryFeedback(.success, trigger: store.refreshCount) { _, _ in hapticsOn }
             .scrollsToTop(on: store.scrollToTop[.quotas, default: 0])
+    }
+
+    private var showsBanner: Bool {
+        if case .failed(let error) = store.state, error != .notConfigured { return true }
+        return false
+    }
+
+    /// One row per agent, in vendor order. A row without a sign-in says 未設定 and has no percent.
+    private var agentRows: [DirectProvider] {
+        let providers = store.alertsOnly
+            ? store.visibleItems.map(\.providerId)
+            : DirectProvider.allCases.map(\.rawValue)
+        return providers.compactMap { DirectProvider(rawValue: $0) }
     }
 
     @ViewBuilder
@@ -42,8 +57,8 @@ struct QuotaListView: View {
                 }
             }
         }
-        if !store.visibleItems.isEmpty {
-            Section { rows(store.visibleItems) }
+        if !agentRows.isEmpty {
+            Section { rows(agentRows) }
         }
         if store.alertsOnly, store.visibleItems.isEmpty {
             Section {
@@ -56,34 +71,67 @@ struct QuotaListView: View {
                 .padding(.vertical, 4)
             }
         }
-        if !store.alertsOnly, !store.missingProviders.isEmpty {
-            Section {
-                ForEach(store.missingProviders) { provider in
-                    Button {
-                        store.selectedTab = .settings
-                    } label: {
-                        LabeledContent {
-                            Text("前往設定").foregroundStyle(.tint)
-                        } label: {
-                            VendorLabel(id: provider.rawValue, name: provider.name)
-                        }
-                    }
-                    .foregroundStyle(.primary)
-                }
-            } header: {
-                Text("未設定")
-            } footer: {
-                Text("設定後，這裡會顯示該服務的剩餘額度與重置時間。")
+    }
+
+    private func rows(_ providers: [DirectProvider]) -> some View {
+        ForEach(providers) { provider in
+            AgentGlanceRow(store: store, provider: provider)
+        }
+    }
+}
+
+/// The company icon is the shortcut. The bar and the percent are read-only.
+private struct AgentGlanceRow: View {
+    let store: QuotaStore
+    let provider: DirectProvider
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    private var quota: ProviderQuota? { store.displayItems.first { $0.id == provider.rawValue } }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            shortcut
+            readout
+        }
+        .contextMenu { ProviderActions(store: store, providerId: provider.rawValue) }
+    }
+
+    @ViewBuilder
+    private var shortcut: some View {
+        if provider.isSignedIn {
+            NavigationLink(value: provider.rawValue) {
+                ProviderBadge(id: provider.rawValue, name: provider.name, base: 28)
             }
+            .buttonStyle(.plain)
+            .navigationLinkIndicatorVisibility(.hidden)
+            .accessibilityLabel("\(provider.name)，詳細內容")
+        } else {
+            Button {
+                if sizeClass == .regular {
+                    store.selectedID = provider.rawValue
+                } else {
+                    store.accountPrompt = provider
+                }
+            } label: {
+                ProviderBadge(id: provider.rawValue, name: provider.name, base: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(provider.name)，登入")
         }
     }
 
-    private func rows(_ items: [ProviderQuota]) -> some View {
-        // In a split view's list, a value link selects the platform: unfolded it fills the
-        // detail pane, folded it pushes the detail screen.
-        ForEach(items) { item in
-            NavigationLink(value: item.id) { QuotaRow(quota: item, status: store.status(for: item.providerId)) }
-                .contextMenu { ProviderActions(store: store, providerId: item.providerId) }
+    @ViewBuilder
+    private var readout: some View {
+        if provider.isSignedIn, let quota, let window = Glance.bottleneck(quota) {
+            GlanceReadout(mark: window.mark, remaining: window.remaining, urgent: window.urgent)
+        } else if provider.isSignedIn, quota?.isUnsupportedPlan == true {
+            Text("這個方案目前無法顯示額度")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("未設定")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -189,103 +237,6 @@ struct ProviderStatusLine: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-    }
-}
-
-struct QuotaRow: View {
-    let quota: ProviderQuota
-    var status: ProviderStatus? = nil
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // At accessibility text sizes the text needs the full width; the badge
-            // only repeats the name, so it steps aside.
-            if !typeSize.isAccessibilitySize {
-                ProviderBadge(id: quota.id, name: quota.name)
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                if typeSize.isAccessibilitySize {
-                    Text(quota.name).font(.headline)
-                    Text(quota.planName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    percentText
-                } else {
-                    HStack(alignment: .firstTextBaseline) {
-                        // A long name ("Google Antigravity") keeps whole words in a narrow
-                        // column; the plan gives way and truncates instead.
-                        Text(quota.name).font(.headline)
-                            .layoutPriority(1)
-                        Text(quota.planName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        percentText
-                    }
-                }
-                ProgressView(value: min(max(quota.remainingPercent, 0), 100), total: 100)
-                    .tint(quota.level.tint)
-                if quota.pools.count > 1 {
-                    PoolSummary(pools: quota.pools)
-                }
-                // A healthy-looking figure can still run out before the reset; say so here
-                // instead of only on the 分析 page.
-                if let warning = paceWarning {
-                    HStack(spacing: 4) {
-                        Image(systemName: warning == .willRunOut ? "exclamationmark.triangle.fill" : "speedometer")
-                            .accessibilityHidden(true)
-                        Text(Self.warningText(warning))
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(warning.textTint)
-                }
-                if let reset = quota.resetDate {
-                    ResetText(date: reset)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                // Only when a free reset is waiting; 「不提供」 on every row was noise
-                // (the resets sheet still lists every provider's count).
-                if quota.reportsResetCredits, (quota.resetCredits ?? 0) > 0 {
-                    ResetCreditsLine(quota: quota).font(.caption)
-                }
-                // FR-7: a plan the parser read but could not turn into any window.
-                if quota.isUnsupportedPlan {
-                    Text("這個方案目前無法顯示額度").font(.caption).foregroundStyle(.secondary)
-                }
-                ProviderStatusLine(status: status)
-            }
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityValue(accessibilityValue)
-    }
-
-    private var accessibilityValue: String {
-        let base = "剩餘 \(Int(quota.remainingPercent.rounded()))%，\(quota.level.label)"
-        return paceWarning.map { "\(base)，\(Self.warningText($0))" } ?? base
-    }
-
-    /// The most urgent pace among this provider's windows (會用完 before 偏快); nil when every
-    /// window is on pace, already used up (the figure shows that) or can't be estimated.
-    private var paceWarning: PaceEstimate.Status? {
-        let statuses = quota.pools.flatMap(\.tiers).map { PaceEstimate(tier: $0).status }
-        if statuses.contains(.willRunOut) { return .willRunOut }
-        if statuses.contains(.fast) { return .fast }
-        return nil
-    }
-
-    static func warningText(_ status: PaceEstimate.Status) -> String {
-        status == .willRunOut ? "照目前速度，重置前會用完" : "用得比時間快"
-    }
-
-    private var percentText: some View {
-        Text(quota.remainingPercent / 100, format: .percent.precision(.fractionLength(0)))
-            .font(.headline.monospacedDigit())
-            .foregroundStyle(quota.level.textTint)
-            .fixedSize()
     }
 }
 

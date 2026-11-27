@@ -63,8 +63,7 @@ jobs:
             xcrun simctl terminate "$UDID" "$BUNDLE" || true
             xcrun simctl uninstall "$UDID" "$BUNDLE" || true
             xcrun simctl install "$UDID" "$app"
-            # Layout check only: demo data, clearly labelled in the app as not real usage.
-            xcrun simctl spawn "$UDID" defaults write "$BUNDLE" opentokenusage_sample_data -bool YES
+            # Unsigned layout: four 未設定 rows, no sample figures.
             xcrun simctl launch "$UDID" "$BUNDLE"
             sleep 12
             capture "$name"

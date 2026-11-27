@@ -65,7 +65,7 @@ struct QuotaWidgetView: View {
                 // One provider: its pools as rows, so the widget still has something per line.
                 QuotaWidgetContent(items: QuotaWidgetContent.poolRows(item), savedAt: entry.savedAt,
                                    size: family == .systemSmall ? .small : .medium, now: entry.date,
-                                   keepOrder: true)
+                                   keepOrder: true, prefixPool: item.pools.count > 1)
             } else {
                 // FR-13.
                 QuotaWidgetMessage(title: ProviderQuery.known.first { $0.id == id }?.name ?? "AI 額度",

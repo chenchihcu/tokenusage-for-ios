@@ -7,7 +7,6 @@ struct SettingsView: View {
     var refreshRelay: () async -> Void = {}
     @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
     @AppStorage(SettingsKey.haptics) private var haptics = true
-    @AppStorage(SettingsKey.sampleData) private var sampleData = false
     @AppStorage(SettingsKey.catalogSchedule) private var catalogSchedule = ModelCatalog.Schedule.weekly.rawValue
     @State private var tokens: [DirectProvider: String] = [:]
     @State private var importMessage: String?
@@ -137,12 +136,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("示範資料", isOn: $sampleData)
-                } footer: {
-                    Text("登入憑證只存在這支手機的鑰匙圈，App 直接向 Claude Code、Codex 與 Cursor 查詢用量，不經過中繼伺服器；只有 Google Antigravity 是讀取你的 Mac 上傳到 Worker 的資料。開啟示範資料時不會連線，顯示的不是你的真實用量。")
-                }
-
-                Section {
                     LabeledContent("版本", value: AppSettings.versionText())
                     LabeledContent("更新時間", value: AppSettings.buildTimestampText())
                 }
@@ -168,11 +161,7 @@ struct SettingsView: View {
                 reloadSignedIn()
             }
             .sheet(item: $signingIn, onDismiss: reloadSignedIn) { provider in
-                if provider.isRelayed {
-                    RelaySetupView(onVerified: refreshRelay)
-                } else {
-                    SignInView(provider: provider)
-                }
+                AccountAccess(provider: provider, onVerified: refreshRelay)
             }
             .confirmationDialog(
                 signingOut?.isRelayed == true ? "停用 \(signingOut?.name ?? "") 轉送？" : "登出 \(signingOut?.name ?? "")？",

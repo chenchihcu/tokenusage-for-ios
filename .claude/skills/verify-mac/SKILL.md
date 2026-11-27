@@ -37,8 +37,8 @@ build); `shots` alone about 7 min. Run `ios` and `shots` in the background.
 ## Screenshots and postures
 
 - Everything runs on a dedicated simulator, "OTU Verify" (an iPhone Duo), created on first use.
-  Never point the script at the person's own simulator: it uninstalls the app and turns on
-  sample data (`opentokenusage_sample_data`).
+  Never point the script at the person's own simulator: it uninstalls the app. Screenshots
+  show the unsigned 額度 page (four 未設定 rows).
 - GUI changes need before/after images of the same element and view: run `shots` before
   editing and again after, open both sets of PNGs, and compare. Copy the ones you cite to
   `docs/evidence/<date>-<feature>/`.

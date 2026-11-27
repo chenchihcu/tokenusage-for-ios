@@ -202,6 +202,20 @@ struct SignInView: View {
     }
 }
 
+/// The sign-in already used in 設定, also opened from a company icon on 額度.
+struct AccountAccess: View {
+    let provider: DirectProvider
+    var onVerified: () async -> Void = {}
+
+    var body: some View {
+        if provider.isRelayed {
+            RelaySetupView(onVerified: onVerified)
+        } else {
+            SignInView(provider: provider)
+        }
+    }
+}
+
 /// Google Antigravity has no phone sign-in. The person's Mac relays its usage to their Worker
 /// (`scripts/relay-antigravity-mac.py`) and the phone reads it from there. This sheet saves the
 /// Worker's address once it has answered with a quota list.
