@@ -291,39 +291,23 @@ struct ResetsView: View {
     var body: some View {
         NavigationStack {
             List {
-                if store.displayItems.isEmpty {
-                    Text("尚無資料。").foregroundStyle(.secondary)
-                }
-                ForEach(store.displayItems) { quota in
-                    Section(quota.name) {
-                        if quota.reportsResetCredits {
-                            LabeledContent("免費重置") {
-                                if let credits = quota.resetCredits {
-                                    Text("\(credits) 次")
-                                        .foregroundStyle(credits > 0 ? Color.statusGreen : Color.secondary)
-                                } else {
-                                    Text("—").accessibilityLabel("不提供")
-                                }
-                            }
+                ForEach(DirectProvider.allCases) { provider in
+                    let quota = store.displayItems.first { $0.id == provider.rawValue }
+                    HStack(spacing: 12) {
+                        ProviderBadge(id: provider.rawValue, name: provider.name, base: 28)
+                        if let credits = ResetBoard.creditText(quota) {
+                            Text(credits)
+                                .font(.body.monospacedDigit().weight(.medium))
+                                .foregroundStyle((quota?.resetCredits ?? 0) > 0 ? Color.statusGreen : Color.secondary)
                         }
-                        ForEach(quota.pools.flatMap { pool in
-                            // Name the pool when there are several, e.g. 「Opus · 每週」.
-                            pool.tiers.map { tier in
-                                (id: "\(pool.id).\(tier.id)",
-                                 label: quota.pools.count > 1 ? "\(pool.name) · \(tier.label)" : tier.label,
-                                 tier: tier)
-                            }
-                        }, id: \.id) { row in
-                            let tier = row.tier
-                            LabeledContent(row.label) {
-                                if let reset = tier.resetDate {
-                                    ResetText(date: reset)
-                                } else {
-                                    Text("重置時間不明")
-                                }
-                            }
+                        Spacer(minLength: 8)
+                        if let date = quota.flatMap({ Glance.bottleneck($0)?.tier.resetDate }) {
+                            ResetText(date: date)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
                     }
+                    .accessibilityElement(children: .combine)
                 }
             }
             .navigationTitle("免費重置與重置時間")
@@ -335,6 +319,14 @@ struct ResetsView: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// Free-reset digits for the four-row reset sheet. Cursor and Antigravity stay blank.
+enum ResetBoard {
+    static func creditText(_ quota: ProviderQuota?) -> String? {
+        guard let quota, quota.reportsResetCredits, let credits = quota.resetCredits else { return nil }
+        return String(credits)
     }
 }
 

@@ -1,48 +1,30 @@
 import SwiftUI
 import UIKit
 
-/// Original badge per AI vendor (spec-vendor-badges-app-icon.md, FR-B1…FR-B7): its own colour
-/// and its own symbol, so vendors are told apart at a glance and in grayscale. No vendor logo
-/// is bundled; an owner-supplied `logo-<id>.png` still replaces the badge (FR-38 / FR-B5).
+/// Original mark per company. The shape is recognisable; the artwork is not a vendor logo.
+/// An owner-supplied `logo-<id>.png` still replaces the drawing.
 /// Shared by the app and the widget.
 struct ProviderBadge: View {
     let id: String
     let name: String
-    /// Side at the default text size; it grows with Dynamic Type so the symbol or logo is
-    /// never clipped (FR-B2).
+    /// Side at the default text size; it grows with Dynamic Type so the mark is never clipped.
     var base: CGFloat = 36
     @ScaledMetric(relativeTo: .headline) private var scale: CGFloat = 1
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
-
-    /// Below this side a symbol is too small to read, so the 2-letter code shows (FR-B4).
-    static let codeThreshold: CGFloat = 20
 
     var body: some View {
         let side = base * scale
         let shape = RoundedRectangle(cornerRadius: side * 0.25, style: .continuous)
         let style = ProviderStyle.style(for: id, name: name)
         ZStack {
-            shape.fill(style.color)
+            shape.fill(style.background)
             if let logo = ProviderStyle.logo(for: id) {
                 Image(uiImage: logo)
                     .resizable()
                     .scaledToFit()
-            } else if side >= Self.codeThreshold, let symbol = style.symbol,
-                      UIImage(systemName: symbol) != nil {
-                Image(systemName: symbol)
-                    .resizable()
-                    .scaledToFit()
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.white)
-                    .frame(width: side * 0.55, height: side * 0.55)
             } else {
-                Text(style.code)
-                    .font(.system(size: side * 0.42, weight: .bold, design: .rounded))
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .foregroundStyle(.white)
-                    .padding(side * 0.08)
+                mark(style, side: side)
             }
         }
         .frame(width: side, height: side)
@@ -55,10 +37,39 @@ struct ProviderBadge: View {
         .accessibilityHidden(true)
     }
 
-    /// Keeps Codex's near-black badge visible on dark backgrounds, and every badge with
-    /// Increase Contrast on.
+    @ViewBuilder
+    private func mark(_ style: ProviderStyle.Style, side: CGFloat) -> some View {
+        switch style.mark {
+        case .burst:
+            BurstMark()
+                .stroke(style.ink, style: StrokeStyle(lineWidth: side * 0.09, lineCap: .round))
+                .padding(side * 0.2)
+        case .knot:
+            KnotMark()
+                .fill(style.ink)
+                .padding(side * 0.18)
+        case .pointer:
+            PointerMark()
+                .fill(style.ink)
+                .padding(side * 0.16)
+        case .quadrants:
+            QuadrantMark()
+                .padding(side * 0.1)
+        case .letters(let text):
+            Text(text)
+                .font(.system(size: side * 0.42, weight: .bold, design: .rounded))
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .foregroundStyle(style.ink)
+                .padding(side * 0.08)
+        }
+    }
+
+    /// Near-black on a dark list, and near-white on a light list, need a hairline.
     private var needsBorder: Bool {
-        contrast == .increased || (id == "codex" && colorScheme == .dark)
+        contrast == .increased
+            || (id == "codex" && colorScheme == .dark)
+            || (id == "cursor" && colorScheme == .light)
     }
 }
 
@@ -76,14 +87,23 @@ struct VendorLabel: View {
 }
 
 enum ProviderStyle {
-    struct Style: Equatable {
-        /// sRGB, 0xRRGGBB.
-        var hex: UInt32
-        /// SF Symbols name; nil uses the code.
-        var symbol: String?
-        var code: String
+    /// One drawing. The four companies never fall back to a two-letter code.
+    enum Mark: Equatable {
+        case burst, knot, pointer, quadrants
+        case letters(String)
+    }
 
-        var color: Color {
+    struct Style: Equatable {
+        var mark: Mark
+        /// sRGB background, 0xRRGGBB. Quadrants paint over most of it.
+        var hex: UInt32
+        /// sRGB ink for burst, knot, pointer and letters.
+        var inkHex: UInt32
+
+        var background: Color { Self.color(hex) }
+        var ink: Color { Self.color(inkHex) }
+
+        static func color(_ hex: UInt32) -> Color {
             Color(.sRGB,
                   red: Double((hex >> 16) & 0xFF) / 255,
                   green: Double((hex >> 8) & 0xFF) / 255,
@@ -91,15 +111,17 @@ enum ProviderStyle {
         }
     }
 
-    /// FR-B1. Every background carries white at ≥ 4.5:1; symbols differ in shape (FR-B3).
+    /// Blue, red, yellow, green, clockwise from the top.
+    static let quadrantHexes: [UInt32] = [0x4285F4, 0xEA4335, 0xF6C400, 0x34A853]
+
     static let known: [String: Style] = [
-        "claude": Style(hex: 0xB5532F, symbol: "asterisk", code: "CC"),
-        "codex": Style(hex: 0x1F1F1F, symbol: "chevron.left.forwardslash.chevron.right", code: "CX"),
-        "cursor": Style(hex: 0x0A7A76, symbol: "cursorarrow", code: "CU"),
-        "antigravity": Style(hex: 0x2F5FD6, symbol: "arrow.up.to.line", code: "AG"),
+        "claude": Style(mark: .burst, hex: 0xC2410C, inkHex: 0xFFFFFF),
+        "codex": Style(mark: .knot, hex: 0x1F1F1F, inkHex: 0xFFFFFF),
+        "cursor": Style(mark: .pointer, hex: 0xF5F5F7, inkHex: 0x1A1A1A),
+        "antigravity": Style(mark: .quadrants, hex: 0xF5F5F7, inkHex: 0x1A1A1A),
     ]
 
-    /// The one vendor order used by the 額度 list and the widget (spec-widget-alignment.md FR-W1).
+    /// The one vendor order used by the 額度 list and the widget.
     /// Never sorted by remaining %.
     static let order = ["claude", "codex", "cursor", "antigravity"]
 
@@ -110,16 +132,90 @@ enum ProviderStyle {
             .map(\.element)
     }
 
-    /// Vendors without a definition: grey with the first two letters (FR-B6).
+    /// Vendors without a definition: grey with the first two letters.
     static func style(for id: String, name: String) -> Style {
         if let style = known[id] { return style }
-        let letters = name.filter { $0.isLetter }.prefix(2).uppercased()
-        return Style(hex: 0x6B6B70, symbol: nil, code: letters.isEmpty ? "?" : letters)
+        let letters = name.filter(\.isLetter).prefix(2).uppercased()
+        return Style(mark: .letters(letters.isEmpty ? "?" : letters), hex: 0x6B6B70, inkHex: 0xFFFFFF)
     }
 
     /// Logo files the owner adds under Resources/Logos: logo-claude.png, logo-codex.png,
     /// logo-cursor.png, logo-antigravity.png (square PNG, at least 180 × 180 px).
     static func logo(for id: String) -> UIImage? {
         UIImage(named: "logo-\(id)")
+    }
+}
+
+/// Eight rays with an empty centre.
+private struct BurstMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let outer = min(rect.width, rect.height) * 0.48
+        let inner = outer * 0.28
+        for index in 0..<8 {
+            let angle = CGFloat(index) / 8 * .pi * 2 - .pi / 2
+            let dx = cos(angle)
+            let dy = sin(angle)
+            path.move(to: CGPoint(x: center.x + dx * inner, y: center.y + dy * inner))
+            path.addLine(to: CGPoint(x: center.x + dx * outer, y: center.y + dy * outer))
+        }
+        return path
+    }
+}
+
+/// Six overlapping discs, a knot rather than a code bracket.
+private struct KnotMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) * 0.22
+        let orbit = radius * 0.95
+        for index in 0..<6 {
+            let angle = CGFloat(index) / 6 * .pi * 2
+            let origin = CGPoint(x: center.x + cos(angle) * orbit - radius,
+                                 y: center.y + sin(angle) * orbit - radius)
+            path.addEllipse(in: CGRect(x: origin.x, y: origin.y, width: radius * 2, height: radius * 2))
+        }
+        return path
+    }
+}
+
+/// A pointer aimed up and to the left.
+private struct PointerMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        let s = min(rect.width, rect.height)
+        let x = rect.minX + (rect.width - s) / 2 + s * 0.18
+        let y = rect.minY + (rect.height - s) / 2 + s * 0.14
+        var path = Path()
+        path.move(to: CGPoint(x: x, y: y))
+        path.addLine(to: CGPoint(x: x, y: y + s * 0.66))
+        path.addLine(to: CGPoint(x: x + s * 0.16, y: y + s * 0.48))
+        path.addLine(to: CGPoint(x: x + s * 0.36, y: y + s * 0.68))
+        path.addLine(to: CGPoint(x: x + s * 0.48, y: y + s * 0.56))
+        path.addLine(to: CGPoint(x: x + s * 0.28, y: y + s * 0.36))
+        path.addLine(to: CGPoint(x: x + s * 0.50, y: y + s * 0.22))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// A circle split in four. No letter.
+private struct QuadrantMark: View {
+    var body: some View {
+        Canvas { context, size in
+            let radius = min(size.width, size.height) / 2
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            for (index, hex) in ProviderStyle.quadrantHexes.enumerated() {
+                var path = Path()
+                path.move(to: center)
+                path.addArc(center: center, radius: radius,
+                            startAngle: .degrees(Double(index) * 90 - 90),
+                            endAngle: .degrees(Double(index + 1) * 90 - 90),
+                            clockwise: false)
+                path.closeSubpath()
+                context.fill(path, with: .color(ProviderStyle.Style.color(hex)))
+            }
+        }
     }
 }

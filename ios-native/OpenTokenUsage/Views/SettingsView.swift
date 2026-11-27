@@ -23,126 +23,36 @@ struct SettingsView: View {
     @AppStorage(AlertCenter.quietStartKey) private var quietStart = QuietHours.defaultStart
     @AppStorage(AlertCenter.quietEndKey) private var quietEnd = QuietHours.defaultEnd
     @State private var notificationsDenied = false
+    @State private var layer: Layer?
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private enum Layer: String, Identifiable {
+        case refresh, notices, quiet, version
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .refresh: return "更新"
+            case .notices: return "通知"
+            case .quiet: return "勿擾"
+            case .version: return "版本"
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                // Signing in is what makes the app useful, so it comes first.
-                Section {
-                    ForEach(DirectProvider.allCases) { provider in
-                        if signedIn.contains(provider) {
-                            LabeledContent {
-                                if provider.isRelayed {
-                                    Button("檢查轉送") { signingIn = provider }
-                                    Button("停用", role: .destructive) { signingOut = provider }
-                                } else {
-                                    Button("登出", role: .destructive) { signingOut = provider }
-                                }
-                            } label: {
-                                VendorLabel(id: provider.rawValue, name: provider.name)
-                            }
-                        } else {
-                            LabeledContent {
-                                Button(provider.isRelayed ? "Mac 轉送" : "登入") { signingIn = provider }
-                            } label: {
-                                VendorLabel(id: provider.rawValue, name: provider.name)
+            Group {
+                if let layer {
+                    Form { layerForm(layer) }
+                        .navigationTitle(layer.title)
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("設定") { self.layer = nil }
                             }
                         }
-                    }
-                } header: {
-                    Text("帳號")
-                } footer: {
-                    Text("登入在各服務的官方頁面進行。這些登入方式並非官方公開介面，服務更新後可能失效。Google Antigravity 不能在手機登入，改由你的 Mac 讀取用量後經 Worker 轉送。")
-                }
-
-                Section {
-                    Picker("自動更新", selection: $refreshInterval) {
-                        ForEach(AppSettings.intervalOptions) { option in
-                            Text(option.title).tag(option.seconds)
-                        }
-                    }
-                } footer: {
-                    Text("App 開啟時依此頻率更新。Claude Code 最快每 5 分鐘、Codex 與 Cursor 最快每 1 分鐘查詢一次，避免被服務拒絕。Antigravity 最快每 1 分鐘讀取 Worker，但只有 Mac 轉送後（約每 5 分鐘）數字才會變。")
-                }
-
-                Section {
-                    Toggle("免費重置通知", isOn: permissionBinding($resetAlerts))
-                    Toggle("額度警示通知", isOn: permissionBinding($quotaAlerts))
-                    if quotaAlerts {
-                        Picker("提醒時機", selection: $alertTiming) {
-                            Text("標準（80%、95%）").tag("standard")
-                            Text("提早（50%、80%、95%）").tag("early")
-                        }
-                    }
-                    Toggle("用完與重置", isOn: permissionBinding($limitResetAlerts))
-                    Toggle("未用完提醒", isOn: permissionBinding($unusedReminders))
-                    Toggle("每週摘要", isOn: permissionBinding($weeklySummary))
-                } header: {
-                    Text("通知")
-                } footer: {
-                    if notificationsDenied {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("通知已關閉，需要到 iOS「設定」開啟。")
-                            Button("開啟設定") {
-                                if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
-                                    UIApplication.shared.open(url)
-                                }
-                            }
-                            .font(.footnote.weight(.semibold))
-                        }
-                    } else {
-                        Text("免費重置：Codex 或 Claude Code 出現免費重置時通知你。額度警示：任一週期用到設定的比例，或照目前速度會在重置前用完時通知你。用完與重置：週期用完時通知，用到 80% 以上的週期重置時再通知一次。未用完提醒：每週額度重置前 12 小時仍用不到一半時提醒。每週摘要：週一早上 9 點。每個週期各通知一次；背景檢查的時間由 iOS 決定。")
-                    }
-                }
-
-                Section {
-                    Toggle("勿擾時段", isOn: $quietHours)
-                    if quietHours {
-                        DatePicker("開始", selection: minutesBinding($quietStart, other: quietEnd),
-                                   displayedComponents: .hourAndMinute)
-                        DatePicker("結束", selection: minutesBinding($quietEnd, other: quietStart),
-                                   displayedComponents: .hourAndMinute)
-                    }
-                } footer: {
-                    Text("這段時間內的額度通知會留到結束時才送出；到時已不正確的（例如週期已重置）就不送。開始與結束不能相同。")
-                }
-
-                Section {
-                    Toggle("觸覺回饋", isOn: $haptics)
-                }
-
-                Section {
-                    Picker("模型與價格更新", selection: $catalogSchedule) {
-                        ForEach(ModelCatalog.Schedule.allCases) { Text($0.title).tag($0.rawValue) }
-                    }
-                } footer: {
-                    Text("各代理會新增或淘汰模型。App 依此頻率下載最新的模型清單與 API 牌價（LiteLLM 公開價格表），只下載公開資料，不傳送你的任何資訊。")
-                }
-
-                Section {
-                    DisclosureGroup("進階：手動貼上權杖") {
-                        Button("從剪貼簿匯入權杖", systemImage: "doc.on.clipboard") { importFromClipboard() }
-                        if let importMessage {
-                            Text(importMessage).font(.footnote).foregroundStyle(.secondary)
-                        }
-                        ForEach(DirectProvider.allCases.filter { !$0.isRelayed }) { provider in
-                            SecureField(provider.tokenTitle, text: tokenBinding(provider))
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                        }
-                    }
-                } footer: {
-                    Text("只有在 App 內登入無法使用時才需要。")
-                }
-
-                Section {
-                    LabeledContent("版本", value: AppSettings.versionText())
-                    LabeledContent("更新時間", value: AppSettings.buildTimestampText())
-                }
-
-                // TEMPORARY (spec-token-usage-codex-cursor.md §12, P1). Remove before release.
-                Section {
-                    NavigationLink("Cursor Token 測試（暫時）") { CursorTokenProbeView() }
+                } else {
+                    iconHome
                 }
             }
             .scrollsToTop(on: scrollToTopToken)
@@ -179,7 +89,128 @@ struct SettingsView: View {
             } message: {
                 Text(signingOut?.isRelayed == true ? "這支手機會停止讀取 Mac 轉送的資料。" : "這支手機會刪除此服務的登入憑證。")
             }
-            .navigationTitle("設定")
+            .onChange(of: scrollToTopToken) { layer = nil }
+        }
+    }
+
+    private var iconHome: some View {
+        List {
+            Section {
+                HStack {
+                    ForEach(DirectProvider.allCases) { provider in
+                        Button {
+                            if signedIn.contains(provider) {
+                                signingOut = provider
+                            } else {
+                                signingIn = provider
+                            }
+                        } label: {
+                            ProviderBadge(id: provider.rawValue, name: provider.name, base: 36)
+                                .opacity(signedIn.contains(provider) ? 1 : 0.35)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(signedIn.contains(provider)
+                            ? "\(provider.name)，\(provider.isRelayed ? "停用" : "登出")"
+                            : "\(provider.name)，登入")
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+            Section {
+                HStack {
+                    layerButton("更新", systemImage: "arrow.clockwise", layer: .refresh)
+                    Spacer(minLength: 0)
+                    layerButton("通知", systemImage: "bell", layer: .notices)
+                    Spacer(minLength: 0)
+                    layerButton("勿擾", systemImage: "moon", layer: .quiet)
+                    Spacer(minLength: 0)
+                    layerButton("版本", systemImage: "number", layer: .version)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollDisabled(!typeSize.isAccessibilitySize)
+        .navigationTitle("設定")
+    }
+
+    private func layerButton(_ title: String, systemImage: String, layer: Layer) -> some View {
+        Button {
+            self.layer = layer
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.title2)
+                Text(title)
+                    .font(.caption)
+            }
+            .frame(minWidth: 44, minHeight: 44)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func layerForm(_ layer: Layer) -> some View {
+        switch layer {
+        case .refresh:
+            Section {
+                Picker("自動更新", selection: $refreshInterval) {
+                    ForEach(AppSettings.intervalOptions) { option in
+                        Text(option.title).tag(option.seconds)
+                    }
+                }
+                Toggle("觸覺回饋", isOn: $haptics)
+                Picker("模型與價格更新", selection: $catalogSchedule) {
+                    ForEach(ModelCatalog.Schedule.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+            }
+            Section {
+                Button("從剪貼簿匯入權杖", systemImage: "doc.on.clipboard") { importFromClipboard() }
+                if let importMessage {
+                    Text(importMessage).font(.footnote).foregroundStyle(.secondary)
+                }
+                ForEach(DirectProvider.allCases.filter { !$0.isRelayed }) { provider in
+                    SecureField(provider.tokenTitle, text: tokenBinding(provider))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+            }
+            Section {
+                NavigationLink("Cursor Token 測試（暫時）") { CursorTokenProbeView() }
+            }
+        case .notices:
+            Section {
+                Toggle("免費重置通知", isOn: permissionBinding($resetAlerts))
+                Toggle("額度警示通知", isOn: permissionBinding($quotaAlerts))
+                if quotaAlerts {
+                    Picker("提醒時機", selection: $alertTiming) {
+                        Text("標準（80%、95%）").tag("standard")
+                        Text("提早（50%、80%、95%）").tag("early")
+                    }
+                }
+                Toggle("用完與重置", isOn: permissionBinding($limitResetAlerts))
+                Toggle("未用完提醒", isOn: permissionBinding($unusedReminders))
+                Toggle("每週摘要", isOn: permissionBinding($weeklySummary))
+                if notificationsDenied {
+                    Button("開啟設定") {
+                        if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+            }
+        case .quiet:
+            Section {
+                Toggle("勿擾時段", isOn: $quietHours)
+                DatePicker("開始", selection: minutesBinding($quietStart, other: quietEnd),
+                           displayedComponents: .hourAndMinute)
+                DatePicker("結束", selection: minutesBinding($quietEnd, other: quietStart),
+                           displayedComponents: .hourAndMinute)
+            }
+        case .version:
+            Section {
+                LabeledContent("版本", value: AppSettings.versionText())
+                LabeledContent("更新時間", value: AppSettings.buildTimestampText())
+            }
         }
     }
 }

@@ -111,6 +111,10 @@ struct SignInView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    ProviderBadge(id: model.provider.rawValue, name: model.provider.name, base: 56)
+                        .frame(maxWidth: .infinity)
+                }
                 switch model.phase {
                 case .intro:
                     Section {
@@ -249,6 +253,10 @@ struct RelaySetupView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    ProviderBadge(id: DirectProvider.antigravity.rawValue, name: DirectProvider.antigravity.name, base: 56)
+                        .frame(maxWidth: .infinity)
+                }
                 Section {
                     Text("Google 不允許在手機登入 Antigravity。改由你的 Mac 讀取用量（透過 CodexBar），每 5 分鐘上傳到你的 Worker，這支手機再從 Worker 讀取。")
                     Text("Mac 關機或睡眠時不會更新；App 會標出資料是什麼時候的。")

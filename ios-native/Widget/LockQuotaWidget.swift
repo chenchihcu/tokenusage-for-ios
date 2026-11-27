@@ -78,13 +78,11 @@ struct LockQuotaView: View {
     @ViewBuilder
     private func windowView(_ window: QuotaWindow) -> some View {
         let remaining = Int(window.remaining.rounded())
-        let code = ProviderStyle.style(for: window.providerId, name: window.providerName).code
         Group {
             switch family {
             case .accessoryCircular:
-                // FR-9: gauge of remaining %, with the provider's 2-letter code.
                 Gauge(value: min(max(window.remaining, 0), 100), in: 0...100) {
-                    Text(code)
+                    ProviderBadge(id: window.providerId, name: window.providerName, base: 12)
                 } currentValueLabel: {
                     Text("\(remaining)")
                 }
