@@ -1,5 +1,5 @@
 {
-  "$comment": "Web UI Acceptance Gate (spec 2026-11-27-03). Run: node ~/.agents/skills/validate-web-ui/scripts/ui-gate.mjs",
+  "$comment": "Web UI Acceptance Gate (spec 2026-11-27-03). Run: node ~/.agents/skills/validate-app-ui/scripts/ui-gate.mjs",
   "watch": [
     "src/client/**",
     "src/worker/**",

@@ -13,7 +13,7 @@
     "server": "node dist-server/index.js",
     "sync:desktop": "python scripts/sync-desktop-accounts.py",
     "test:e2e": "playwright test",
-    "verify:ui": "node \"$HOME/.agents/skills/validate-web-ui/scripts/ui-gate.mjs\""
+    "verify:ui": "node \"$HOME/.agents/skills/validate-app-ui/scripts/ui-gate.mjs\""
   },
   "dependencies": {
     "lucide-react": "^1.16.0",
