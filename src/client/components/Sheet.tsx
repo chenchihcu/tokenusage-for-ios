@@ -48,7 +48,7 @@ export const Sheet: React.FC<SheetProps> = ({ title, open, onClose, children }) 
             完成
           </button>
         </div>
-        <div className="py-2 min-h-0 overflow-hidden">{children}</div>
+        <div className="py-2 min-h-0 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

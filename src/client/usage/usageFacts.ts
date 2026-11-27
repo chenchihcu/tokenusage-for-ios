@@ -85,9 +85,25 @@ function feeText(metrics: Metric[]): string | null {
   return null;
 }
 
-function tierUsed(pool: TokenPool, tierId: string): number | null {
-  const tier = pool.tiers?.find((item) => item.id === tierId);
+const SESSION_TIER_IDS = ['5h', 'session'];
+const WEEK_TIER_IDS = ['weekly'];
+
+function tierUsed(pool: TokenPool, tierIds: readonly string[]): number | null {
+  const tier = pool.tiers?.find((item) => tierIds.includes(item.id));
   return tier && typeof tier.used === 'number' ? tier.used : null;
+}
+
+function windowUsed(
+  pool: TokenPool | null,
+  tierIds: readonly string[],
+  metrics: Metric[],
+  pattern: RegExp,
+): number | null {
+  if (pool) {
+    const fromTier = tierUsed(pool, tierIds);
+    if (fromTier !== null) return fromTier;
+  }
+  return metricUsed(metrics, pattern);
 }
 
 function governingPool(pools: TokenPool[]): TokenPool | null {
@@ -109,8 +125,8 @@ export function buildAgentUsage(item: QuotaCardProps): AgentUsage {
     remainingPercent: item.remainingPercent,
     modelName: pool ? pool.name : null,
     extraModels: Math.max(0, pools.length - 1),
-    sessionUsed: pool ? tierUsed(pool, '5h') : metricUsed(metrics, SESSION_LABEL),
-    weekUsed: pool ? tierUsed(pool, 'weekly') : metricUsed(metrics, WEEK_LABEL),
+    sessionUsed: windowUsed(pool, SESSION_TIER_IDS, metrics, SESSION_LABEL),
+    weekUsed: windowUsed(pool, WEEK_TIER_IDS, metrics, WEEK_LABEL),
     feeText: feeText(metrics),
   };
 }

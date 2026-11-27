@@ -67,7 +67,7 @@ export function extractResetWindowSummary(item: QuotaCardProps, nowMs: number = 
       const pools: TokenPool[] = JSON.parse(item.token_pools_json);
       for (const pool of pools) {
         for (const tier of pool.tiers || []) {
-          if (tier.id === '5h' && !sessionResetAt) {
+          if ((tier.id === '5h' || tier.id === 'session') && !sessionResetAt) {
             sessionResetAt = tier.resetsAt;
             sessionText = tier.resetsAt
               ? formatResetCountdown(tier.resetsAt, nowMs)
