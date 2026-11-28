@@ -139,8 +139,7 @@ struct AnalyticsView: View {
     private func series(for window: GlanceWindow?) -> [UsageDay] {
         guard let window else { return [] }
         return history.series(providerId: providerId, poolId: window.poolId,
-                              tierId: window.tier.id, period: period,
-                              providerName: quota?.name, poolName: window.poolName)
+                              tierId: window.tier.id, period: period)
     }
 }
 
