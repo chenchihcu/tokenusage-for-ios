@@ -1,16 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { QuotaCardProps } from './QuotaCard';
+import { QuotaCard, QuotaCardProps } from './QuotaCard';
 import { HandednessMode } from './ViewModeSelector';
-import { PlatformIcon } from './PlatformIcon';
 import {
   USAGE_GROUPS,
   UsageGroupId,
   buildAgentUsage,
   isUsageGroup,
-  levelWord,
-  modelText,
   orderAgents,
-  percentText,
 } from '../usage/usageFacts';
 
 interface CockpitOverviewProps {
@@ -28,13 +24,6 @@ interface CockpitOverviewProps {
 }
 
 const STORAGE_KEY_USAGE_GROUP = 'opentokenusage_usage_group';
-
-const SELECTED_BORDER: Record<string, string> = {
-  cursor: 'border-cyan-400',
-  codex: 'border-emerald-400',
-  antigravity: 'border-purple-400',
-  claude: 'border-amber-400',
-};
 
 function readGroup(): UsageGroupId {
   try {
@@ -68,82 +57,80 @@ export const CockpitOverview: React.FC<CockpitOverviewProps> = ({
 }) => {
   const [group, setGroup] = useState<UsageGroupId>(readGroup);
 
-  const rows = useMemo(() => {
-    const visible = filterAlertOnly ? quotas.filter((item) => item.remainingPercent <= 20) : quotas;
-    return orderAgents(visible.map(buildAgentUsage), group);
-  }, [quotas, filterAlertOnly, group]);
+  const visibleQuotas = useMemo(
+    () => (filterAlertOnly ? quotas.filter((item) => item.remainingPercent <= 20) : quotas),
+    [quotas, filterAlertOnly],
+  );
+
+  const rows = useMemo(
+    () => orderAgents(visibleQuotas.map(buildAgentUsage), group),
+    [visibleQuotas, group],
+  );
 
   const chooseGroup = (next: UsageGroupId) => {
     setGroup(next);
     storeGroup(next);
   };
 
-  const hot = (id: UsageGroupId) => (group === id ? 'text-cyan-300 font-bold' : 'text-slate-300 font-normal');
-
   return (
     <div
       data-usage-board
-      className="usage-board fab-clearance flex flex-col h-full min-h-0 min-w-0 w-full max-w-full overflow-hidden bg-slate-950 select-none"
+      className="bento-board usage-board fab-clearance flex flex-col h-full min-h-0 min-w-0 w-full max-w-7xl mx-auto overflow-y-auto phoneland:overflow-hidden bg-surface-canvas select-none"
     >
-      <div role="tablist" aria-label="用量分組" className="shrink-0 flex flex-nowrap gap-1 px-2 pt-1">
-        {USAGE_GROUPS.map((item) => {
-          const selected = group === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => chooseGroup(item.id)}
-              className={`flex-1 min-w-0 min-h-[44px] px-1 rounded-lg text-xs whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
-                selected ? 'bg-slate-800 text-cyan-300 font-bold' : 'text-slate-400 font-normal'
-              }`}
-            >
-              {item.label}
-            </button>
-          );
-        })}
+      {/* Apple HIG Segmented Control */}
+      <div className="shrink-0 px-3 sm:px-6 pt-2.5 phoneland:pt-1 pb-1.5 phoneland:pb-0.5">
+        <div
+          role="tablist"
+          aria-label="用量分組"
+          className="flex flex-nowrap gap-1 p-1 phoneland:p-0.5 rounded-xl bg-surface-muted/80 border border-border-hairline"
+        >
+          {USAGE_GROUPS.map((item) => {
+            const selected = group === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => chooseGroup(item.id)}
+                className={`flex-1 min-w-0 min-h-[44px] phoneland:min-h-[32px] px-2 rounded-lg text-xs whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
+                  selected
+                    ? 'bg-surface-card text-ink-primary font-bold shadow-hig-card'
+                    : 'text-ink-secondary font-normal hover:text-ink-primary'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {rows.length === 0 ? (
-        <p role="status" className="flex-1 flex items-center justify-center text-sm text-slate-300">
+        <p role="status" className="flex-1 flex items-center justify-center text-body text-ink-secondary px-4">
           沒有剩餘 20% 以下的服務
         </p>
       ) : (
         <div
           role="list"
           aria-label="四個服務的額度"
-          className="flex-1 min-h-0 min-w-0 grid gap-1 px-2 py-1"
-          style={{ gridTemplateRows: `repeat(${rows.length}, minmax(0, 1fr))` }}
+          className="bento-grid flex-1 min-h-0 min-w-0 grid grid-cols-1 gap-1.5 sm:gap-3 phoneland:grid-cols-2 phoneland:grid-rows-2 phoneland:gap-1.5 px-3 sm:px-6 py-1 sm:py-2 phoneland:py-0.5 content-start phoneland:content-stretch"
         >
           {rows.map((row) => {
-            const level = levelWord(row.remainingPercent);
-            const selected = row.id === selectedId;
+            const fullQuota = visibleQuotas.find((q) => q.id === row.id);
+            if (!fullQuota) return null;
             return (
-              <div key={row.id} role="listitem" className="min-h-0 min-w-0 h-full">
-              <button
-                type="button"
-                aria-pressed={selected}
-                onClick={() => onSelectPlatform(row.id)}
-                onDoubleClick={() => onOpenDetail(row.id)}
-                className={`min-h-0 min-w-0 h-full w-full overflow-hidden flex items-center gap-2 px-2 rounded-xl border text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
-                  selected
-                    ? `bg-slate-900 ${SELECTED_BORDER[row.id] ?? 'border-cyan-400'}`
-                    : 'bg-slate-900/60 border-slate-800'
-                }`}
-              >
-                <PlatformIcon id={row.id} className="w-4 h-4 shrink-0" />
-                <span className="min-w-0 flex-1 overflow-hidden">
-                  <span className="flex items-center gap-1 min-w-0">
-                    <h3 className="min-w-0 text-sm font-bold text-slate-100 truncate">{row.name}</h3>
-                    {level ? <span className="shrink-0 text-xs font-bold text-rose-300">{level}</span> : null}
-                  </span>
-                  <span className={`block text-xs truncate ${hot('model')}`}>模型 {modelText(row)}</span>
-                </span>
-                <span className="min-w-0 max-w-[62%] truncate text-xs tabular-nums text-slate-300 font-normal">
-                  5小時 {percentText(row.sessionUsed)} · 每週 {percentText(row.weekUsed)} · 費用 {row.feeText ?? '未提供'}
-                </span>
-              </button>
+              <div key={row.id} role="listitem" className="min-w-0 phoneland:min-h-0 phoneland:h-full">
+                <QuotaCard
+                  {...fullQuota}
+                  usage={row}
+                  isSelected={row.id === selectedId}
+                  highlightKey={group}
+                  onClick={() => {
+                    onSelectPlatform(row.id);
+                    onOpenDetail(row.id);
+                  }}
+                />
               </div>
             );
           })}
