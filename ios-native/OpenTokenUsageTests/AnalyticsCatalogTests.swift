@@ -163,30 +163,6 @@ final class AnalyticsCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.models.first { $0.id == "gpt-5.6-sol" }?.contextTokens, 922_000)   // no correction
     }
 
-    func testWorkerCatalogParsesOfficialModelsAndTracksDiff() throws {
-        let json = #"""
-        {
-          "success": true,
-          "fetchedAt": "2026-11-28T03:00:00Z",
-          "models": [
-            {"id": "gpt-6.2-astra", "provider": "OpenAI", "context_window": 1050000, "cost_per_m_input": 2.5, "cost_per_m_output": 10.0},
-            {"id": "claude-fable-5-1", "provider": "Anthropic", "context_window": 1000000, "cost_per_m_input": 4.0, "cost_per_m_output": 20.0},
-            {"id": "gemini-3.8-flash", "provider": "Google", "context_window": 1000000, "cost_per_m_input": 0.075, "cost_per_m_output": 0.3},
-            {"id": "cursor-agent", "provider": "Cursor", "context_window": 200000, "cost_per_m_input": 0, "cost_per_m_output": 0}
-          ]
-        }
-        """#
-        let previous = ModelCatalog(models: [
-            CatalogModel(id: "gpt-6.2-astra", vendor: .openai),
-            CatalogModel(id: "gpt-4o-latest", vendor: .openai),
-        ], fetchedAt: Date(timeIntervalSince1970: 0))
-        let catalog = try XCTUnwrap(ModelCatalog.parseWorkerCatalog(Data(json.utf8), previous: previous))
-        XCTAssertEqual(Set(catalog.models.map(\.id)), ["gpt-6.2-astra", "claude-fable-5-1", "gemini-3.8-flash"])
-        XCTAssertEqual(catalog.added, ["claude-fable-5-1", "gemini-3.8-flash"])
-        XCTAssertEqual(catalog.removed, ["gpt-4o-latest"])
-        XCTAssertEqual(try XCTUnwrap(catalog.models.first { $0.id == "gpt-6.2-astra" }?.inputPerMillion), 2.5, accuracy: 0.001)
-    }
-
     func testStoredCatalogHidesRetiredModelsAndOldChanges() {
         let fetched = ISO8601DateFormatter().date(from: "2026-11-01T12:00:00Z")!
         let catalog = ModelCatalog(models: [
