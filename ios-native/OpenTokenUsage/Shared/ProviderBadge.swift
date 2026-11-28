@@ -1,9 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// Original mark per company. The shape is recognisable; the artwork is not a vendor logo.
-/// An owner-supplied `logo-<id>.png` still replaces the drawing.
-/// Shared by the app and the widget.
+/// Vendor badge shared by the app and the widget.
+/// Codex and Google Antigravity use the official brand artwork bundled in `BrandLogos.xcassets`
+/// (derived from `docs/brand/*.svg`), centered with 15% padding on a neutral light/dark tile.
+/// Other vendors keep their built-in marks; an owner-supplied `logo-<id>.png` still overrides.
 struct ProviderBadge: View {
     let id: String
     let name: String
@@ -17,12 +18,14 @@ struct ProviderBadge: View {
         let side = base * scale
         let shape = RoundedRectangle(cornerRadius: side * 0.25, style: .continuous)
         let style = ProviderStyle.style(for: id, name: name)
+        let hasBundledBrandLogo = ProviderStyle.bundledBrandLogoIds.contains(id)
         ZStack {
-            shape.fill(style.background)
+            shape.fill(tileBackground(for: style, isBundledBrandLogo: hasBundledBrandLogo))
             if let logo = ProviderStyle.logo(for: id) {
                 Image(uiImage: logo)
                     .resizable()
                     .scaledToFit()
+                    .padding(hasBundledBrandLogo ? side * 0.15 : 0)
             } else {
                 mark(style, side: side)
             }
@@ -35,6 +38,11 @@ struct ProviderBadge: View {
             }
         }
         .accessibilityHidden(true)
+    }
+
+    private func tileBackground(for style: ProviderStyle.Style, isBundledBrandLogo: Bool) -> Color {
+        guard isBundledBrandLogo else { return style.background }
+        return colorScheme == .dark ? ProviderStyle.Style.color(0x18181B) : .white
     }
 
     @ViewBuilder
@@ -65,10 +73,10 @@ struct ProviderBadge: View {
         }
     }
 
-    /// Near-black on a dark list, and near-white on a light list, need a hairline.
+    /// Near-black on a dark list, and white/near-white on a light list, need a hairline.
     private var needsBorder: Bool {
         contrast == .increased
-            || (id == "codex" && colorScheme == .dark)
+            || ProviderStyle.bundledBrandLogoIds.contains(id)
             || (id == "cursor" && colorScheme == .light)
     }
 }
@@ -139,8 +147,12 @@ enum ProviderStyle {
         return Style(mark: .letters(letters.isEmpty ? "?" : letters), hex: 0x6B6B70, inkHex: 0xFFFFFF)
     }
 
-    /// Logo files the owner adds under Resources/Logos: logo-claude.png, logo-codex.png,
-    /// logo-cursor.png, logo-antigravity.png (square PNG, at least 180 × 180 px).
+    /// Vendors whose official brand artwork is bundled in `Shared/BrandLogos.xcassets`
+    /// and displayed on a neutral tile (white in light mode, `#18181B` in dark mode) with 15% padding.
+    static let bundledBrandLogoIds: Set<String> = ["codex", "antigravity"]
+
+    /// Bundled brand logos (`Shared/BrandLogos.xcassets`: `logo-codex`, `logo-antigravity`) or
+    /// owner-supplied files under `Resources/Logos` (`logo-claude.png`, `logo-cursor.png`, etc.).
     static func logo(for id: String) -> UIImage? {
         UIImage(named: "logo-\(id)")
     }
