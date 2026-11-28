@@ -31,7 +31,55 @@ enum SampleQuotas {
                       tiers: [tier("auto", "本期", 100, at(90), 30 * 86_400)]),
                 .init(id: "cursor_api", name: "API 模型", description: "手動指定的模型，例如 Claude、GPT。",
                       tiers: [tier("api", "本期", 0, at(90), 30 * 86_400)]),
-            ], metrics: [QuotaMetric(label: "方案總用量", used: 62, limit: 100)], now: now),
+            ], metrics: [QuotaMetric(label: "方案總用量", used: 62, limit: 100)], now: now,
+                               tokenUsage: sampleCursorTokenUsage(now: now)),
         ]
+    }
+
+    private static func sampleCursorTokenUsage(now: Date) -> TokenUsageSummary {
+        let iso = ISO8601DateFormatter()
+        let end = now.addingTimeInterval(90 * 3600)
+        let start = Calendar.current.date(byAdding: .day, value: -30, to: end) ?? now.addingTimeInterval(-26 * 86_400)
+        return TokenUsageSummary(
+            periodStart: iso.string(from: start),
+            periodEnd: iso.string(from: end),
+            isFallbackPeriod: false,
+            totalTokens: 12_345_678,
+            inputTokens: 1_450_000,
+            cacheWriteTokens: 820_000,
+            cacheReadTokens: 9_650_678,
+            outputTokens: 425_000,
+            totalCents: 410,
+            models: [
+                TokenUsageModel(
+                    model: "claude-4-sonnet",
+                    inputTokens: 980_000,
+                    cacheWriteTokens: 560_000,
+                    cacheReadTokens: 7_150_678,
+                    outputTokens: 290_000,
+                    totalTokens: 8_980_678,
+                    totalCents: 295
+                ),
+                TokenUsageModel(
+                    model: "gpt-5",
+                    inputTokens: 320_000,
+                    cacheWriteTokens: 260_000,
+                    cacheReadTokens: 1_850_000,
+                    outputTokens: 95_000,
+                    totalTokens: 2_525_000,
+                    totalCents: 88
+                ),
+                TokenUsageModel(
+                    model: "auto",
+                    inputTokens: 150_000,
+                    cacheWriteTokens: nil,
+                    cacheReadTokens: 650_000,
+                    outputTokens: 40_000,
+                    totalTokens: 840_000,
+                    totalCents: 27
+                ),
+            ],
+            fetchedAt: iso.string(from: now)
+        )
     }
 }

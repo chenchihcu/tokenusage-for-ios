@@ -64,10 +64,14 @@ struct QuotaClient {
         var succeeded: Set<DirectProvider> = []
         /// Why each failed provider failed this round (FR-1).
         var errors: [DirectProvider: QuotaClientError] = [:]
+        /// Providers whose secondary token usage request succeeded this round.
+        var tokenSucceeded: Set<DirectProvider> = []
+        /// Non-PII reason why a provider's token usage request failed (independent of quota status).
+        var tokenProblems: [DirectProvider: TokenUsageProblem] = [:]
     }
 
-    private enum Outcome {
-        case success(ProviderQuota)
+    enum Outcome {
+        case success(ProviderQuota, tokenSucceeded: Bool = false, tokenProblem: TokenUsageProblem? = nil)
         case failure(QuotaClientError, retryAfter: TimeInterval?)
     }
 
@@ -97,14 +101,17 @@ struct QuotaClient {
 
         await withTaskGroup(of: (DirectProvider, Outcome).self) { group in
             for (provider, token) in configured where !skipping.contains(provider) {
-                group.addTask { (provider, await self.fetch(provider, token: token)) }
+                let prev = previous.first { $0.providerId == provider.rawValue }
+                group.addTask { (provider, await self.fetch(provider, token: token, previous: prev)) }
             }
             for await (provider, outcome) in group {
                 result.asked.insert(provider)
                 switch outcome {
-                case .success(let quota):
+                case .success(let quota, let tokenSucceeded, let tokenProblem):
                     result.items.append(quota)
                     result.succeeded.insert(provider)
+                    if tokenSucceeded { result.tokenSucceeded.insert(provider) }
+                    if let tokenProblem { result.tokenProblems[provider] = tokenProblem }
                 case .failure(let error, let retryAfter):
                     if result.firstError == nil { result.firstError = error }
                     result.errors[provider] = error
@@ -117,7 +124,7 @@ struct QuotaClient {
         return result
     }
 
-    private func fetch(_ provider: DirectProvider, token: String) async -> Outcome {
+    func fetch(_ provider: DirectProvider, token: String, previous: ProviderQuota? = nil) async -> Outcome {
         let data: Data
         let response: URLResponse
         do {
@@ -141,7 +148,25 @@ struct QuotaClient {
         if provider.isRelayed, AntigravityRelay.read(data) == .nothingRelayed {
             return .failure(.relayEmpty, retryAfter: nil)
         }
-        guard let quota = provider.parse(data) else { return .failure(.badResponse, retryAfter: nil) }
+        guard var quota = provider.parse(data) else { return .failure(.badResponse, retryAfter: nil) }
+
+        if provider == .cursor {
+            let cycle: (start: Date?, end: Date?)
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                cycle = QuotaParser.cursorCycle(json)
+            } else {
+                cycle = (nil, nil)
+            }
+            switch await CursorTokenSource.fetch(token: token, cycleStart: cycle.start, cycleEnd: cycle.end, session: session) {
+            case .success(let summary):
+                quota.tokenUsage = summary
+                return .success(quota, tokenSucceeded: true, tokenProblem: nil)
+            case .failure(let problem):
+                // TR-6: quota still succeeds; keep the last saved token figures with their data time.
+                quota.tokenUsage = previous?.tokenUsage
+                return .success(quota, tokenSucceeded: false, tokenProblem: problem)
+            }
+        }
         return .success(quota)
     }
 }

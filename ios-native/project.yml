@@ -12,8 +12,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.10"
-    MARKETING_VERSION: "3.1.4"
-    CURRENT_PROJECT_VERSION: "5"
+    MARKETING_VERSION: "3.2.0"
+    CURRENT_PROJECT_VERSION: "6"
     # Set in project.yml so `xcodegen generate` keeps device signing.
     DEVELOPMENT_TEAM: QJ3VV82725
 targets:

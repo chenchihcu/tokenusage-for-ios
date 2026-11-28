@@ -76,9 +76,11 @@ struct QuotaDetailView: View {
                     ResetCreditsLine(quota: quota)
                 }
             }
+
+            tokenUsageSection
         }
         .listStyle(.insetGrouped)
-        .scrollDisabled(!typeSize.isAccessibilitySize && openedID == nil)
+        .scrollDisabled(!typeSize.isAccessibilitySize && openedID == nil && quota.tokenUsage == nil && status?.tokenProblem == nil)
         .alert("無法追蹤", isPresented: Binding(get: { trackMessage != nil }, set: { if !$0 { trackMessage = nil } })) {
             if trackMessage == ResetActivity.StartError.disabled.errorDescription {
                 Button("開啟設定") {
@@ -130,6 +132,134 @@ struct QuotaDetailView: View {
                     trackedRef: $trackedRef, message: $trackMessage)
             }
         }
+    }
+
+    @ViewBuilder
+    private var tokenUsageSection: some View {
+        Section {
+            if quota.providerId != DirectProvider.cursor.rawValue, quota.tokenUsage == nil {
+                Text("Token：服務未提供")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                if let problem = status?.tokenProblem {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: problem == .offline ? "wifi.slash" : "exclamationmark.triangle.fill")
+                            .accessibilityHidden(true)
+                        Text(problem.message)
+                    }
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(problem == .offline ? Color.secondary : Color.statusOrange)
+                }
+
+                if let usage = quota.tokenUsage {
+                    tokenUsageRows(usage)
+                } else if status?.tokenProblem == nil {
+                    Text("尚未取得 Token 資料")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Token 用量")
+        } footer: {
+            if let footer = tokenFooterText {
+                Text(footer)
+            }
+        }
+    }
+
+    private var tokenFooterText: String? {
+        guard let usage = quota.tokenUsage else { return nil }
+        var lines: [String] = []
+        if usage.totalCents != nil {
+            lines.append("依服務回報的 API 價格估算，不是帳單金額。")
+        }
+        if usage.isPartial == true {
+            lines.append("僅彙總前 1,000 筆事件，實際用量可能更高。")
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    @ViewBuilder
+    private func tokenUsageRows(_ usage: TokenUsageSummary) -> some View {
+        LabeledContent("期間", value: TokenFormat.periodText(usage))
+            .font(.subheadline)
+
+        let totalPrefix = usage.isPartial == true ? "≥ " : ""
+        let totalValue = usage.totalCents.map {
+            "\(totalPrefix)\(TokenFormat.shortCount(usage.totalTokens)) tokens · \(TokenFormat.estimatedCost(cents: $0))"
+        } ?? "\(totalPrefix)\(TokenFormat.shortCount(usage.totalTokens)) tokens"
+
+        LabeledContent("總計") {
+            Text(totalValue)
+                .font(.subheadline.monospacedDigit().weight(.semibold))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("總計，\(TokenFormat.rowAccessibilityLabel(usage))")
+
+        let categories: [(String, Int64?)] = [
+            ("輸入", usage.inputTokens),
+            ("快取寫入", usage.cacheWriteTokens),
+            ("快取讀取", usage.cacheReadTokens),
+            ("輸出", usage.outputTokens),
+        ]
+        ForEach(categories.compactMap { title, value in value.map { (title, $0) } }, id: \.0) { title, value in
+            LabeledContent(title) {
+                Text(TokenFormat.shortCount(value))
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(title)，\(TokenFormat.spokenCount(value)) tokens")
+        }
+
+        ForEach(usage.models) { item in
+            tokenModelRow(item)
+        }
+
+        if let fetched = usage.fetchedDate {
+            LabeledContent("資料時間") {
+                Text(fetched, format: .dateTime.month().day().hour().minute())
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .font(.footnote)
+        }
+    }
+
+    @ViewBuilder
+    private func tokenModelRow(_ item: TokenUsageModel) -> some View {
+        let countText = "\(TokenFormat.shortCount(item.totalTokens)) tokens"
+        let costText = item.totalCents.map { TokenFormat.estimatedCost(cents: $0) }
+        let spoken = costText.map { "\(item.model)，\(TokenFormat.spokenCount(item.totalTokens)) tokens，\($0)" }
+            ?? "\(item.model)，\(TokenFormat.spokenCount(item.totalTokens)) tokens"
+
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.model)
+                        .font(.subheadline.weight(.medium))
+                    Text(costText.map { "\(countText) · \($0)" } ?? countText)
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(item.model)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(costText.map { "\(countText) · \($0)" } ?? countText)
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken)
     }
 }
 

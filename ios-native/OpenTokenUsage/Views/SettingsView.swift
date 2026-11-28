@@ -195,9 +195,6 @@ struct SettingsView: View {
                         .autocorrectionDisabled()
                 }
             }
-            Section {
-                NavigationLink("Cursor Token 測試（暫時）") { CursorTokenProbeView() }
-            }
         case .notices:
             Section {
                 Toggle("免費重置通知", isOn: permissionBinding($resetAlerts))

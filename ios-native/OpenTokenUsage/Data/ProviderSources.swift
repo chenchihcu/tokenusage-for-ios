@@ -100,6 +100,17 @@ enum DirectProvider: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Formats the stored Cursor session value into a valid `Cookie` header.
+    static func cursorCookieHeader(for token: String) -> String {
+        let name = "WorkosCursorSessionToken="
+        var value = token.hasPrefix(name) ? String(token.dropFirst(name.count)) : token
+        // The cookie is "<user id>::<token>". A bare token from in-app sign-in gets the id added.
+        if !value.contains("::"), !value.contains("%3A%3A"), let user = JWT.cursorUserID(of: value) {
+            value = "\(user)%3A%3A\(value)"
+        }
+        return name + value
+    }
+
     func request(token: String) -> URLRequest {
         var request: URLRequest
         switch self {
@@ -115,13 +126,7 @@ enum DirectProvider: String, CaseIterable, Identifiable {
             }
         case .cursor:
             request = URLRequest(url: URL(string: "https://cursor.com/api/usage-summary")!)
-            let name = "WorkosCursorSessionToken="
-            var value = token.hasPrefix(name) ? String(token.dropFirst(name.count)) : token
-            // The cookie is "<user id>::<token>". A bare token from in-app sign-in gets the id added.
-            if !value.contains("::"), !value.contains("%3A%3A"), let user = JWT.cursorUserID(of: value) {
-                value = "\(user)%3A%3A\(value)"
-            }
-            request.setValue(name + value, forHTTPHeaderField: "Cookie")
+            request.setValue(Self.cursorCookieHeader(for: token), forHTTPHeaderField: "Cookie")
         case .antigravity:
             // The "token" is the Worker's address; a bad one fails as a network error.
             request = URLRequest(url: AntigravityRelay.quotasURL(base: token)
@@ -207,6 +212,13 @@ enum QuotaParser {
         }
         let plan = (json["plan_type"] as? String)?.capitalized ?? "ChatGPT"
         return make(.codex, plan: plan, poolName: "Codex 用量", tiers: tiers, metrics: metrics, now: now)
+    }
+
+    /// Extracts Cursor's billing cycle start and end dates from `usage-summary` JSON.
+    static func cursorCycle(_ json: [String: Any]) -> (start: Date?, end: Date?) {
+        let start = (json["billingCycleStart"] as? String).flatMap(QuotaDate.parse)
+        let end = (json["billingCycleEnd"] as? String).flatMap(QuotaDate.parse)
+        return (start, end)
     }
 
     /// Cursor's paid plans meter two pools separately: Auto + Composer, and API (models you
