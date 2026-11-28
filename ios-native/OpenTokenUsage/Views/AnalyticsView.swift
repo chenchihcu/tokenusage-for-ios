@@ -34,7 +34,7 @@ struct AnalyticsView: View {
                 }
                 if !windows.isEmpty {
                     Section {
-                        ForEach(windows.prefix(Glance.detailLimit)) { window in
+                        ForEach(windows) { window in
                             Button {
                                 windowId = window.id
                             } label: {
@@ -42,6 +42,8 @@ struct AnalyticsView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                    } header: {
+                        Text("用量與重置預估")
                     }
                 }
                 Section {
@@ -137,11 +139,12 @@ struct AnalyticsView: View {
     private func series(for window: GlanceWindow?) -> [UsageDay] {
         guard let window else { return [] }
         return history.series(providerId: providerId, poolId: window.poolId,
-                              tierId: window.tier.id, period: period)
+                              tierId: window.tier.id, period: period,
+                              providerName: quota?.name, poolName: window.poolName)
     }
 }
 
-/// Elapsed share of the window, with the projected use at reset.
+/// Current used share of the window, with pace status (never an uncapped >100% projection).
 private struct PaceLine: View {
     let window: GlanceWindow
     let selected: Bool
@@ -154,23 +157,23 @@ private struct PaceLine: View {
                 .font(.subheadline.weight(selected ? .semibold : .regular))
                 .frame(width: 72, alignment: .leading)
                 .lineLimit(1)
-            ProgressView(value: min(max(pace.elapsed ?? 0, 0), 100), total: 100)
+            ProgressView(value: min(max(pace.used, 0), 100), total: 100)
                 .tint(pace.status.tint)
-            Text(projected)
+            Text(summary)
                 .font(.body.monospacedDigit())
                 .foregroundStyle(pace.status.textTint)
-                .frame(minWidth: 44, alignment: .trailing)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
             if pace.status == .willRunOut || pace.status == .fast {
                 Circle().fill(Color.statusOrange).frame(width: 6, height: 6)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(window.mark)，\(pace.status.label)，\(projected)")
+        .accessibilityLabel("\(window.mark)，已用 \(summary)")
     }
 
-    private var projected: String {
-        guard let value = pace.projected else { return "—" }
-        return (value / 100).formatted(.percent.precision(.fractionLength(0)))
+    private var summary: String {
+        pace.compactSummary
     }
 }
 

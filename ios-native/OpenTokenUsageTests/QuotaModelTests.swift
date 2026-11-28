@@ -220,6 +220,87 @@ final class QuotaModelTests: XCTestCase {
         XCTAssertEqual(ResetAlerts.increases(previous: ["claude": 2], current: ["claude": 0]), [:])
         XCTAssertEqual(ResetAlerts.increases(previous: [:], current: ["claude": 0]), [:])
     }
+
+    func testCodexFinishSurvivesPendingRateLimitAndTransientNetworkErrors() async throws {
+        actor StepCounter {
+            var pollCount = 0
+            func nextPoll() -> Int {
+                pollCount += 1
+                return pollCount
+            }
+        }
+        let counter = StepCounter()
+        let attempt = SignInService.CodexAttempt(
+            deviceAuthID: "dev_1",
+            userCode: "ABCD-1234",
+            interval: 5,
+            url: URL(string: "https://auth.openai.com/codex/device")!
+        )
+        let cred = try await SignInService.codexFinish(attempt, pollInterval: 0.001) { request in
+            if request.url?.path.hasSuffix("/oauth/token") == true {
+                return (200, ["access_token": "tok_codex", "refresh_token": "ref_codex", "expires_in": 3600])
+            }
+            switch await counter.nextPoll() {
+            case 1: return (403, [:])
+            case 2: throw SignInError.network
+            case 3: return (429, [:])
+            default: return (200, ["authorization_code": "auth_1", "code_verifier": "ver_1"])
+            }
+        }
+        XCTAssertEqual(cred.accessToken, "tok_codex")
+        XCTAssertEqual(cred.refreshToken, "ref_codex")
+    }
+
+    func testCodexFinishFailsAfterConsecutiveNetworkErrors() async {
+        let attempt = SignInService.CodexAttempt(
+            deviceAuthID: "dev_1",
+            userCode: "ABCD-1234",
+            interval: 5,
+            url: URL(string: "https://auth.openai.com/codex/device")!
+        )
+        do {
+            _ = try await SignInService.codexFinish(attempt, pollInterval: 0.001) { _ in
+                throw SignInError.network
+            }
+            XCTFail("Expected SignInError.network")
+        } catch let error as SignInError {
+            XCTAssertEqual(error, .network)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    @MainActor
+    func testCodexSignInModelShowsCodeBeforeOpeningBrowserAndReopensSameURL() async throws {
+        var beginCalls = 0
+        let expectedURL = URL(string: "https://auth.openai.com/codex/device")!
+        let model = SignInModel(
+            provider: .codex,
+            beginCodex: {
+                beginCalls += 1
+                return SignInService.CodexAttempt(
+                    deviceAuthID: "dev_\(beginCalls)",
+                    userCode: "CODE-\(beginCalls)",
+                    interval: 5,
+                    url: expectedURL
+                )
+            },
+            finishCodex: { _ in
+                try await Task.sleep(for: .seconds(60))
+                return Credential(accessToken: "unused", refreshToken: nil, expiresAt: nil)
+            }
+        )
+        model.start()
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(model.phase, .codexCode("CODE-1"))
+        XCTAssertNil(model.page)
+
+        model.reopenPage()
+        XCTAssertEqual(model.page?.url, expectedURL)
+        XCTAssertEqual(model.phase, .codexCode("CODE-1"))
+        XCTAssertEqual(beginCalls, 1)
+        model.cancel()
+    }
 }
 
 /// spec-usage-pace-charts.md, FR-P1…FR-P5.
@@ -308,6 +389,15 @@ final class PaceEstimateTests: XCTestCase {
         XCTAssertNil(tier.windowSeconds)
         XCTAssertEqual(PaceEstimate(tier: tier, now: now).status, .unknown(.stale))
     }
+
+    func testCompactSummaryNeverExposesOver100PercentProjection() throws {
+        // Reproduces Antigravity weekly reading: 58.3% used at ~31.2% elapsed -> ~187% projected.
+        let p = pace(used: 58.3, resetIn: 4.81 * day, window: week)
+        XCTAssertEqual(p.status, .willRunOut)
+        XCTAssertGreaterThan(try XCTUnwrap(p.projected), 180)
+        XCTAssertEqual(p.compactSummary, "58% · 會用完")
+        XCTAssertFalse(p.compactSummary.contains("187"))
+    }
 }
 
 /// spec-vendor-badges-app-icon.md, FR-B1, FR-B3, FR-B6.
@@ -329,15 +419,16 @@ final class ProviderBadgeTests: XCTestCase {
     }
 
     func testEveryVendorHasABadge() {
-        XCTAssertEqual(Set(ProviderStyle.known.keys), ["claude", "codex", "cursor", "antigravity"])
+        XCTAssertEqual(Set(ProviderStyle.known.keys), ["claude", "codex", "cursor", "antigravity", "grok"])
         XCTAssertEqual(ProviderStyle.known["claude"]?.mark, .burst)
         XCTAssertEqual(ProviderStyle.known["codex"]?.mark, .knot)
         XCTAssertEqual(ProviderStyle.known["cursor"]?.mark, .pointer)
         XCTAssertEqual(ProviderStyle.known["antigravity"]?.mark, .quadrants)
+        XCTAssertEqual(ProviderStyle.known["grok"]?.mark, .slash)
     }
 
     func testLightInkIsReadable() throws {
-        for id in ["claude", "codex"] {
+        for id in ["claude", "codex", "grok"] {
             let style = try XCTUnwrap(ProviderStyle.known[id])
             XCTAssertEqual(style.inkHex, 0xFFFFFF)
             XCTAssertGreaterThanOrEqual(contrast(style.inkHex, on: style.hex), 4.5, id)
@@ -453,6 +544,12 @@ final class WidgetAlignmentTests: XCTestCase {
                 }
             }
         }
+    }
+
+    func testWidgetProviderQueryIncludesAntigravity() {
+        let ids = ProviderQuery.known.map(\.id)
+        XCTAssertEqual(ids, ["claude", "codex", "cursor", "antigravity"])
+        XCTAssertEqual(ProviderQuery.known.last?.name, "Google Antigravity")
     }
 }
 

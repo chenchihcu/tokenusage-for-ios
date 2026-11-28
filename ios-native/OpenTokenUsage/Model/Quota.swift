@@ -213,6 +213,18 @@ struct PaceEstimate: Equatable {
             status = .onPace
         }
     }
+
+    /// Compact single-line summary for analytics rows: shows actual used % (0–100%) and pace warning
+    /// without exposing uncapped >100% projections as if they were token usage.
+    var compactSummary: String {
+        let usedPercent = (min(max(used, 0), 100) / 100).formatted(.percent.precision(.fractionLength(0)))
+        switch status {
+        case .exhausted, .willRunOut, .fast:
+            return "\(usedPercent) · \(status.label)"
+        case .onPace, .unknown:
+            return usedPercent
+        }
+    }
 }
 
 /// Builds provider rows from their windows. Shared by the response parser, the bundled
