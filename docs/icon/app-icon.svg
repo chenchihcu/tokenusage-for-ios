@@ -1,6 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-<!-- OpenTokenUsage app icon (docs/spec-vendor-badges-app-icon.md, FR-I1 to FR-I5). Arcs, left to right: Claude Code, Codex, Cursor, Antigravity. Export: swift scripts/render-app-icon.swift -->
-<rect width="1024" height="1024" fill="#101828"/><g fill="none" stroke-width="96" stroke-linecap="round"><path d="M 299.9 772.1 A 300 300 0 0 1 212.4 544.3" stroke="#B5532F"/><path d="M 249.6 414.6 A 300 300 0 0 1 444.5 267.7" stroke="#9AA3AF"/><path d="M 579.5 267.7 A 300 300 0 0 1 774.4 414.6" stroke="#14A39D"/><path d="M 811.6 544.3 A 300 300 0 0 1 724.1 772.1" stroke="#4A7BEA"/></g>
-<line x1="512" y1="560" x2="671.7" y2="448.2" stroke="#FFFFFF" stroke-width="44" stroke-linecap="round"/>
-<circle cx="512" cy="560" r="54" fill="#FFFFFF"/>
+<!-- Four company marks, 2×2: Anthropic, OpenAI, Cursor, Google. Not vendor logos. Export: swift scripts/render-app-icon.swift -->
+<rect width="1024" height="1024" fill="#101828"/>
+<rect x="112.0" y="112.0" width="380" height="380" rx="88" fill="#C2410C"/>
+<rect x="532.0" y="112.0" width="380" height="380" rx="88" fill="#1F1F1F"/>
+<rect x="112.0" y="532.0" width="380" height="380" rx="88" fill="#F5F5F7"/>
+<rect x="532.0" y="532.0" width="380" height="380" rx="88" fill="#F5F5F7"/>
+<g stroke="#FFFFFF" stroke-width="28" stroke-linecap="round">
+<line x1="302.0" y1="256.0" x2="302.0" y2="170.0"/>
+<line x1="334.5" y1="269.5" x2="395.3" y2="208.7"/>
+<line x1="348.0" y1="302.0" x2="434.0" y2="302.0"/>
+<line x1="334.5" y1="334.5" x2="395.3" y2="395.3"/>
+<line x1="302.0" y1="348.0" x2="302.0" y2="434.0"/>
+<line x1="269.5" y1="334.5" x2="208.7" y2="395.3"/>
+<line x1="256.0" y1="302.0" x2="170.0" y2="302.0"/>
+<line x1="269.5" y1="269.5" x2="208.7" y2="208.7"/>
+</g>
+<g fill="#FFFFFF">
+<circle cx="772.0" cy="302.0" r="52"/>
+<circle cx="747.0" cy="345.3" r="52"/>
+<circle cx="697.0" cy="345.3" r="52"/>
+<circle cx="672.0" cy="302.0" r="52"/>
+<circle cx="697.0" cy="258.7" r="52"/>
+<circle cx="747.0" cy="258.7" r="52"/>
+</g>
+<g fill="#1A1A1A">
+<polygon points="180.4,585.2 180.4,836.0 241.2,767.6 317.2,843.6 362.8,798.0 286.8,722.0 370.4,668.8"/>
+</g>
+<path d="M 722.0 722.0 L 722.0 590.0 A 132.0 132.0 0 0 1 854.0 722.0 Z" fill="#4285F4"/>
+<path d="M 722.0 722.0 L 854.0 722.0 A 132.0 132.0 0 0 1 722.0 854.0 Z" fill="#EA4335"/>
+<path d="M 722.0 722.0 L 722.0 854.0 A 132.0 132.0 0 0 1 590.0 722.0 Z" fill="#F6C400"/>
+<path d="M 722.0 722.0 L 590.0 722.0 A 132.0 132.0 0 0 1 722.0 590.0 Z" fill="#34A853"/>
 </svg>

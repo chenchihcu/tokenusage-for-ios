@@ -111,6 +111,10 @@ struct SignInView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    ProviderBadge(id: model.provider.rawValue, name: model.provider.name, base: 56)
+                        .frame(maxWidth: .infinity)
+                }
                 switch model.phase {
                 case .intro:
                     Section {
@@ -202,6 +206,20 @@ struct SignInView: View {
     }
 }
 
+/// The sign-in already used in 設定, also opened from a company icon on 額度.
+struct AccountAccess: View {
+    let provider: DirectProvider
+    var onVerified: () async -> Void = {}
+
+    var body: some View {
+        if provider.isRelayed {
+            RelaySetupView(onVerified: onVerified)
+        } else {
+            SignInView(provider: provider)
+        }
+    }
+}
+
 /// Google Antigravity has no phone sign-in. The person's Mac relays its usage to their Worker
 /// (`scripts/relay-antigravity-mac.py`) and the phone reads it from there. This sheet saves the
 /// Worker's address once it has answered with a quota list.
@@ -235,6 +253,10 @@ struct RelaySetupView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    ProviderBadge(id: DirectProvider.antigravity.rawValue, name: DirectProvider.antigravity.name, base: 56)
+                        .frame(maxWidth: .infinity)
+                }
                 Section {
                     Text("Google 不允許在手機登入 Antigravity。改由你的 Mac 讀取用量（透過 CodexBar），每 5 分鐘上傳到你的 Worker，這支手機再從 Worker 讀取。")
                     Text("Mac 關機或睡眠時不會更新；App 會標出資料是什麼時候的。")

@@ -4,7 +4,7 @@
 # Usage: scripts/verify-mac.sh [all|web|ios|shots] ...      (default: all)
 #   web    tsc, vite build, Worker bundle (wrangler --dry-run), Playwright, Python script tests
 #   ios    xcodegen, then xcodebuild test on a dedicated simulator (xcresult kept)
-#   shots  light/dark portrait and dark landscape screenshots of every display, sample data on
+#   shots  light/dark portrait and dark landscape screenshots of every display, unsigned layout
 #
 # Every gate runs even when an earlier one fails. Exit 1 if any gate FAILED, 2 if none failed but
 # one was BLOCKED (a prerequisite is missing), 0 if all passed.
@@ -228,8 +228,7 @@ shoot() { # app name appearance
   xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null
   xcrun simctl uninstall "$UDID" "$BUNDLE" 2>/dev/null
   xcrun simctl install "$UDID" "$1" || return 1
-  # Layout check only: demo data, labelled in the app as not real usage.
-  xcrun simctl spawn "$UDID" defaults write "$BUNDLE" opentokenusage_sample_data -bool YES || return 1
+  # Unsigned layout: four 未設定 rows, no sample figures.
   xcrun simctl launch "$UDID" "$BUNDLE" || return 1
   sleep "$SHOT_WAIT"
   capture "$2"

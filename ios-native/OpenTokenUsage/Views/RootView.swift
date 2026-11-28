@@ -81,20 +81,44 @@ private struct QuotasSplitView: View {
             QuotaListView(store: store)
         } detail: {
             if let id = store.selectedID {
-                QuotaDetailContainer(store: store, id: id)
+                AgentDetail(store: store, id: id)
             } else {
                 ContentUnavailableView(
                     "選擇一個平台",
                     systemImage: "sidebar.leading",
-                    description: Text("在清單點選平台，詳細額度會顯示在這裡。")
+                    description: Text("點公司圖示，登入或查看這個服務。")
                 )
             }
         }
+        .sheet(item: $store.accountPrompt, onDismiss: {
+            Task { await store.refresh(force: true) }
+        }) { provider in
+            AccountAccess(provider: provider) { await store.refresh(force: true) }
+        }
         .onChange(of: sizeClass, initial: true) { _, newValue in
-            // Unfolding shows the most urgent platform right away instead of an empty pane.
+            // Unfolding shows the first agent immediately: its detail, or its sign-in.
             if newValue == .regular, store.selectedID == nil {
-                store.selectedID = store.displayItems.first?.id
+                store.selectedID = DirectProvider.allCases.first?.rawValue
             }
+        }
+    }
+}
+
+/// Right pane, or the screen pushed from a company icon: that agent's bars, or its sign-in.
+private struct AgentDetail: View {
+    let store: QuotaStore
+    let id: String
+
+    var body: some View {
+        if store.displayItems.contains(where: { $0.id == id }) {
+            QuotaDetailContainer(store: store, id: id)
+        } else if let provider = DirectProvider(rawValue: id), !provider.isSignedIn {
+            AccountAccess(provider: provider) { await store.refresh(force: true) }
+        } else if DirectProvider(rawValue: id) != nil {
+            ContentUnavailableView("還沒有額度資料", systemImage: "gauge.with.dots.needle.50percent",
+                                   description: Text("下拉即可更新。"))
+        } else {
+            ContentUnavailableView("找不到這個平台", systemImage: "questionmark.circle")
         }
     }
 }

@@ -76,9 +76,6 @@ struct QuotaClient {
     /// Providers that fail, or are skipped this round, keep their previous row,
     /// so one expired token or a rate limit does not blank the whole list.
     func fetchQuotas(previous: [ProviderQuota], skipping: Set<DirectProvider> = []) async throws -> Result {
-        if UserDefaults.standard.bool(forKey: SettingsKey.sampleData) {
-            return Result(items: SampleData.items(), firstError: nil)
-        }
         // Renews tokens that are about to expire before asking for usage.
         var configured: [(DirectProvider, String)] = []
         for provider in DirectProvider.allCases where !skipping.contains(provider) || provider.isSignedIn {

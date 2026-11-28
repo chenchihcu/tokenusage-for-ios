@@ -325,3 +325,133 @@ extension ProviderQuota {
         resetCredits.map { "免費重置 \($0) 次" } ?? "免費重置：不提供"
     }
 }
+
+/// One window drawn as a mark, a bar and a percent. The list shows only the bottleneck;
+/// the detail shows up to four of these.
+struct GlanceWindow: Equatable, Identifiable {
+    var poolId: String
+    var poolName: String
+    var tier: QuotaTier
+    var mark: String
+    var isBottleneck: Bool
+    var urgent: Bool
+
+    var id: String { "\(poolId).\(tier.id)" }
+    var remaining: Double { tier.remaining }
+}
+
+enum GlanceSlot: Equatable, Identifiable {
+    case window(GlanceWindow)
+    case more(Int)
+
+    var id: String {
+        switch self {
+        case .window(let window): return window.id
+        case .more: return "more"
+        }
+    }
+}
+
+/// Names the tightest window with a short mark: `5h`, `週`, `月`, or `Opus週`.
+enum Glance {
+    /// Detail keeps four cells. Past that, the fourth cell is a count.
+    static let detailLimit = 4
+
+    static func bottleneck(_ quota: ProviderQuota, forcePrefix: Bool = false, now: Date = Date()) -> GlanceWindow? {
+        windows(quota, forcePrefix: forcePrefix, now: now).first { $0.isBottleneck }
+    }
+
+    /// Bottleneck first, then the next-tightest windows.
+    static func windows(_ quota: ProviderQuota, forcePrefix: Bool = false, now: Date = Date()) -> [GlanceWindow] {
+        let tightest = quota.pools.min { $0.effectiveRemaining < $1.effectiveRemaining }
+        let governing = tightest.flatMap { pool in
+            pool.tiers.first { $0.isGoverning == true } ?? pool.tiers.min { $0.remaining < $1.remaining }
+        }
+        let rows = quota.pools.flatMap { pool in
+            pool.tiers.map { tier in
+                window(pool: pool, tier: tier, quota: quota, forcePrefix: forcePrefix,
+                       bottleneck: pool.id == tightest?.id && tier.id == governing?.id, now: now)
+            }
+        }
+        return rows.sorted { lhs, rhs in
+            if lhs.isBottleneck != rhs.isBottleneck { return lhs.isBottleneck }
+            if lhs.remaining != rhs.remaining { return lhs.remaining < rhs.remaining }
+            return lhs.id < rhs.id
+        }
+    }
+
+    /// At most four cells. More windows collapse into 「還有 N 個」.
+    static func detail(_ quota: ProviderQuota, now: Date = Date()) -> [GlanceSlot] {
+        let rows = windows(quota, now: now)
+        guard rows.count > detailLimit else { return rows.map { .window($0) } }
+        return rows.prefix(detailLimit - 1).map { .window($0) } + [.more(rows.count - (detailLimit - 1))]
+    }
+
+    /// One line per pool, for a widget that shows a single agent. Each line is that pool's tightest window.
+    static func poolLines(_ quota: ProviderQuota, now: Date = Date()) -> [GlanceWindow] {
+        let prefix = quota.pools.count > 1
+        return quota.pools.compactMap { pool in
+            let tier = pool.tiers.first { $0.isGoverning == true } ?? pool.tiers.min { $0.remaining < $1.remaining }
+            guard let tier else { return nil }
+            return window(pool: pool, tier: tier, quota: quota, forcePrefix: prefix, bottleneck: false, now: now)
+        }
+    }
+
+    private static func window(pool: TokenPool, tier: QuotaTier, quota: ProviderQuota,
+                               forcePrefix: Bool, bottleneck: Bool, now: Date) -> GlanceWindow {
+        GlanceWindow(poolId: pool.id, poolName: pool.name, tier: tier,
+                     mark: mark(pool: pool, tier: tier, quota: quota, forcePrefix: forcePrefix),
+                     isBottleneck: bottleneck, urgent: isUrgent(tier, now: now))
+    }
+
+    static func mark(pool: TokenPool, tier: QuotaTier, quota: ProviderQuota, forcePrefix: Bool = false) -> String {
+        let symbol = symbol(tier: tier, providerId: quota.providerId)
+        if !forcePrefix, isShared(pool, quota: quota) { return symbol }
+        return shortName(pool) + symbol
+    }
+
+    /// The agent's shared pool, or its only pool, is named by the symbol alone.
+    static func isShared(_ pool: TokenPool, quota: ProviderQuota) -> Bool {
+        if quota.pools.count <= 1 { return true }
+        if pool.id == "claude_all" || pool.name == "所有模型" { return true }
+        if pool.id == "codex_main" { return true }
+        return false
+    }
+
+    static func symbol(tier: QuotaTier, providerId: String) -> String {
+        if tier.label == "本期" { return "月" }
+        if providerId == "cursor", tier.label != "5 小時", tier.label != "每週" { return "月" }
+        if let seconds = tier.windowSeconds {
+            if abs(seconds - 18_000) <= 120 { return "5h" }
+            if abs(seconds - 604_800) <= 3_600 || abs(seconds - 7 * 86_400) <= 3_600 { return "週" }
+        }
+        if tier.label.contains("5"), tier.label.contains("小時") { return "5h" }
+        if tier.label.contains("每週") || tier.label.localizedCaseInsensitiveContains("week") { return "週" }
+        if providerId == "cursor" { return "月" }
+        return tier.label
+    }
+
+    static func shortName(_ pool: TokenPool) -> String {
+        let known = [
+            "claude_opus": "Opus",
+            "claude_sonnet": "Sonnet",
+            "claude_oauth_apps": "App",
+            "claude_cowork": "Cowork",
+            "cursor_auto": "Auto",
+            "cursor_api": "API",
+            "antigravity_gemini": "Gemini",
+            "antigravity_3p": "Claude",
+            "antigravity_gemini_argon_wtu": "Argon",
+        ]
+        if let name = known[pool.id] { return name }
+        let word = pool.name.split(whereSeparator: { $0 == " " || $0 == "·" }).first.map(String.init) ?? pool.name
+        return String(word.prefix(8))
+    }
+
+    static func isUrgent(_ tier: QuotaTier, now: Date) -> Bool {
+        switch PaceEstimate(tier: tier, now: now).status {
+        case .willRunOut, .fast: return true
+        default: return false
+        }
+    }
+}

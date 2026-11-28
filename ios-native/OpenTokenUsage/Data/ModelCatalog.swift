@@ -231,3 +231,71 @@ enum ModelCatalogStore {
         return catalog
     }
 }
+
+/// One price bar. The fraction is this price divided by the dearest price in the same set.
+enum PriceBoard {
+    struct Line: Equatable, Identifiable {
+        var vendor: CatalogModel.Vendor
+        var modelId: String
+        var inputPerMillion: Double
+        var fraction: Double
+        var id: String { "\(vendor.rawValue)/\(modelId)" }
+    }
+
+    static let rowLimit = 6
+
+    /// The dearest input price of each vendor, scaled against the dearest of those three.
+    static func headlines(_ models: [CatalogModel]) -> [Line] {
+        let tops = CatalogModel.Vendor.allCases.compactMap { vendor -> Line? in
+            guard let model = priciest(vendor, in: models, matching: "") else { return nil }
+            return Line(vendor: vendor, modelId: model.id, inputPerMillion: model.inputPerMillion ?? 0, fraction: 0)
+        }
+        return scaled(tops)
+    }
+
+    /// Matches across vendors, dearest first, still at most six rows.
+    static func search(_ query: String, in models: [CatalogModel]) -> [Line] {
+        let matches = models
+            .filter { ($0.inputPerMillion ?? 0) > 0 && $0.id.localizedCaseInsensitiveContains(query) }
+            .sorted { ($0.inputPerMillion ?? 0) > ($1.inputPerMillion ?? 0) }
+            .prefix(rowLimit)
+        return scaled(matches.map { model in
+            Line(vendor: model.vendor, modelId: model.id, inputPerMillion: model.inputPerMillion ?? 0, fraction: 0)
+        })
+    }
+
+    /// Up to six models of one vendor, dearest first. A query replaces that list.
+    static func lines(for vendor: CatalogModel.Vendor, in models: [CatalogModel], matching query: String = "") -> [Line] {
+        let matches = models
+            .filter { model in
+                model.vendor == vendor && (model.inputPerMillion ?? 0) > 0 &&
+                    (query.isEmpty || model.id.localizedCaseInsensitiveContains(query))
+            }
+            .sorted { ($0.inputPerMillion ?? 0) > ($1.inputPerMillion ?? 0) }
+            .prefix(rowLimit)
+        return scaled(matches.map { model in
+            Line(vendor: vendor, modelId: model.id, inputPerMillion: model.inputPerMillion ?? 0, fraction: 0)
+        })
+    }
+
+    static func fraction(_ price: Double, of maxPrice: Double) -> Double {
+        guard maxPrice > 0 else { return 0 }
+        return min(max(price / maxPrice, 0), 1)
+    }
+
+    private static func priciest(_ vendor: CatalogModel.Vendor, in models: [CatalogModel], matching query: String) -> CatalogModel? {
+        models
+            .filter { $0.vendor == vendor && ($0.inputPerMillion ?? 0) > 0 &&
+                (query.isEmpty || $0.id.localizedCaseInsensitiveContains(query)) }
+            .max { ($0.inputPerMillion ?? 0) < ($1.inputPerMillion ?? 0) }
+    }
+
+    private static func scaled(_ lines: [Line]) -> [Line] {
+        let maxPrice = lines.map(\.inputPerMillion).max() ?? 0
+        return lines.map { line in
+            var copy = line
+            copy.fraction = fraction(line.inputPerMillion, of: maxPrice)
+            return copy
+        }
+    }
+}

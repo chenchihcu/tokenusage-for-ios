@@ -44,7 +44,7 @@ Log: `~/Library/Logs/opentokenusage-antigravity-relay.log`.
 - **Widgets**: Home Screen (small, medium; all services or one service's pools) and Lock Screen (inline, circular, rectangular; one window, by default the tightest). Figures older than an hour are dimmed.
 - **重置倒數 Live Activity**: 「在鎖定畫面追蹤」 on a window's detail starts a Lock Screen / Dynamic Island countdown (one at a time, about 8 hours at most). Also from the Control Center control 「追蹤下次重置」 or Siri (「用 OpenTokenUsage 追蹤下次重置」); 「用 OpenTokenUsage 查額度」 reads each service's tightest window.
 - **Notifications** (Settings › 通知): free resets, level alerts (80/95 %, or 50/80/95 %), 用完與重置, 未用完提醒 (weekly windows, 12 h before reset), 每週摘要 (Monday 09:00), and 勿擾時段 that holds them and drops ones that are no longer true. See [`docs/spec-competitive-gap-v3.1.md`](../docs/spec-competitive-gap-v3.1.md).
-- **示範資料** in Settings shows sample figures for checking layouts; they are not your usage.
+- **未登入**的服務在額度頁顯示「未設定」，沒有百分比。點公司圖示進入該服務的登入；已登入則進入它的視窗。
 
 ## Build and install
 

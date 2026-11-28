@@ -316,13 +316,6 @@ final class ProviderBadgeTests: XCTestCase {
         (Double((hex >> 16) & 0xFF) / 255, Double((hex >> 8) & 0xFF) / 255, Double(hex & 0xFF) / 255)
     }
 
-    private func contrastWithWhite(_ hex: UInt32) -> Double {
-        func linear(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
-        let (r, g, b) = channels(hex)
-        let luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
-        return 1.05 / (luminance + 0.05)
-    }
-
     private func hue(_ hex: UInt32) -> (degrees: Double, chroma: Double) {
         let (r, g, b) = channels(hex)
         let maxC = max(r, g, b), minC = min(r, g, b), chroma = maxC - minC
@@ -337,29 +330,32 @@ final class ProviderBadgeTests: XCTestCase {
 
     func testEveryVendorHasABadge() {
         XCTAssertEqual(Set(ProviderStyle.known.keys), ["claude", "codex", "cursor", "antigravity"])
-        XCTAssertEqual(Set(ProviderStyle.known.values.map(\.code)).count, 4)
-        XCTAssertEqual(Set(ProviderStyle.known.values.compactMap(\.symbol)).count, 4, "symbols must differ in shape")
+        XCTAssertEqual(ProviderStyle.known["claude"]?.mark, .burst)
+        XCTAssertEqual(ProviderStyle.known["codex"]?.mark, .knot)
+        XCTAssertEqual(ProviderStyle.known["cursor"]?.mark, .pointer)
+        XCTAssertEqual(ProviderStyle.known["antigravity"]?.mark, .quadrants)
     }
 
-    func testSymbolsExistOnThisSystem() {
-        for (id, style) in ProviderStyle.known {
-            let symbol = try? XCTUnwrap(style.symbol)
-            XCTAssertNotNil(symbol.flatMap { UIImage(systemName: $0) }, "\(id): \(symbol ?? "nil")")
+    func testLightInkIsReadable() throws {
+        for id in ["claude", "codex"] {
+            let style = try XCTUnwrap(ProviderStyle.known[id])
+            XCTAssertEqual(style.inkHex, 0xFFFFFF)
+            XCTAssertGreaterThanOrEqual(contrast(style.inkHex, on: style.hex), 4.5, id)
         }
     }
 
-    func testWhiteSymbolsAreReadable() {
-        for (id, style) in ProviderStyle.known {
-            XCTAssertGreaterThanOrEqual(contrastWithWhite(style.hex), 4.5, id)
-        }
+    func testCursorPointerIsReadable() throws {
+        let style = try XCTUnwrap(ProviderStyle.known["cursor"])
+        XCTAssertGreaterThanOrEqual(contrast(style.inkHex, on: style.hex), 4.5)
     }
 
-    func testColouredBadgesAreFarApartInHue() {
-        let hues = ProviderStyle.known.values.map { hue($0.hex) }.filter { $0.chroma > 0.05 }.map(\.degrees)
-        XCTAssertEqual(hues.count, 3, "Codex is the one achromatic badge")
-        for (i, a) in hues.enumerated() {
-            for b in hues[(i + 1)...] {
-                let gap = min(abs(a - b), 360 - abs(a - b))
+    func testGoogleQuadrantsAreFarApartInHue() {
+        let hues = ProviderStyle.quadrantHexes.map { hue($0) }
+        XCTAssertEqual(hues.count, 4)
+        XCTAssertTrue(hues.allSatisfy { $0.chroma > 0.2 })
+        for (index, a) in hues.enumerated() {
+            for b in hues[(index + 1)...] {
+                let gap = min(abs(a.degrees - b.degrees), 360 - abs(a.degrees - b.degrees))
                 XCTAssertGreaterThanOrEqual(gap, 40)
             }
         }
@@ -367,8 +363,21 @@ final class ProviderBadgeTests: XCTestCase {
 
     func testUnknownVendorGetsGreyLetters() {
         let style = ProviderStyle.style(for: "foo", name: "Foo AI")
-        XCTAssertEqual(style.code, "FO")
-        XCTAssertNil(style.symbol)
+        XCTAssertEqual(style.hex, 0x6B6B70)
+        XCTAssertEqual(style.mark, .letters("FO"))
+        XCTAssertGreaterThanOrEqual(contrast(style.inkHex, on: style.hex), 4.5)
+    }
+
+    private func contrast(_ ink: UInt32, on ground: UInt32) -> Double {
+        let lighter = max(luminance(ink), luminance(ground))
+        let darker = min(luminance(ink), luminance(ground))
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private func luminance(_ hex: UInt32) -> Double {
+        func linear(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        let (r, g, b) = channels(hex)
+        return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 }
 
@@ -385,6 +394,20 @@ final class WidgetAlignmentTests: XCTestCase {
         let items = SampleData.items()
         let ordered: [ProviderQuota] = ProviderStyle.vendorOrdered(items, id: { (item: ProviderQuota) in item.providerId })
         XCTAssertEqual(ordered.map { $0.providerId }, ["claude", "codex", "cursor"])
+    }
+
+    func testGlanceMarkNamesTheBottleneckWindow() {
+        let items = SampleQuotas.items()
+        let claude = items[0]
+        let codex = items[1]
+        let cursor = items[2]
+        XCTAssertEqual(Glance.bottleneck(claude)?.mark, "週")
+        XCTAssertEqual(Glance.bottleneck(codex)?.mark, "週")
+        XCTAssertEqual(Glance.bottleneck(cursor)?.mark, "Auto月")
+        XCTAssertEqual(Glance.detail(claude).count, 4)
+        XCTAssertEqual(Glance.windows(claude).map(\.mark), ["週", "Sonnet週", "5h", "Opus週"])
+        XCTAssertEqual(Glance.windows(codex).map(\.mark), ["週", "5h"])
+        XCTAssertEqual(Glance.windows(cursor).map(\.mark), ["Auto月", "API月"])
     }
 
     func testPoolLineJoinsEveryPool() throws {
@@ -452,6 +475,11 @@ final class AntigravityRelayTests: XCTestCase {
         XCTAssertEqual(quota.pools[0].tiers[0].isGoverning, true)
         // Headline is the tightest pool, worked out on the phone like every other provider.
         XCTAssertEqual(quota.remainingPercent, 68.7, accuracy: 0.0001)
+        XCTAssertEqual(Glance.bottleneck(quota)?.mark, "Gemini5h")
+        let slots = Glance.detail(quota)
+        XCTAssertEqual(slots.count, 4)
+        guard case .more(let count) = slots.last else { return XCTFail("expected a count") }
+        XCTAssertEqual(count, 2)
         XCTAssertEqual(quota.resetTime, "2026-11-20T17:55:53Z")
         // The data time is the Mac's reading, not when the phone asked.
         XCTAssertEqual(quota.fetchedDate, QuotaDate.parse("2026-11-20T16:25:46Z"))

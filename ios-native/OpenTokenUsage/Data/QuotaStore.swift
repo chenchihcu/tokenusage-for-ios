@@ -29,10 +29,7 @@ final class QuotaStore {
     private(set) var isUpdatingCatalog = false
     private(set) var catalogError: String?
 
-    /// Sample figures (Settings › 示範資料) get sample history too, never mixed with real history.
-    var displayHistory: UsageHistory {
-        UserDefaults.standard.bool(forKey: SettingsKey.sampleData) ? SampleData.history() : history
-    }
+    var displayHistory: UsageHistory { history }
 
     /// The app's main pages (FR-39). One tab bar holds them, so any page is one tap away and
     /// each keeps its place; the system puts the bar beside the camera on iPhone Duo.
@@ -51,6 +48,8 @@ final class QuotaStore {
     /// Bumped when the person taps the tab they are already on; that page scrolls to its top.
     private(set) var scrollToTop: [Tab: Int] = [:]
     var selectedID: ProviderQuota.ID?
+    /// Sign-in or Mac relay for one agent, presented over the compact 額度 list.
+    var accountPrompt: DirectProvider?
     var presentedSheet: Sheet?
     /// Fast-path filter: only agents with 20 % or less remaining.
     var alertsOnly = false
@@ -103,12 +102,11 @@ final class QuotaStore {
         return displayItems.first { $0.id == selectedID }
     }
 
-    /// Providers to list under 「未設定」. With demo data on every provider already shows sample
-    /// numbers, so none is listed as missing.
+    /// Providers with no sign-in. `hasToken` is injected so tests do not read this phone's Keychain.
     nonisolated static func unconfiguredProviders(
-        sampleData: Bool = UserDefaults.standard.bool(forKey: SettingsKey.sampleData)
+        hasToken: (DirectProvider) -> Bool = { $0.isSignedIn }
     ) -> [DirectProvider] {
-        sampleData ? [] : DirectProvider.allCases.filter { $0.token == nil }
+        DirectProvider.allCases.filter { !hasToken($0) }
     }
 
     var alertCount: Int { displayItems.filter { $0.level == .exhausted }.count }
@@ -162,7 +160,7 @@ final class QuotaStore {
             ResetAlerts.check(result.items)
             await AlertCenter.sync(result.items)
             await ResetActivity.update(with: result.items)
-            if !UserDefaults.standard.bool(forKey: SettingsKey.sampleData), !result.asked.isEmpty {
+            if !result.asked.isEmpty {
                 history.record(result.items)
                 UsageHistoryStore.save(history)
             }

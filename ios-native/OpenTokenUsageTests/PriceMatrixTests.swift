@@ -30,8 +30,40 @@ final class PriceMatrixTests: XCTestCase {
 }
 
 extension PriceMatrixTests {
+    func testHeadlineBarIsTheDearestModelAgainstTheDearestVendor() {
+        let models = [
+            CatalogModel(id: "opus", vendor: .anthropic, inputPerMillion: 15),
+            CatalogModel(id: "haiku", vendor: .anthropic, inputPerMillion: 1),
+            CatalogModel(id: "gpt", vendor: .openai, inputPerMillion: 5),
+            CatalogModel(id: "gemini", vendor: .google, inputPerMillion: 1.25),
+        ]
+        let lines = PriceBoard.headlines(models)
+        XCTAssertEqual(lines.map(\.modelId), ["opus", "gpt", "gemini"])
+        XCTAssertEqual(lines[0].fraction, 1, accuracy: 0.0001)
+        XCTAssertEqual(lines[1].fraction, 5.0 / 15, accuracy: 0.0001)
+        XCTAssertEqual(lines[2].fraction, 1.25 / 15, accuracy: 0.0001)
+        XCTAssertEqual(PriceBoard.lines(for: .anthropic, in: models).map(\.modelId), ["opus", "haiku"])
+        XCTAssertEqual(PriceBoard.lines(for: .anthropic, in: models).first?.fraction, 1)
+    }
+
+    func testSearchReplacesTheBoardAndStopsAtSix() {
+        let models = (0..<8).map { CatalogModel(id: "m\($0)", vendor: .openai, inputPerMillion: Double($0 + 1)) }
+        XCTAssertEqual(PriceBoard.search("m", in: models).count, 6)
+        XCTAssertEqual(PriceBoard.search("m", in: models).first?.modelId, "m7")
+    }
+
+    func testResetCountIsBlankUnlessTheVendorReportsOne() {
+        let codex = QuotaAssembly.make(id: "codex", name: "Codex", plan: "Plus", pools: [],
+                                        metrics: [QuotaMetric(label: "Resets", value: "2 available")], now: Date())
+        let cursor = QuotaAssembly.make(id: "cursor", name: "Cursor", plan: "Pro", pools: [], metrics: [], now: Date())
+        XCTAssertEqual(ResetBoard.creditText(codex), "2")
+        XCTAssertNil(ResetBoard.creditText(cursor))
+        XCTAssertNil(ResetBoard.creditText(nil))
+    }
+
     func testPricesUseABareDollarSign() {
         XCTAssertEqual(MatrixColumn.price(3), "$3.00")
+        XCTAssertEqual(MatrixColumn.price(15), "$15.00")
         XCTAssertEqual(MatrixColumn.price(0.075), "$0.075")
     }
 }

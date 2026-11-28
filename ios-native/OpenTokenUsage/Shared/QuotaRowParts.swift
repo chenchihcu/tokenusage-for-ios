@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import WidgetKit
 
 // Pieces of the 額度 row shared by the app and the home-screen widget, so both read the same
 // way (spec-widget-alignment.md, FR-W3, FR-W6).
@@ -59,6 +60,43 @@ struct PoolSummary: View {
     /// The same line as plain text, for VoiceOver and tests.
     static func plainLine(_ pools: [TokenPool]) -> String {
         pools.map { "\($0.name) \(percent($0))" }.joined(separator: separator)
+    }
+}
+
+/// Mark, remaining bar, percent. The company icon sits beside this, as the shortcut.
+struct GlanceReadout: View {
+    let mark: String
+    let remaining: Double
+    var urgent = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(mark)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+                .layoutPriority(1)
+            ProgressView(value: min(max(remaining, 0), 100), total: 100)
+                .tint(QuotaLevel(remaining: remaining).tint)
+                .widgetAccentable()
+                .accessibilityHidden(true)
+            Text(remaining / 100, format: .percent.precision(.fractionLength(0)))
+                .font(.body.monospacedDigit().weight(.medium))
+                .foregroundStyle(QuotaLevel(remaining: remaining).textTint)
+                .frame(minWidth: 44, alignment: .trailing)
+            if urgent {
+                Circle()
+                    .fill(Color.statusOrange)
+                    .frame(width: 6, height: 6)
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+
+    private var label: String {
+        let base = "\(mark)，剩餘 \(Int(remaining.rounded()))%，\(QuotaLevel(remaining: remaining).label)"
+        return urgent ? base + "，重置前會用完" : base
     }
 }
 
