@@ -368,6 +368,15 @@ final class ProviderBadgeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(contrast(style.inkHex, on: style.hex), 4.5)
     }
 
+    func testOfficialBrandLogosLoadFromBundle() throws {
+        for id in ["codex", "antigravity"] {
+            XCTAssertTrue(ProviderStyle.bundledBrandLogoIds.contains(id), id)
+            let image = try XCTUnwrap(ProviderStyle.logo(for: id), "Missing bundled logo-\(id)")
+            XCTAssertGreaterThan(image.size.width, 0, id)
+            XCTAssertGreaterThan(image.size.height, 0, id)
+        }
+    }
+
     private func contrast(_ ink: UInt32, on ground: UInt32) -> Double {
         let lighter = max(luminance(ink), luminance(ground))
         let darker = min(luminance(ink), luminance(ground))
