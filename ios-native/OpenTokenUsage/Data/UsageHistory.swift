@@ -31,25 +31,37 @@ struct UsageHistory: Codable, Equatable {
     /// Days kept on the phone.
     static let retention = 400
 
-    /// Adds one refresh's readings. A rise counts as use; a drop means the window reset,
-    /// so everything shown after the reset was used since then.
+    static func key(providerId: String, poolId: String, tierId: String? = nil) -> String {
+        if let tierId { return "\(providerId)/\(poolId)/\(tierId)" }
+        return "\(providerId)/\(poolId)"
+    }
+
+    /// Adds one refresh's readings per window. A rise counts as use; a meaningful drop (>= 1%)
+    /// means the window reset, so everything shown after the reset was used since then.
     mutating func record(_ items: [ProviderQuota], at date: Date = Date(), calendar: Calendar = .current) {
         let today = calendar.startOfDay(for: date)
         for item in items {
             for pool in item.pools {
-                // Tiers run shortest to longest window; the longest shows usage best.
-                guard let window = pool.tiers.last else { continue }
-                let key = "\(item.providerId)/\(pool.id)"
-                let reading = window.used
-                defer { lastReading[key] = reading }
-                guard let previous = lastReading[key] else { continue }
-                let used = reading >= previous ? reading - previous : reading
-                guard used > 0 else { continue }
-                if let index = days.firstIndex(where: { $0.key == key && $0.day == today }) {
-                    days[index].consumed += used
-                } else {
-                    days.append(UsageDay(day: today, key: key, providerName: item.name,
-                                         poolName: pool.name, consumed: used))
+                for tier in pool.tiers {
+                    let key = Self.key(providerId: item.providerId, poolId: pool.id, tierId: tier.id)
+                    let reading = tier.used
+                    defer { lastReading[key] = reading }
+                    guard let previous = lastReading[key] else { continue }
+                    let used: Double
+                    if reading >= previous {
+                        used = reading - previous
+                    } else if previous - reading >= 1.0 {
+                        used = reading
+                    } else {
+                        used = 0
+                    }
+                    guard used > 0 else { continue }
+                    if let index = days.firstIndex(where: { $0.key == key && $0.day == today }) {
+                        days[index].consumed += used
+                    } else {
+                        days.append(UsageDay(day: today, key: key, providerName: item.name,
+                                             poolName: pool.name, consumed: used))
+                    }
                 }
             }
         }
@@ -90,6 +102,41 @@ struct UsageHistory: Codable, Equatable {
             sums[id]?.consumed += day.consumed
         }
         return sums.values.sorted { ($0.day, $0.key) < ($1.day, $1.key) }
+    }
+
+    /// Contiguous calendar buckets for one window (last 30 days / 8 weeks / 12 months),
+    /// filling idle buckets with 0 and falling back to legacy pool-level keys if needed.
+    func series(providerId: String, poolId: String, tierId: String, period: Period,
+                now: Date = Date(), calendar: Calendar = .current) -> [UsageDay] {
+        let allTotals = totals(by: period, calendar: calendar)
+        let tierKey = Self.key(providerId: providerId, poolId: poolId, tierId: tierId)
+        let legacyKey = Self.key(providerId: providerId, poolId: poolId)
+        let tierTotals = allTotals.filter { $0.key == tierKey }
+        let matched = tierTotals.isEmpty ? allTotals.filter { $0.key == legacyKey } : tierTotals
+        guard let template = matched.first else { return [] }
+
+        let count: Int
+        switch period {
+        case .day: count = 30
+        case .week: count = 8
+        case .month: count = 12
+        }
+        guard let currentStart = calendar.dateInterval(of: period.component, for: now)?.start else { return [] }
+        let byStart = Dictionary(uniqueKeysWithValues: matched.map { ($0.day, $0) })
+
+        var result: [UsageDay] = []
+        result.reserveCapacity(count)
+        for offset in (0..<count).reversed() {
+            guard let shifted = calendar.date(byAdding: period.component, value: -offset, to: currentStart),
+                  let start = calendar.dateInterval(of: period.component, for: shifted)?.start else { continue }
+            if let existing = byStart[start] {
+                result.append(existing)
+            } else {
+                result.append(UsageDay(day: start, key: template.key, providerName: template.providerName,
+                                       poolName: template.poolName, consumed: 0))
+            }
+        }
+        return result
     }
 }
 

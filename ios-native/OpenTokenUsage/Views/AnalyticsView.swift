@@ -59,6 +59,17 @@ struct AnalyticsView: View {
             .listStyle(.insetGrouped)
             .scrollsToTop(on: scrollToTopToken)
             .navigationTitle("用量分析")
+            .onAppear(perform: syncProviderSelection)
+            .onChange(of: items.map(\.providerId)) { _, _ in
+                syncProviderSelection()
+            }
+        }
+    }
+
+    private func syncProviderSelection() {
+        if quota == nil, let first = items.first?.providerId {
+            providerId = first
+            windowId = nil
         }
     }
 
@@ -75,31 +86,58 @@ struct AnalyticsView: View {
                 .frame(height: 4)
                 .frame(maxHeight: .infinity, alignment: .center)
         } else {
+            let maxConsumed = points.map(\.consumed).max() ?? 0
             Chart(points) { item in
+                AreaMark(
+                    x: .value("期間", item.day),
+                    y: .value("用量", item.consumed)
+                )
+                .foregroundStyle(Color.accentColor.opacity(0.12))
+
                 LineMark(
-                    x: .value("期間", item.day, unit: period.component),
+                    x: .value("期間", item.day),
                     y: .value("用量", item.consumed)
                 )
                 .foregroundStyle(Color.accentColor)
+
+                if item.consumed > 0 {
+                    PointMark(
+                        x: .value("期間", item.day),
+                        y: .value("用量", item.consumed)
+                    )
+                    .symbolSize(20)
+                    .foregroundStyle(Color.accentColor)
+                }
             }
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
+            .chartYScale(domain: 0...max(maxConsumed * 1.15, 10))
+            .chartYAxis {
+                AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text("\(Int(v.rounded()))%")
+                                .font(.caption2.monospacedDigit())
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                    AxisValueLabel {
+                        if let date = value.as(Date.self) {
+                            Text(date, format: period == .month ? .dateTime.month(.abbreviated) : .dateTime.month(.defaultDigits).day())
+                                .font(.caption2)
+                        }
+                    }
+                }
+            }
         }
     }
 
     private func series(for window: GlanceWindow?) -> [UsageDay] {
         guard let window else { return [] }
-        let key = "\(providerId)/\(window.poolId)"
-        let totals = history.totals(by: period).filter { $0.key == key }
-        let count: Int
-        switch period {
-        case .day: count = 30
-        case .week: count = 8
-        case .month: count = 12
-        }
-        let starts = Array(Set(totals.map(\.day))).sorted().suffix(count)
-        guard let first = starts.first else { return [] }
-        return totals.filter { $0.day >= first }
+        return history.series(providerId: providerId, poolId: window.poolId,
+                              tierId: window.tier.id, period: period)
     }
 }
 

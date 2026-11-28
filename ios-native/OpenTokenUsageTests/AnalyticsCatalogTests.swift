@@ -28,11 +28,55 @@ final class AnalyticsCatalogTests: XCTestCase {
         XCTAssertTrue(history.days.isEmpty)
         history.record([claude(weekly: 25, opus: 5)], at: day1.addingTimeInterval(600), calendar: calendar)
         history.record([claude(weekly: 4, opus: 9)], at: day1.addingTimeInterval(1200), calendar: calendar) // weekly reset
-        let all = history.days.first { $0.key == "claude/claude_all" }
-        XCTAssertEqual(all?.consumed ?? 0, 15 + 4, accuracy: 0.001)
-        let opus = history.days.first { $0.key == "claude/claude_opus" }
+        let weekly = history.days.first { $0.key == "claude/claude_all/weekly" }
+        XCTAssertEqual(weekly?.consumed ?? 0, 15 + 4, accuracy: 0.001)
+        let fiveHour = history.days.first { $0.key == "claude/claude_all/5h" }
+        XCTAssertNil(fiveHour) // 5h stayed at 1%, no rise
+        let opus = history.days.first { $0.key == "claude/claude_opus/weekly_opus" }
         XCTAssertEqual(opus?.consumed ?? 0, 4, accuracy: 0.001)
         XCTAssertEqual(opus?.seriesName, "Claude Code · Opus")
+    }
+
+    func testHistoryIgnoresMinorRoundingJitterWithoutReset() {
+        var history = UsageHistory()
+        let day1 = Date(timeIntervalSince1970: 1_794_800_000)
+        history.record([claude(weekly: 42.3, opus: 10.0)], at: day1, calendar: calendar)
+        // Small dip < 1% is jitter, not a reset
+        history.record([claude(weekly: 41.8, opus: 10.0)], at: day1.addingTimeInterval(300), calendar: calendar)
+        XCTAssertTrue(history.days.isEmpty)
+        // Subsequent rise counts from the latest reading (41.8 -> 45.0)
+        history.record([claude(weekly: 45.0, opus: 10.0)], at: day1.addingTimeInterval(600), calendar: calendar)
+        let weekly = history.days.first { $0.key == "claude/claude_all/weekly" }
+        XCTAssertEqual(weekly?.consumed ?? 0, 3.2, accuracy: 0.001)
+    }
+
+    func testSeriesFillsZeroGapsAndFallsBackToLegacyPoolKey() {
+        var history = UsageHistory()
+        let now = Date(timeIntervalSince1970: 1_794_800_000)
+        let today = calendar.startOfDay(for: now)
+        let threeDaysAgo = calendar.date(byAdding: .day, value: -3, to: today)!
+        let staleDay = calendar.date(byAdding: .day, value: -45, to: today)!
+        history.days = [
+            UsageDay(day: staleDay, key: "claude/claude_all/weekly", providerName: "Claude Code", poolName: "所有模型", consumed: 99),
+            UsageDay(day: threeDaysAgo, key: "claude/claude_all/weekly", providerName: "Claude Code", poolName: "所有模型", consumed: 12),
+            UsageDay(day: today, key: "claude/claude_all/weekly", providerName: "Claude Code", poolName: "所有模型", consumed: 5),
+            UsageDay(day: today, key: "codex/codex_main", providerName: "Codex", poolName: "Codex 用量", consumed: 7),
+        ]
+
+        let claudeSeries = history.series(providerId: "claude", poolId: "claude_all", tierId: "weekly",
+                                          period: .day, now: now, calendar: calendar)
+        XCTAssertEqual(claudeSeries.count, 30)
+        XCTAssertEqual(claudeSeries.last?.consumed ?? -1, 5, accuracy: 0.001)
+        XCTAssertEqual(claudeSeries[claudeSeries.count - 4].consumed, 12, accuracy: 0.001)
+        XCTAssertEqual(claudeSeries[claudeSeries.count - 2].consumed, 0, accuracy: 0.001)
+        // Stale 45-day-old point is excluded from the 30-day window
+        XCTAssertFalse(claudeSeries.contains { $0.consumed == 99 })
+
+        // Legacy pool-only key fallback works when no per-tier key exists
+        let codexSeries = history.series(providerId: "codex", poolId: "codex_main", tierId: "secondary_window",
+                                         period: .day, now: now, calendar: calendar)
+        XCTAssertEqual(codexSeries.count, 30)
+        XCTAssertEqual(codexSeries.last?.consumed ?? -1, 7, accuracy: 0.001)
     }
 
     func testSeriesNameDropsRepeatedProvider() {
@@ -117,6 +161,30 @@ final class AnalyticsCatalogTests: XCTestCase {
         XCTAssertEqual(Set(catalog.models.map(\.id)), ["gpt-5.6-sol", "gpt-6-luna", "gemini-3.6-flash"])
         XCTAssertEqual(catalog.models.first { $0.id == "gpt-6-luna" }?.contextTokens, 1_050_000)
         XCTAssertEqual(catalog.models.first { $0.id == "gpt-5.6-sol" }?.contextTokens, 922_000)   // no correction
+    }
+
+    func testWorkerCatalogParsesOfficialModelsAndTracksDiff() throws {
+        let json = #"""
+        {
+          "success": true,
+          "fetchedAt": "2026-11-28T03:00:00Z",
+          "models": [
+            {"id": "gpt-6.2-astra", "provider": "OpenAI", "context_window": 1050000, "cost_per_m_input": 2.5, "cost_per_m_output": 10.0},
+            {"id": "claude-fable-5-1", "provider": "Anthropic", "context_window": 1000000, "cost_per_m_input": 4.0, "cost_per_m_output": 20.0},
+            {"id": "gemini-3.8-flash", "provider": "Google", "context_window": 1000000, "cost_per_m_input": 0.075, "cost_per_m_output": 0.3},
+            {"id": "cursor-agent", "provider": "Cursor", "context_window": 200000, "cost_per_m_input": 0, "cost_per_m_output": 0}
+          ]
+        }
+        """#
+        let previous = ModelCatalog(models: [
+            CatalogModel(id: "gpt-6.2-astra", vendor: .openai),
+            CatalogModel(id: "gpt-4o-latest", vendor: .openai),
+        ], fetchedAt: Date(timeIntervalSince1970: 0))
+        let catalog = try XCTUnwrap(ModelCatalog.parseWorkerCatalog(Data(json.utf8), previous: previous))
+        XCTAssertEqual(Set(catalog.models.map(\.id)), ["gpt-6.2-astra", "claude-fable-5-1", "gemini-3.8-flash"])
+        XCTAssertEqual(catalog.added, ["claude-fable-5-1", "gemini-3.8-flash"])
+        XCTAssertEqual(catalog.removed, ["gpt-4o-latest"])
+        XCTAssertEqual(try XCTUnwrap(catalog.models.first { $0.id == "gpt-6.2-astra" }?.inputPerMillion), 2.5, accuracy: 0.001)
     }
 
     func testStoredCatalogHidesRetiredModelsAndOldChanges() {
