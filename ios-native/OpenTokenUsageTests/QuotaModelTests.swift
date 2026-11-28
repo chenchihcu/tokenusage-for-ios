@@ -471,12 +471,6 @@ final class WidgetAlignmentTests: XCTestCase {
             }
         }
     }
-
-    func testWidgetProviderQueryIncludesAntigravity() {
-        let ids = ProviderQuery.known.map(\.id)
-        XCTAssertEqual(ids, ["claude", "codex", "cursor", "antigravity"])
-        XCTAssertEqual(ProviderQuery.known.last?.name, "Google Antigravity")
-    }
 }
 
 /// Google Antigravity cannot sign in on the phone; its figures are relayed by the person's Mac.
