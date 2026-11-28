@@ -213,7 +213,7 @@ final class QuotaStore {
         isUpdatingCatalog = true
         defer { isUpdatingCatalog = false }
         do {
-            let fresh = try await ModelCatalogStore.download(previous: catalog, workerBase: DirectProvider.antigravity.token)
+            let fresh = try await ModelCatalogStore.download(previous: catalog)
             catalog = fresh
             catalogError = nil
             ModelCatalogStore.save(fresh)

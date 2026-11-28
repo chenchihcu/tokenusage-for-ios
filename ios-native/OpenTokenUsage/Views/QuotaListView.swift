@@ -249,7 +249,7 @@ struct ProviderStatusLine: View {
 /// system keeps them together on a vertical or horizontal bar.
 struct FastPathItems: ToolbarContent {
     @Bindable var store: QuotaStore
-    @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = AppSettings.defaultRefreshInterval
+    @AppStorage(SettingsKey.refreshInterval) private var refreshInterval = 60
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
