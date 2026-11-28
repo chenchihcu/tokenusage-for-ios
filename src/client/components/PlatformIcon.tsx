@@ -6,24 +6,29 @@ interface PlatformIconProps {
 }
 
 /**
- * 5 大 AI 平台專屬 SVG 圖示
- * Codex 與 Google Antigravity 採用 docs/brand/ 官方品牌 SVG（置於中性底塊內，留 15% 內距）；
- * 其餘平台維持既有簡約向量輪廓。
+ * 5 大 AI 平台專屬品牌徽章 SVG 圖示 (Brand Vector Badges)
+ * Codex 與 Google Antigravity 採用 docs/brand/ 官方品牌 SVG（置於中性底塊內，淺色白底／深色近黑底，留 15% 內距）；
+ * 其餘平台維持既有高對比品牌色徽章。
  */
-export const PlatformIcon: React.FC<PlatformIconProps> = ({ id, className = 'w-4 h-4' }) => {
+export const PlatformIcon: React.FC<PlatformIconProps> = ({ id, className = 'w-5 h-5' }) => {
   const uid = useId().replace(/:/g, '');
 
   switch (id) {
     case 'cursor':
       return (
         <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+          <rect x="0.75" y="0.75" width="22.5" height="22.5" rx="6" fill="#0F172A" stroke="#38BDF8" strokeOpacity="0.45" strokeWidth="1.2" />
+          {/* 3D Cube-Pointer silhouette */}
           <path
-            d="M4 3.5L20 11.2L12.6 13.4L10.4 20.8L4 3.5Z"
-            stroke="currentColor"
-            strokeWidth="1.9"
+            d="M12 4.2L18.8 8.1V15.9L12 19.8L5.2 15.9V8.1L12 4.2Z"
+            stroke="#38BDF8"
+            strokeWidth="1.6"
             strokeLinejoin="round"
           />
-          <path d="M12.6 13.4L17.5 18.3" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          <path
+            d="M8.8 7.5L16.5 11.4L12.4 12.9L10.9 17L8.8 7.5Z"
+            fill="#F8FAFC"
+          />
         </svg>
       );
     case 'codex': {
@@ -36,8 +41,7 @@ export const PlatformIcon: React.FC<PlatformIconProps> = ({ id, className = 'w-4
             width="22.5"
             height="22.5"
             rx="6"
-            fill="#18181B"
-            stroke="#3F3F46"
+            className="fill-white stroke-[#CBD5E1] dark:fill-[#18181B] dark:stroke-[#3F3F46]"
             strokeWidth="1.2"
           />
           <defs>
@@ -67,8 +71,7 @@ export const PlatformIcon: React.FC<PlatformIconProps> = ({ id, className = 'w-4
             width="22.5"
             height="22.5"
             rx="6"
-            fill="#18181B"
-            stroke="#3F3F46"
+            className="fill-white stroke-[#CBD5E1] dark:fill-[#18181B] dark:stroke-[#3F3F46]"
             strokeWidth="1.2"
           />
           <defs>
@@ -177,37 +180,31 @@ export const PlatformIcon: React.FC<PlatformIconProps> = ({ id, className = 'w-4
     case 'claude':
       return (
         <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-          <path
-            d="M12 3V21M4.2 7.5L19.8 16.5M19.8 7.5L4.2 16.5"
-            stroke="currentColor"
-            strokeWidth="1.85"
-            strokeLinecap="round"
-          />
-          <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+          <rect x="0.75" y="0.75" width="22.5" height="22.5" rx="6" fill="#C2410C" />
+          {/* Anthropic 8-ray sunburst */}
+          <g stroke="#FFFFFF" strokeWidth="1.9" strokeLinecap="round">
+            <path d="M12 4.8V8.4M12 15.6V19.2M4.8 12H8.4M15.6 12H19.2" />
+            <path d="M6.9 6.9L9.45 9.45M14.55 14.55L17.1 17.1M17.1 6.9L14.55 9.45M9.45 14.55L6.9 17.1" />
+          </g>
         </svg>
       );
     case 'grok':
       return (
         <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+          <rect x="0.75" y="0.75" width="22.5" height="22.5" rx="6" fill="#09090B" stroke="#3F3F46" strokeWidth="1.2" />
           <path
-            d="M5 5L19 19M19 5L13.5 10.5M10.5 13.5L5 19"
-            stroke="currentColor"
-            strokeWidth="1.95"
+            d="M6.5 17.5L17.5 6.5M8.5 7.5L15.5 16.5"
+            stroke="#FFFFFF"
+            strokeWidth="2.2"
             strokeLinecap="round"
-          />
-          <path
-            d="M15.5 4.5C18.5 6 20 9 20 12.2C20 16.5 16.5 20 12.2 20"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeDasharray="2.5 2.5"
           />
         </svg>
       );
     default:
       return (
         <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-          <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
+          <rect x="0.75" y="0.75" width="22.5" height="22.5" rx="6" fill="#334155" />
+          <circle cx="12" cy="12" r="5" stroke="#E2E8F0" strokeWidth="1.8" />
         </svg>
       );
   }
