@@ -179,7 +179,15 @@ final class QuotaStore {
     private func recordStatus(_ result: QuotaClient.Result, at now: Date) {
         guard !result.asked.isEmpty else { return }
         for provider in result.succeeded {
-            var status = ProviderStatus(lastSuccess: now, problem: nil, retryAt: nil)
+            var status = providerStatus[provider.rawValue] ?? ProviderStatus()
+            status.lastSuccess = now
+            status.problem = nil
+            status.retryAt = nil
+            if result.tokenSucceeded.contains(provider) {
+                status.tokenProblem = nil
+            } else if let tokenProblem = result.tokenProblems[provider] {
+                status.tokenProblem = tokenProblem
+            }
             // Relayed figures are as old as the Mac's last upload, not this request.
             if provider.isRelayed,
                let quota = result.items.first(where: { $0.providerId == provider.rawValue }) {

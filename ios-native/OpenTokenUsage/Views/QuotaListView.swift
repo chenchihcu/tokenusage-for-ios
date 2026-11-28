@@ -124,7 +124,18 @@ private struct AgentGlanceRow: View {
     @ViewBuilder
     private var readout: some View {
         if hasAccess, let quota, let window = Glance.bottleneck(quota) {
-            GlanceReadout(mark: window.mark, remaining: window.remaining, urgent: window.urgent)
+            if let usage = quota.tokenUsage {
+                VStack(alignment: .leading, spacing: 3) {
+                    GlanceReadout(mark: window.mark, remaining: window.remaining, urgent: window.urgent)
+                    Text(TokenFormat.rowSummary(usage))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(TokenFormat.rowAccessibilityLabel(usage))
+                }
+            } else {
+                GlanceReadout(mark: window.mark, remaining: window.remaining, urgent: window.urgent)
+            }
         } else if hasAccess, quota?.isUnsupportedPlan == true {
             Text("這個方案目前無法顯示額度")
                 .font(.subheadline)

@@ -8,7 +8,7 @@ on a phone, so its figures are relayed by your Mac through your Worker (below).
 |---|---|---|
 | Codex | Device code, approved on OpenAI's page | 5 h / weekly windows, free-reset count when reported |
 | Claude Code | Claude's page, then paste the code it shows | 5 h / weekly windows, free-reset count when reported |
-| Cursor | Cursor's page; the app detects when sign-in finishes | Plan usage |
+| Cursor | Cursor's page; the app detects when sign-in finishes | Plan usage, billing-cycle token total & per-model breakdown |
 | Google Antigravity | No phone sign-in. Settings › 帳號 › Mac 轉送: your Mac reads usage with CodexBar and uploads it to your Worker | Gemini Models, Claude and GPT models, Gemini 4 Argon (5 h / weekly), with the Mac's data time |
 
 Sign-in happens on each vendor's own page; the app never sees a password. Credentials stay

@@ -1,6 +1,6 @@
 # Feature Spec: Token 用量 for Codex and Cursor (phone only)
 
-Status: **Approved 2026-11-25 · P0 done (see §12)** · 2026-11-25
+Status: **Implemented 2026-11-28 in iOS v3.2.0 (6)** · 2026-11-28 (dual-endpoint Cursor parser, list & detail UI, unified non-token wording across Claude Code/Codex/Antigravity, non-PII failure diagnostics, temporary `CursorTokenProbeView` removed)
 Tags: untagged = stated by the owner or verified; `[ASSUMPTION]` = author default, confirm yes/no; `[OPEN_QUESTION]` = must be answered before the affected step; `VERIFY` = check on a real device.
 
 ## 1. Summary

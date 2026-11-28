@@ -62,6 +62,8 @@ struct ProviderQuota: Codable, Hashable, Identifiable {
     var tokenPoolsJson: String?
     var metricsJson: String?
     var fetchedAt: String
+    /// Optional billing-cycle token usage; missing in older snapshots and decodes as nil.
+    var tokenUsage: TokenUsageSummary? = nil
 
     var id: String { providerId }
 
@@ -77,6 +79,7 @@ struct ProviderQuota: Codable, Hashable, Identifiable {
         case tokenPoolsJson = "token_pools_json"
         case metricsJson = "metrics_json"
         case fetchedAt = "fetched_at"
+        case tokenUsage = "token_usage"
     }
 
     var pools: [TokenPool] { Self.decodeEmbedded([TokenPool].self, from: tokenPoolsJson) ?? [] }
@@ -249,7 +252,8 @@ enum QuotaAssembly {
     /// Each pool's remaining share is its tightest window (RFC-003). The provider headline is
     /// its tightest pool, so a model that has run out is never hidden behind one that has not.
     static func make(id: String, name: String, plan: String, pools drafts: [PoolDraft],
-                     metrics: [QuotaMetric], now: Date) -> ProviderQuota {
+                     metrics: [QuotaMetric], now: Date,
+                     tokenUsage: TokenUsageSummary? = nil) -> ProviderQuota {
         let pools = drafts.map { draft -> TokenPool in
             var tiers = draft.tiers
             let worst = tiers.indices.min { tiers[$0].remaining < tiers[$1].remaining }
@@ -268,7 +272,7 @@ enum QuotaAssembly {
             totalQuota: 100, usedQuota: 100 - remaining, remainingPercent: remaining,
             resetTime: reset ?? "", status: remaining <= 5 ? "warning" : "active",
             tokenPoolsJson: encode(pools), metricsJson: metrics.isEmpty ? nil : encode(metrics),
-            fetchedAt: iso.string(from: now))
+            fetchedAt: iso.string(from: now), tokenUsage: tokenUsage)
     }
 
     private static let iso: ISO8601DateFormatter = {

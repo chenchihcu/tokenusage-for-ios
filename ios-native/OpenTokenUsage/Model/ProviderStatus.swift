@@ -39,6 +39,8 @@ struct ProviderStatus: Codable, Equatable {
     var problem: ProviderProblem?
     /// When a 429 back-off ends.
     var retryAt: Date?
+    /// Non-PII reason why the latest token usage request failed; independent of quota `problem`.
+    var tokenProblem: TokenUsageProblem? = nil
 }
 
 /// Per-provider status on disk in the App Group, so it survives launches and the widget can
