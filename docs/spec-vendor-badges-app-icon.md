@@ -25,11 +25,10 @@ Success: on the 額度 list, the widget and the home screen, the owner can tell 
 - Keeping FR-38: an owner-supplied `Resources/Logos/logo-<id>.png` still overrides the built-in badge.
 
 **Out of scope**
-- Bundling any vendor's official logo, wordmark or trademarked artwork. Badges must not copy or trace a vendor mark.
+- Bundling official logos for vendors other than Codex and Google Antigravity (revised 2026-11-28: owner approved bundling official Codex and Google Antigravity marks from `docs/brand/` into web + iOS app/widget badges, accepting trademark risk).
 - Alternate app icons the owner can switch between (Settings → App icon). `[ASSUMPTION]` possible later.
 - Lock-screen / StandBy widget families, Control Center controls.
 - Changing chart series colours in 用量分析 (they stay per pool, `SeriesPalette`).
-- Web app (`src/`) icons and favicon.
 - App Store marketing artwork.
 
 ## 3. User Stories
@@ -55,7 +54,7 @@ Success: on the 額度 list, the widget and the home screen, the owner can tell 
 - **FR-B2.** The badge is a continuous rounded square, corner radius 25 % of its side. Its side follows Dynamic Type (`@ScaledMetric`, base 36 pt, as today).
 - **FR-B3.** Any two badges differ in symbol shape, so they can be told apart in grayscale. Their background hues are ≥ 40° apart on the colour wheel; Codex is achromatic. Every background gives white ≥ 4.5:1 contrast. (A lightness-gap rule was considered and dropped: four mid-tone backgrounds cannot all carry white at 4.5:1 and also be 15 L* apart.)
 - **FR-B4.** Below 20 pt side (widget rows, compact places), the badge shows the 2-letter code instead of the symbol, in a bold rounded font.
-- **FR-B5.** When `logo-<id>.png` is present in the app bundle, it replaces that vendor's built-in badge, clipped to the same shape (FR-38 unchanged). The widget extension has its own bundle, so it always shows the built-in badges.
+- **FR-B5.** (revised 2026-11-28) Codex (`codex`) and Google Antigravity (`antigravity`) bundle their official brand marks from `docs/brand/` into `Shared/BrandLogos.xcassets` (`logo-codex`, `logo-antigravity`) so both the iOS app and widget extension render them centered with 15% padding on a neutral tile (white in light mode, `#18181B` in dark mode) with a 1 pt hairline border; the web `PlatformIcon` renders the same official SVGs on `#18181B`. For other vendors, an owner-supplied `Resources/Logos/logo-<id>.png` in the app bundle still replaces the built-in badge, clipped to the same shape (FR-38).
 - **FR-B6.** An unknown provider id shows a grey badge with the first two letters of its name in upper case.
 - **FR-B7.** Badges appear in every place listed under "In scope" and are hidden from VoiceOver, because the vendor name is always read next to them.
 
@@ -118,9 +117,9 @@ Success: on the 額度 list, the widget and the home screen, the owner can tell 
   - Badges render the same on iPhone Duo outer (~466 pt) and inner (~951 pt) screens.
 - **Performance.** Badges are vector (SF Symbols + shapes), with no image decoding per row.
 - **Legal / trademark.**
-  - Built-in badges use only generic SF Symbols, colours and letter codes.
+  - Revised 2026-11-28 (owner approved): Codex and Google Antigravity badges use official brand artwork stored in `docs/brand/codex.svg` and `docs/brand/antigravity.svg` (owner accepts trademark risk for personal/app use).
+  - Other built-in badges (`claude`, `cursor`) and the home-screen app icon continue to use original non-trademarked geometry.
   - Vendor names appear only as text, to identify the service (nominative use).
-  - Official logos are only ever owner-supplied and never committed.
 
 ## 8. Dependencies
 

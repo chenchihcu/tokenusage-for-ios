@@ -24,6 +24,7 @@ struct QuotaListView: View {
                 }
             }
             .refreshable { await store.refresh(force: true) }
+            .scrollDisabled(!typeSize.isAccessibilitySize && !showsBanner)
             .overlay {
                 if store.items.isEmpty, store.isLoading {
                     ProgressView("正在載入額度…")
