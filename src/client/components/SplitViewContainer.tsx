@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { MasterList } from './MasterList';
 import { DetailWorkbench } from './DetailWorkbench';
 import { CockpitOverview } from './CockpitOverview';
+import { DetailDrawer } from './DetailDrawer';
 import { QuotaCardProps } from './QuotaCard';
 import { ChevronLeft } from 'lucide-react';
 import { DashboardViewMode, HandednessMode } from './ViewModeSelector';
@@ -30,7 +31,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   onSelect,
   isLoading,
   viewMode,
-  onChangeViewMode,
   isOnline,
   linkLabel,
   textScale = 1,
@@ -46,10 +46,10 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   const [isVerticalDual, setIsVerticalDual] = useState<boolean>(false);
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
   const [showMobileDetail, setShowMobileDetail] = useState<boolean>(false);
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const openerRef = useRef<HTMLElement | null>(null);
   const wide = columns === 'dual';
 
-  // 欄數只看內容寬度與文字縮放。折疊媒體查詢有支援時才啟用，窄空間仍退回單欄。
   useLayoutEffect(() => {
     const target = document.getElementById('app-content') ?? document.documentElement;
     const apply = (width: number) => setColumns(decideColumns(width, textScale));
@@ -91,7 +91,6 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
     };
   }, []);
 
-  // URL 深度連結同步 (State Restoration: 平台選取與視圖模式)
   useEffect(() => {
     if (typeof window !== 'undefined' && selectedId) {
       const url = new URL(window.location.href);
@@ -122,14 +121,10 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
     }
   };
 
-  const handleOpenDetail = (id: string) => {
+  const handleOpenDetailDrawer = (id: string) => {
     haptic.impactMedium();
-    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     onSelect(id);
-    onChangeViewMode('split');
-    if (!wide) {
-      setShowMobileDetail(true);
-    }
+    setDrawerOpen(true);
   };
 
   const handleBack = () => {
@@ -138,26 +133,17 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
   };
 
   const selectedItem = quotas.find((q) => q.id === selectedId);
-  // Same rule as the cockpit's 「只看告警」 chip.
   const listQuotas = filterAlertOnly ? quotas.filter((q) => q.remainingPercent <= 20) : quotas;
 
-  // =========================================================================
-  // 特殊形態 A：W3C Viewport Segments 雙屏水平展開 (horizontal-viewport-segments: 2)
-  // 左螢幕全景 Cockpit : 右螢幕深入 Detail，中央轉軸安全避讓縫隙 (Hinge Seam Guard)
-  // =========================================================================
   if (isHorizontalDual && wide) {
     return (
-      <div className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe">
-        {/* 左屏：CockpitOverview (Segment 0 0) */}
-        <div
-          className="h-full overflow-hidden"
-          style={{ width: 'calc(50% - 8px)' }}
-        >
+      <div className="flex h-full w-full overflow-hidden bg-surface-canvas pl-safe-island pr-safe-island pb-safe">
+        <div className="h-full overflow-hidden" style={{ width: 'calc(50% - 8px)' }}>
           <CockpitOverview
             quotas={quotas}
             selectedId={selectedId}
             onSelectPlatform={onSelect}
-            onOpenDetail={handleOpenDetail}
+            onOpenDetail={handleOpenDetailDrawer}
             isOnline={isOnline}
             linkLabel={linkLabel}
             countdownSeconds={countdownSeconds}
@@ -168,19 +154,14 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
           />
         </div>
 
-        {/* 硬體轉軸鉸鏈中隔避讓槽 (Hinge Spine Seam - 零數據落於物理折縫) */}
         <div
           aria-hidden="true"
-          className="w-4 h-full bg-slate-950 border-x border-slate-900 flex items-center justify-center shrink-0"
+          className="w-4 h-full bg-surface-canvas border-x border-border-hairline flex items-center justify-center shrink-0"
         >
-          <div className="w-[1px] h-1/3 bg-slate-850 rounded-full" />
+          <div className="w-[1px] h-1/3 bg-border-strong rounded-full" />
         </div>
 
-        {/* 右屏：DetailWorkbench (Segment 1 0) */}
-        <div
-          className="h-full overflow-hidden flex-1 min-w-0"
-          style={{ width: 'calc(50% - 8px)' }}
-        >
+        <div className="h-full overflow-hidden flex-1 min-w-0" style={{ width: 'calc(50% - 8px)' }}>
           <DetailWorkbench
             selectedItem={selectedItem}
             isFocusMode={false}
@@ -193,19 +174,15 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
     );
   }
 
-  // =========================================================================
-  // 特殊形態 B：W3C Viewport Segments 垂直折疊筆電態 (vertical-viewport-segments: 2)
-  // 上半屏只讀圖表監控中樞 : 下半屏觸控控制台
-  // =========================================================================
   if (isVerticalDual) {
     return (
-      <div className="flex flex-col h-full w-full overflow-hidden bg-slate-950 pt-safe pb-safe">
-        <div className="h-1/2 overflow-hidden border-b border-slate-800">
+      <div className="flex flex-col h-full w-full overflow-hidden bg-surface-canvas pt-safe pb-safe">
+        <div className="h-1/2 overflow-hidden border-b border-border-hairline">
           <CockpitOverview
             quotas={quotas}
             selectedId={selectedId}
             onSelectPlatform={onSelect}
-            onOpenDetail={handleOpenDetail}
+            onOpenDetail={handleOpenDetailDrawer}
             isOnline={isOnline}
             linkLabel={linkLabel}
             countdownSeconds={countdownSeconds}
@@ -228,17 +205,14 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
     );
   }
 
-  // ==========================================
-  // 標準模式 A：一頁式全景矩陣駕駛艙 (Cockpit - Includes All)
-  // ==========================================
   if (viewMode === 'cockpit') {
     return (
-      <div className="h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe">
+      <div className="h-full w-full overflow-hidden bg-surface-canvas pl-safe-island pr-safe-island pb-safe">
         <CockpitOverview
           quotas={quotas}
           selectedId={selectedId}
           onSelectPlatform={onSelect}
-          onOpenDetail={handleOpenDetail}
+          onOpenDetail={handleOpenDetailDrawer}
           isOnline={isOnline}
           linkLabel={linkLabel}
           countdownSeconds={countdownSeconds}
@@ -246,22 +220,22 @@ export const SplitViewContainer: React.FC<SplitViewContainerProps> = ({
           onToggleFilterAlert={onToggleFilterAlert}
           handedness={handedness}
         />
+        <DetailDrawer
+          item={selectedItem}
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          connectionLabel={linkLabel}
+        />
       </div>
     );
   }
 
-  // ==========================================
-  // 標準模式 B：iPhone Duo 雙欄自適應佈局 (38% : 62% + Path Icon Rail)
-  // ==========================================
   if (wide) {
     return (
-      <div
-className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-safe-island pb-safe"
-      >
-        {/* 左欄 Master List (38% 黃金分割寬度，支援 Focus Mode 收折) */}
+      <div className="flex h-full w-full overflow-hidden bg-surface-canvas pl-safe-island pr-safe-island pb-safe">
         <aside
           aria-label="AI 平台清單"
-          className={`h-full transition-apple overflow-hidden ${
+          className={`h-full transition-all duration-200 overflow-hidden ${
             isFocusMode
               ? 'w-0 opacity-0 pointer-events-none'
               : 'w-[38%] min-w-[260px] max-w-[400px] opacity-100'
@@ -275,11 +249,7 @@ className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-saf
           />
         </aside>
 
-        {/* 右欄 Detail Workbench (62% 寬度或 100% 全寬) */}
-        <main
-          aria-label="服務詳情"
-          className="flex-1 h-full min-w-0 bg-slate-950"
-        >
+        <main aria-label="服務詳情" className="flex-1 h-full min-w-0 bg-surface-canvas">
           <DetailWorkbench
             selectedItem={selectedItem}
             isFocusMode={isFocusMode}
@@ -292,19 +262,17 @@ className="flex h-full w-full overflow-hidden bg-slate-950 pl-safe-island pr-saf
     );
   }
 
-  // ==========================================
-  // 直向行動端單欄切換模式 (支援單手熱區)
-  // ==========================================
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-slate-950 pt-safe pb-safe">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-surface-canvas pt-safe pb-safe">
       {showMobileDetail ? (
         <div className="flex flex-col h-full">
-          <div className="p-3 border-b border-slate-800 flex items-center bg-slate-950">
+          <div className="p-3 border-b border-border-hairline flex items-center bg-surface-card">
             <button
+              type="button"
               onClick={handleBack}
-              className="flex items-center gap-1 text-sm font-semibold text-cyan-400 active:opacity-70 transition-all min-h-[44px] touch-manipulation"
+              className="flex items-center gap-1 text-body font-bold text-accent-primary active:opacity-70 transition-opacity min-h-[44px]"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5" aria-hidden="true" />
               返回清單
             </button>
           </div>

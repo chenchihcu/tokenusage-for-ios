@@ -3,24 +3,148 @@
 @tailwind utilities;
 
 :root {
-  --color-bg-base: #090A10;
-  --color-bg-card: rgba(18, 24, 38, 0.75);
-  --color-text-main: #F8FAFC;
-  --color-text-sub: #94A3B8;
-  --color-accent-blue: #0A84FF;
-  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  color-scheme: light dark;
+
+  --surface-canvas-light: #F2F2F7;
+  --surface-canvas-dark: #000000;
+  --surface-card-light: #FFFFFF;
+  --surface-card-dark: #1C1C1E;
+  --surface-elevated-light: #FFFFFF;
+  --surface-elevated-dark: #2C2C2E;
+  --surface-muted-light: #E5E5EA;
+  --surface-muted-dark: #2C2C2E;
+  --surface-chrome-light: rgba(255, 255, 255, 0.86);
+  --surface-chrome-dark: rgba(28, 28, 30, 0.86);
+
+  --border-hairline-light: rgba(60, 60, 67, 0.14);
+  --border-hairline-dark: rgba(255, 255, 255, 0.14);
+  --border-strong-light: rgba(60, 60, 67, 0.28);
+  --border-strong-dark: rgba(255, 255, 255, 0.24);
+
+  --ink-primary-light: #1C1C1E;
+  --ink-primary-dark: #F5F5F7;
+  --ink-secondary-light: #515156;
+  --ink-secondary-dark: #AEAEB2;
+  --ink-muted-light: #6E6E73;
+  --ink-muted-dark: #8E8E93;
+
+  --accent-primary-light: #007AFF;
+  --accent-primary-dark: #0A84FF;
+  --accent-tint-light: rgba(0, 122, 255, 0.12);
+  --accent-tint-dark: rgba(10, 132, 255, 0.20);
+
+  --status-healthy-light: #15803D;
+  --status-healthy-dark: #30D158;
+  --status-healthy-bg-light: rgba(21, 128, 61, 0.10);
+  --status-healthy-bg-dark: rgba(48, 209, 88, 0.16);
+
+  --status-warning-light: #B45309;
+  --status-warning-dark: #FF9F0A;
+  --status-warning-bg-light: rgba(180, 83, 9, 0.10);
+  --status-warning-bg-dark: rgba(255, 159, 10, 0.16);
+
+  --status-critical-light: #BE123C;
+  --status-critical-dark: #FF453A;
+  --status-critical-bg-light: rgba(190, 18, 60, 0.10);
+  --status-critical-bg-dark: rgba(255, 69, 58, 0.18);
+
+  --surface-canvas: var(--surface-canvas-light);
+  --surface-card: var(--surface-card-light);
+  --surface-elevated: var(--surface-elevated-light);
+  --surface-muted: var(--surface-muted-light);
+  --surface-chrome: var(--surface-chrome-light);
+  --border-hairline: var(--border-hairline-light);
+  --border-strong: var(--border-strong-light);
+  --ink-primary: var(--ink-primary-light);
+  --ink-secondary: var(--ink-secondary-light);
+  --ink-muted: var(--ink-muted-light);
+  --accent-primary: var(--accent-primary-light);
+  --accent-tint: var(--accent-tint-light);
+  --status-healthy: var(--status-healthy-light);
+  --status-healthy-bg: var(--status-healthy-bg-light);
+  --status-warning: var(--status-warning-light);
+  --status-warning-bg: var(--status-warning-bg-light);
+  --status-critical: var(--status-critical-light);
+  --status-critical-bg: var(--status-critical-bg-light);
+
+  accent-color: var(--accent-primary);
+  scrollbar-color: var(--ink-muted) transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-canvas: var(--surface-canvas-dark);
+    --surface-card: var(--surface-card-dark);
+    --surface-elevated: var(--surface-elevated-dark);
+    --surface-muted: var(--surface-muted-dark);
+    --surface-chrome: var(--surface-chrome-dark);
+    --border-hairline: var(--border-hairline-dark);
+    --border-strong: var(--border-strong-dark);
+    --ink-primary: var(--ink-primary-dark);
+    --ink-secondary: var(--ink-secondary-dark);
+    --ink-muted: var(--ink-muted-dark);
+    --accent-primary: var(--accent-primary-dark);
+    --accent-tint: var(--accent-tint-dark);
+    --status-healthy: var(--status-healthy-dark);
+    --status-healthy-bg: var(--status-healthy-bg-dark);
+    --status-warning: var(--status-warning-dark);
+    --status-warning-bg: var(--status-warning-bg-dark);
+    --status-critical: var(--status-critical-dark);
+    --status-critical-bg: var(--status-critical-bg-dark);
+  }
+}
+
+@supports (color: light-dark(white, black)) {
+  :root {
+    --surface-canvas: light-dark(var(--surface-canvas-light), var(--surface-canvas-dark));
+    --surface-card: light-dark(var(--surface-card-light), var(--surface-card-dark));
+    --surface-elevated: light-dark(var(--surface-elevated-light), var(--surface-elevated-dark));
+    --surface-muted: light-dark(var(--surface-muted-light), var(--surface-muted-dark));
+    --surface-chrome: light-dark(var(--surface-chrome-light), var(--surface-chrome-dark));
+    --border-hairline: light-dark(var(--border-hairline-light), var(--border-hairline-dark));
+    --border-strong: light-dark(var(--border-strong-light), var(--border-strong-dark));
+    --ink-primary: light-dark(var(--ink-primary-light), var(--ink-primary-dark));
+    --ink-secondary: light-dark(var(--ink-secondary-light), var(--ink-secondary-dark));
+    --ink-muted: light-dark(var(--ink-muted-light), var(--ink-muted-dark));
+    --accent-primary: light-dark(var(--accent-primary-light), var(--accent-primary-dark));
+    --accent-tint: light-dark(var(--accent-tint-light), var(--accent-tint-dark));
+    --status-healthy: light-dark(var(--status-healthy-light), var(--status-healthy-dark));
+    --status-healthy-bg: light-dark(var(--status-healthy-bg-light), var(--status-healthy-bg-dark));
+    --status-warning: light-dark(var(--status-warning-light), var(--status-warning-dark));
+    --status-warning-bg: light-dark(var(--status-warning-bg-light), var(--status-warning-bg-dark));
+    --status-critical: light-dark(var(--status-critical-light), var(--status-critical-dark));
+    --status-critical-bg: light-dark(var(--status-critical-bg-light), var(--status-critical-bg-dark));
+  }
+}
+
+:root:has(> head > meta[name="color-scheme"][content="dark"]) {
+  color-scheme: dark;
+}
+
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
+  color-scheme: light;
+}
+
+html {
+  scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
 }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang TC", "Noto Sans TC", sans-serif;
-  background-color: var(--color-bg-base);
-  color: var(--color-text-main);
+  background-color: var(--surface-canvas);
+  color: var(--ink-primary);
+  overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
 }
 
-/* 數字等寬 (Zero CLS) */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
@@ -31,7 +155,7 @@ body {
   padding-bottom: var(--keyboard-inset, 0px);
 }
 
-/* Safe area comes from the system inset. Do not substitute a device-specific guess. */
+/* Safe area insets */
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
 }
@@ -45,15 +169,15 @@ body {
   padding-right: max(1rem, env(safe-area-inset-right, 0px));
 }
 
-/* Floating toolbar: stay clear of the island/notch side and the home indicator. */
+/* Floating toolbar safe offsets */
 .fab-safe-bottom {
-  bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+  bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
 }
 .fab-safe-right {
-  right: max(1.5rem, env(safe-area-inset-right, 0px));
+  right: max(1.25rem, env(safe-area-inset-right, 0px));
 }
 .fab-safe-left {
-  left: max(1.5rem, env(safe-area-inset-left, 0px));
+  left: max(1.25rem, env(safe-area-inset-left, 0px));
 }
 @media (orientation: landscape) and (max-height: 500px) {
   .fab-safe-bottom {
@@ -61,13 +185,11 @@ body {
   }
 }
 
-/* Scroll content reserves room for the fast-path cluster so nothing sits under it (V2).
-   !important: it must win over the containers' own responsive p-* utilities. */
 .fab-clearance {
-  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)) !important;
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  scroll-padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
 }
 @media (orientation: landscape) and (max-height: 500px) {
-  /* Short landscape: the cluster is a vertical column on the thumb side. */
   .fab-clearance {
     padding-bottom: 0.75rem !important;
   }
@@ -77,20 +199,49 @@ body {
   [data-hand='left'] .fab-clearance {
     padding-left: 5.5rem !important;
   }
-  /* Rows above the scroll area (reset chips) only need the side clearance:
-     the bar's own offset (.fab-safe-left/right) + its ~70px width + a gap. */
   [data-hand='right'] .fab-clearance-side {
-    padding-right: calc(max(1.5rem, env(safe-area-inset-right, 0px)) + 5rem) !important;
+    padding-right: calc(max(1.25rem, env(safe-area-inset-right, 0px)) + 5rem) !important;
   }
   [data-hand='left'] .fab-clearance-side {
-    padding-left: calc(max(1.5rem, env(safe-area-inset-left, 0px)) + 5rem) !important;
+    padding-left: calc(max(1.25rem, env(safe-area-inset-left, 0px)) + 5rem) !important;
   }
   [data-hand='right'] .usage-board.fab-clearance {
-    padding-right: 6.75rem !important;
+    padding-right: 6.5rem !important;
   }
   [data-hand='left'] .usage-board.fab-clearance {
-    padding-left: 6.75rem !important;
+    padding-left: 6.5rem !important;
   }
+}
+
+/* Container queries for Bento Grid & Quota Cards */
+.bento-board {
+  container: bento-board / inline-size;
+}
+.bento-card {
+  container: bento-card / inline-size;
+}
+
+@container bento-board (inline-size >= 40rem) {
+  .bento-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container bento-board (inline-size >= 64rem) {
+  .bento-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Native modal dialog scroll containment */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -99,17 +250,4 @@ body {
   .animate-spin {
     animation: none !important;
   }
-}
-
-/* 賽博發光與玻璃擬態卡片 */
-.glass-panel {
-  background: rgba(18, 24, 38, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* 流暢過渡 (Apple Ease) */
-.transition-apple {
-  transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
