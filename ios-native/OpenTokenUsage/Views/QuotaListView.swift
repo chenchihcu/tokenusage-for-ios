@@ -102,7 +102,7 @@ private struct AgentGlanceRow: View {
             NavigationLink(value: provider.rawValue) {
                 ProviderBadge(id: provider.rawValue, name: provider.name, base: 28)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
             .navigationLinkIndicatorVisibility(.hidden)
             .accessibilityLabel("\(provider.name)，詳細內容")
         } else {
@@ -126,6 +126,10 @@ private struct AgentGlanceRow: View {
             GlanceReadout(mark: window.mark, remaining: window.remaining, urgent: window.urgent)
         } else if provider.isSignedIn, quota?.isUnsupportedPlan == true {
             Text("這個方案目前無法顯示額度")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        } else if provider.isSignedIn {
+            Text("尚未更新")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         } else {

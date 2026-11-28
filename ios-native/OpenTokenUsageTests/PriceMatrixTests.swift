@@ -63,6 +63,7 @@ extension PriceMatrixTests {
 
     func testPricesUseABareDollarSign() {
         XCTAssertEqual(MatrixColumn.price(3), "$3.00")
+        XCTAssertEqual(MatrixColumn.price(15), "$15.00")
         XCTAssertEqual(MatrixColumn.price(0.075), "$0.075")
     }
 }

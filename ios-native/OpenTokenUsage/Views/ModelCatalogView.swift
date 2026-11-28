@@ -8,7 +8,6 @@ struct ModelCatalogView: View {
     /// Nil is the three-vendor board. Cursor opens that board with a shared-price note.
     @State private var vendor: CatalogModel.Vendor?
     @State private var showsCursor = false
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var catalog: ModelCatalog { store.catalog }
 
@@ -23,6 +22,11 @@ struct ModelCatalogView: View {
                         .foregroundStyle(.secondary)
                 }
                 if models.isEmpty {
+                    if let error = store.catalogError {
+                        Text(error)
+                            .font(.subheadline)
+                            .foregroundStyle(Color.statusOrange)
+                    }
                     Button("立即下載") { Task { await store.refreshCatalogIfDue(force: true) } }
                         .disabled(store.isUpdatingCatalog)
                 } else if !search.isEmpty {
@@ -42,7 +46,6 @@ struct ModelCatalogView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .scrollDisabled(!typeSize.isAccessibilitySize && search.isEmpty)
             .scrollsToTop(on: store.scrollToTop[.catalog, default: 0])
             .searchable(text: $search, prompt: "搜尋模型")
             .navigationTitle("模型與費用")
@@ -100,7 +103,7 @@ struct ModelCatalogView: View {
                 .lineLimit(1)
             ProgressView(value: line.fraction)
                 .tint(Color.accentColor)
-            Text(line.inputPerMillion, format: .currency(code: "USD").precision(.fractionLength(line.inputPerMillion < 1 ? 2 : 0)))
+            Text(MatrixColumn.price(line.inputPerMillion))
                 .font(.body.monospacedDigit())
                 .frame(minWidth: 52, alignment: .trailing)
         }

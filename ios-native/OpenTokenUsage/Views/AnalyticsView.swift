@@ -9,7 +9,6 @@ struct AnalyticsView: View {
     @State private var providerId = DirectProvider.claude.rawValue
     @State private var windowId: String?
     @State private var period: UsageHistory.Period = .week
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let windows = quota.map { Glance.windows($0) } ?? []
@@ -58,7 +57,6 @@ struct AnalyticsView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .scrollDisabled(!typeSize.isAccessibilitySize)
             .scrollsToTop(on: scrollToTopToken)
             .navigationTitle("用量分析")
         }

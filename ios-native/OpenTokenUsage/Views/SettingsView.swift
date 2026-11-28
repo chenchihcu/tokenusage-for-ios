@@ -24,7 +24,7 @@ struct SettingsView: View {
     @AppStorage(AlertCenter.quietEndKey) private var quietEnd = QuietHours.defaultEnd
     @State private var notificationsDenied = false
     @State private var layer: Layer?
-    @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var account: DirectProvider?
 
     private enum Layer: String, Identifiable {
         case refresh, notices, quiet, version
@@ -42,7 +42,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let layer {
+                if let account {
+                    Form {
+                        Section {
+                            Button(account.isRelayed ? "停用" : "登出", role: .destructive) {
+                                signingOut = account
+                            }
+                            if account.isRelayed {
+                                Button("檢查轉送") { signingIn = account }
+                            }
+                        }
+                    }
+                    .navigationTitle(account.name)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("設定") { self.account = nil }
+                        }
+                    }
+                } else if let layer {
                     Form { layerForm(layer) }
                         .navigationTitle(layer.title)
                         .navigationBarTitleDisplayMode(.inline)
@@ -82,6 +100,7 @@ struct SettingsView: View {
                     if let provider = signingOut {
                         CredentialStore.delete(provider)
                         tokens[provider] = ""
+                        account = nil
                         reloadSignedIn()
                     }
                 }
@@ -89,7 +108,10 @@ struct SettingsView: View {
             } message: {
                 Text(signingOut?.isRelayed == true ? "這支手機會停止讀取 Mac 轉送的資料。" : "這支手機會刪除此服務的登入憑證。")
             }
-            .onChange(of: scrollToTopToken) { layer = nil }
+            .onChange(of: scrollToTopToken) {
+                layer = nil
+                account = nil
+            }
         }
     }
 
@@ -100,7 +122,7 @@ struct SettingsView: View {
                     ForEach(DirectProvider.allCases) { provider in
                         Button {
                             if signedIn.contains(provider) {
-                                signingOut = provider
+                                account = provider
                             } else {
                                 signingIn = provider
                             }
@@ -110,7 +132,7 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(signedIn.contains(provider)
-                            ? "\(provider.name)，\(provider.isRelayed ? "停用" : "登出")"
+                            ? "\(provider.name)，帳號"
                             : "\(provider.name)，登入")
                         Spacer(minLength: 0)
                     }
@@ -129,7 +151,6 @@ struct SettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollDisabled(!typeSize.isAccessibilitySize)
         .navigationTitle("設定")
     }
 
