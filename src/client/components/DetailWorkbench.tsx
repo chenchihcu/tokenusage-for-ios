@@ -24,7 +24,7 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
 
   if (!selectedItem || !usage) {
     return (
-      <div className="flex h-full items-center justify-center p-4 text-sm text-slate-300">
+      <div className="flex h-full items-center justify-center p-4 text-body text-ink-secondary">
         選擇一個服務
       </div>
     );
@@ -38,8 +38,8 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
   ];
 
   return (
-    <div className="usage-board fab-clearance flex flex-col h-full min-h-0 overflow-hidden text-slate-100">
-      <div className="shrink-0 h-11 px-2 flex items-center gap-2 border-b border-slate-800">
+    <div className="usage-board fab-clearance flex flex-col h-full min-h-0 overflow-hidden bg-surface-canvas text-ink-primary">
+      <div className="shrink-0 h-11 px-3 flex items-center gap-2 border-b border-border-hairline bg-surface-card">
         <button
           type="button"
           onClick={() => {
@@ -47,28 +47,31 @@ export const DetailWorkbench: React.FC<DetailWorkbenchProps> = ({
             onToggleFocus();
           }}
           aria-label={isFocusMode ? '展開清單' : '隱藏清單'}
-          className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+          className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-ink-secondary hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary"
         >
           {isFocusMode ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
         </button>
-        <PlatformIcon id={selectedItem.id} className="w-4 h-4 shrink-0" />
-        <h2 id="detail-title" tabIndex={-1} className="min-w-0 truncate text-base font-bold outline-none">
+        <PlatformIcon id={selectedItem.id} className="w-5 h-5 shrink-0" />
+        <h2 id="detail-title" tabIndex={-1} className="min-w-0 truncate text-heading-section font-bold outline-none">
           {selectedItem.name}
         </h2>
-        <span className="shrink-0 text-xs text-slate-300">{selectedItem.planName}</span>
-        <span className="ml-auto shrink-0 text-xs text-slate-300 truncate">{connectionLabel}</span>
+        <span className="shrink-0 text-xs text-ink-muted">{selectedItem.planName}</span>
+        <span className="ml-auto shrink-0 text-xs text-ink-secondary truncate">{connectionLabel}</span>
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-2 p-2">
+      <div className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-2.5 p-3">
         {cells.map((cell) => (
-          <div key={cell.label} className="min-h-0 min-w-0 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2">
-            <div className="text-xs text-slate-400">{cell.label}</div>
-            <div className="text-sm font-bold tabular-nums truncate">{cell.value}</div>
+          <div
+            key={cell.label}
+            className="min-h-0 min-w-0 overflow-hidden rounded-2xl border border-border-hairline bg-surface-card shadow-hig-card px-3.5 py-2.5 flex flex-col justify-center"
+          >
+            <div className="text-xs text-ink-muted">{cell.label}</div>
+            <div className="text-body font-bold text-ink-primary tabular-nums truncate mt-0.5">{cell.value}</div>
           </div>
         ))}
       </div>
 
-      <p className="shrink-0 px-3 h-8 flex items-center text-xs text-slate-300 tabular-nums">
+      <p className="shrink-0 px-3.5 h-8 flex items-center text-xs text-ink-secondary tabular-nums">
         已用 {percentText(usage.usedPercent)} · 剩餘 {percentText(usage.remainingPercent)}
       </p>
     </div>

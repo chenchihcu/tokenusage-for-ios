@@ -100,3 +100,14 @@ test('view switcher: wide screens can switch to split view and see details', asy
   await switcher.getByRole('button').nth(1).click();
   await expect(page.getByRole('main', { name: '服務詳情' })).toBeVisible();
 });
+
+test('cockpit: clicking a service card opens the slide-over detail drawer', async ({ page }) => {
+  await serveQuotas(page);
+  await page.goto('/?view=cockpit');
+  await page.getByRole('listitem').filter({ hasText: 'Codex' }).getByRole('button').click();
+  const drawer = page.getByRole('dialog', { name: 'Codex' });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText('整體剩餘額度')).toBeVisible();
+  await drawer.getByRole('button', { name: '完成' }).click();
+  await expect(drawer).toHaveCount(0);
+});

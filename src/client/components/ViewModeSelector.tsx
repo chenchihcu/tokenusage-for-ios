@@ -24,47 +24,44 @@ export const ViewModeSelector: React.FC<ViewModeSelectorProps> = ({
   return (
     <nav
       aria-label="視圖模式切換器"
-      className="inline-flex items-center p-1 rounded-xl bg-slate-900/90 border border-slate-800/90 select-none"
+      className="inline-flex items-center p-1 rounded-xl bg-surface-muted/80 border border-border-hairline select-none"
     >
-      {/* 模式 A：全景駕駛艙 (Includes All) - Apple HIG ≥ 44pt 觸控熱區 */}
       <button
         type="button"
         onClick={() => handleSelectMode('cockpit')}
         aria-pressed={currentMode === 'cockpit'}
-        className={`relative flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] active:scale-95 touch-manipulation ${
+        className={`relative flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors min-h-[44px] sm:min-h-[36px] touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
           currentMode === 'cockpit'
-            ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
-            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            ? 'bg-surface-card text-ink-primary shadow-hig-card'
+            : 'text-ink-secondary hover:text-ink-primary'
         }`}
       >
-        <LayoutGrid className="w-4 h-4" />
+        <LayoutGrid className="w-4 h-4" aria-hidden="true" />
         <span>全景</span>
         {governingAlertCount > 0 && (
           <span
             className="flex h-2 w-2 relative ml-0.5"
             title={`${governingAlertCount} 個平台處於耗盡或告警狀態`}
           >
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-critical opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-status-critical" />
           </span>
         )}
       </button>
 
-      {/* 模式 B：雙欄深入工作台 (Duo Split) - Apple HIG ≥ 44pt 觸控熱區 */}
       <button
         type="button"
         onClick={() => handleSelectMode('split')}
         aria-pressed={currentMode === 'split'}
-        className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all min-h-[44px] active:scale-95 touch-manipulation ${
+        className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors min-h-[44px] sm:min-h-[36px] touch-manipulation focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
           currentMode === 'split'
-            ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-300 border border-purple-500/40 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
-            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+            ? 'bg-surface-card text-ink-primary shadow-hig-card'
+            : 'text-ink-secondary hover:text-ink-primary'
         }`}
       >
-        <Columns2 className="w-4 h-4" />
+        <Columns2 className="w-4 h-4" aria-hidden="true" />
         <span>雙欄</span>
       </button>
-
     </nav>
   );
 };

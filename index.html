@@ -3,16 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      try {
+        var m = document.querySelector('meta[name="color-scheme"]');
+        if (m) m.content = localStorage.getItem('color-scheme') || 'light dark';
+      } catch (e) {}
+    </script>
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; media-src 'self' blob:; connect-src 'self' https://opentokenusage-web.chihfu-chen-tw.workers.dev wss://opentokenusage-web.chihfu-chen-tw.workers.dev; base-uri 'self'; form-action 'self'; object-src 'none'"
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>OpenTokenUsage (iPhone Duo)</title>
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>OpenTokenUsage</title>
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   </head>
-  <body class="bg-[#020617] text-slate-100 antialiased selection:bg-cyan-900 selection:text-cyan-100 overflow-x-hidden">
+  <body class="antialiased">
     <div id="root"></div>
     <script type="module" src="/src/client/main.tsx"></script>
   </body>

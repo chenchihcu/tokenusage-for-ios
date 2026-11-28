@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Clock, Check, ChevronDown, Zap } from 'lucide-react';
 
-export type RefreshIntervalSeconds = 15 | 30 | 60 | 300 | 900 | 0;
+export type RefreshIntervalSeconds = 600 | 3600 | 7200 | 0;
+
+export const DEFAULT_REFRESH_INTERVAL: RefreshIntervalSeconds = 600;
 
 export interface RefreshOption {
   value: RefreshIntervalSeconds;
@@ -11,13 +13,34 @@ export interface RefreshOption {
 }
 
 export const REFRESH_OPTIONS: RefreshOption[] = [
-  { value: 15, label: '15 秒', description: '極速即時監控 / 高強度編程' },
-  { value: 30, label: '30 秒', description: '敏捷即時反饋' },
-  { value: 60, label: '1 分鐘', description: '標準平衡（推薦）', recommended: true },
-  { value: 300, label: '5 分鐘', description: '省流節能模式' },
-  { value: 900, label: '15 分鐘', description: '背景長駐觀察' },
+  { value: 600, label: '10 分鐘', description: '標準平衡（推薦）', recommended: true },
+  { value: 3600, label: '60 分鐘', description: '每小時背景同步' },
+  { value: 7200, label: '2 小時', description: '長效節能觀察' },
   { value: 0, label: '手動更新', description: '僅點擊時刷新' },
 ];
+
+export function normalizeRefreshInterval(raw: string | number | null | undefined): RefreshIntervalSeconds {
+  if (raw === null || raw === undefined || raw === '') return DEFAULT_REFRESH_INTERVAL;
+  const parsed = Number(raw);
+  return REFRESH_OPTIONS.some((o) => o.value === parsed)
+    ? (parsed as RefreshIntervalSeconds)
+    : DEFAULT_REFRESH_INTERVAL;
+}
+
+function formatCountdown(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  if (s >= 3600) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return m > 0 ? `${h}h${m}m` : `${h}h`;
+  }
+  if (s >= 60) {
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return rem > 0 ? `${m}m${rem}s` : `${m}m`;
+  }
+  return `${s}s`;
+}
 
 export const STORAGE_KEY_REFRESH_INTERVAL = 'opentokenusage_refresh_interval_sec';
 
@@ -35,7 +58,7 @@ export const FrequencySelector: React.FC<FrequencySelectorProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const currentOption = REFRESH_OPTIONS.find(o => o.value === interval) || REFRESH_OPTIONS[2];
+  const currentOption = REFRESH_OPTIONS.find(o => o.value === interval) || REFRESH_OPTIONS[0];
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -68,8 +91,8 @@ export const FrequencySelector: React.FC<FrequencySelectorProps> = ({
           {currentOption.label}
         </span>
         {interval > 0 && (
-          <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-500/40 text-[10px] text-cyan-300 font-mono">
-            {countdownSeconds}s
+          <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-500/40 text-[10px] text-cyan-300 font-mono tabular-nums">
+            {formatCountdown(countdownSeconds)}
           </span>
         )}
         <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />

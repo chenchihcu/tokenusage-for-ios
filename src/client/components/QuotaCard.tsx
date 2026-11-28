@@ -1,7 +1,9 @@
 import React from 'react';
-import { AlertTriangle, Sparkles } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
+import { MiniRingChart } from './MiniRingChart';
 import { extractResetWindowSummary } from '../utils/resetMonitor';
+import { AgentUsage, levelWord, modelText, percentText } from '../usage/usageFacts';
 
 export interface QuotaCardProps {
   id: string;
@@ -16,58 +18,18 @@ export interface QuotaCardProps {
   metrics_json?: string;
   fetched_at?: string;
   isSelected?: boolean;
+  highlightKey?: 'agent' | 'model' | 'session' | 'week' | 'fee';
   onClick?: () => void;
 }
 
-// 5 大平台專屬炫彩樣式字典
-const PLATFORM_STYLES: Record<string, {
-  borderSelect: string;
-  glowSelect: string;
-  badgeBg: string;
-  badgeText: string;
-  badgeBorder: string;
-  gradient: string;
-  accentText: string;
-}> = {
-  cursor: {
-    borderSelect: 'border-cyan-400',
-    glowSelect: 'shadow-[0_0_25px_rgba(0,242,254,0.3)]',
-    badgeBg: 'bg-cyan-950/60',
-    badgeText: 'text-cyan-300',
-    badgeBorder: 'border-cyan-500/40',
-    gradient: 'bg-gradient-to-r from-[#00F2FE] to-[#4FACFE]',
-    accentText: 'text-cyan-400',
-  },
-  codex: {
-    borderSelect: 'border-emerald-400',
-    glowSelect: 'shadow-[0_0_25px_rgba(0,255,135,0.3)]',
-    badgeBg: 'bg-emerald-950/60',
-    badgeText: 'text-emerald-300',
-    badgeBorder: 'border-emerald-500/40',
-    gradient: 'bg-gradient-to-r from-[#00FF87] to-[#60EFFF]',
-    accentText: 'text-emerald-400',
-  },
-  antigravity: {
-    borderSelect: 'border-purple-400',
-    glowSelect: 'shadow-[0_0_25px_rgba(168,85,247,0.3)]',
-    badgeBg: 'bg-purple-950/60',
-    badgeText: 'text-purple-300',
-    badgeBorder: 'border-purple-500/40',
-    gradient: 'bg-gradient-to-r from-[#4285F4] via-[#A855F7] to-[#EC4899]',
-    accentText: 'text-purple-400',
-  },
-  claude: {
-    borderSelect: 'border-amber-400',
-    glowSelect: 'shadow-[0_0_25px_rgba(245,158,11,0.3)]',
-    badgeBg: 'bg-amber-950/60',
-    badgeText: 'text-amber-300',
-    badgeBorder: 'border-amber-500/40',
-    gradient: 'bg-gradient-to-r from-amber-400 to-orange-400',
-    accentText: 'text-amber-400',
-  },
+const PLATFORM_RING_COLORS: Record<string, [string, string]> = {
+  cursor: ['#0284C7', '#007AFF'],
+  codex: ['#059669', '#10B981'],
+  antigravity: ['#4F46E5', '#7C3AED'],
+  claude: ['#D97706', '#EA580C'],
 };
 
-export const QuotaCard: React.FC<QuotaCardProps> = ({
+export const QuotaCard: React.FC<QuotaCardProps & { usage?: AgentUsage }> = ({
   id,
   name,
   planName,
@@ -78,208 +40,123 @@ export const QuotaCard: React.FC<QuotaCardProps> = ({
   status,
   token_pools_json,
   metrics_json,
-  isSelected,
+  isSelected = false,
+  highlightKey = 'agent',
+  usage,
   onClick,
 }) => {
-  const pStyle = PLATFORM_STYLES[id] || PLATFORM_STYLES.cursor;
   const isCritical = remainingPercent <= 5;
-  const isWarning = remainingPercent < 20 && remainingPercent > 5;
-  const isHealthy = remainingPercent >= 20;
+  const isWarning = remainingPercent <= 20 && remainingPercent > 5;
+  const level = levelWord(remainingPercent);
+  const ringColors = PLATFORM_RING_COLORS[id] ?? ['#007AFF', '#38BDF8'];
 
-  // 格式化重置時間戳 (若為 ISO 8601 轉為本地簡約時間)
-  let displayReset = resetTime;
-  if (resetTime && resetTime.includes('T')) {
-    try {
-      const d = new Date(resetTime);
-      displayReset = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} 重置`;
-    } catch {
-      displayReset = resetTime;
-    }
-  }
+  const win = extractResetWindowSummary({
+    id,
+    name,
+    planName,
+    remainingPercent,
+    usedQuota,
+    totalQuota,
+    resetTime,
+    status,
+    token_pools_json,
+    metrics_json,
+  });
 
-  // 提取多配額池 (Token Pools) 資訊
-  let tokenPools: { id: string; name: string; effectiveRemaining: number; isCritical: boolean }[] = [];
-  if (token_pools_json) {
-    try {
-      const parsed = JSON.parse(token_pools_json);
-      if (Array.isArray(parsed)) {
-        tokenPools = parsed.map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          effectiveRemaining: p.effectiveRemaining,
-          isCritical: p.isCritical || p.effectiveRemaining <= 5,
-        }));
-      }
-    } catch {}
-  }
-  const hasCriticalSubPool = tokenPools.some((p) => p.isCritical);
-
-  // 提取多維度指標 (Session vs Weekly) 雙軌資訊 (作為後備)
-  let subMeters: { label: string; used: number; isAlert?: boolean }[] = [];
-  if (metrics_json) {
-    try {
-      const parsed = JSON.parse(metrics_json);
-      if (Array.isArray(parsed)) {
-        subMeters = parsed
-          .filter((m: any) => m.used !== undefined && (m.label === 'Session' || m.label === 'Weekly' || m.label === 'Weekly (Shared)'))
-          .map((m: any) => ({
-            label: m.label.replace(' (Shared)', ''),
-            used: m.used,
-            isAlert: m.isAlert || m.used >= 90,
-          }));
-      }
-    } catch {}
-  }
+  const sessionVal = usage?.sessionUsed ?? null;
+  const weekVal = usage?.weekUsed ?? null;
+  const modelLabel = usage ? modelText(usage) : '未提供';
+  const feeLabel = usage?.feeText ?? '未提供';
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      role="button"
-      tabIndex={0}
-      className={`group relative p-4 phoneland:p-3 rounded-2xl transition-all cursor-pointer border text-left backdrop-blur-xl ${
+      aria-pressed={isSelected}
+      className={`bento-card group relative w-full sm:h-full phoneland:h-full min-h-0 min-w-0 flex flex-col justify-between gap-0.5 sm:gap-2 phoneland:gap-0.5 px-3 py-1.5 sm:p-3.5 phoneland:px-2.5 phoneland:py-1.5 rounded-2xl border text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary ${
         isSelected
-          ? `bg-slate-900/90 ${pStyle.borderSelect} ${pStyle.glowSelect} ring-1 ring-white/10`
-          : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900/80 hover:border-slate-700/80'
+          ? 'bg-surface-card border-accent-primary shadow-hig-card ring-1 ring-accent-primary/20'
+          : 'bg-surface-card border-border-hairline shadow-hig-card hover:border-border-strong'
       }`}
     >
-      {/* 頂部細長裝飾流光條 */}
-      <div className={`absolute top-0 left-4 right-4 h-[2px] rounded-full opacity-60 group-hover:opacity-100 transition-opacity ${pStyle.gradient}`} />
-
-      <div className="flex items-center justify-between mb-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`p-1.5 rounded-lg border ${pStyle.badgeBg} ${pStyle.badgeText} ${pStyle.badgeBorder} shrink-0`}>
-            <PlatformIcon id={id} className="w-3.5 h-3.5" />
-          </span>
-          <h3 className="font-bold text-base text-slate-100 tracking-tight group-hover:text-white transition-colors truncate">
-            {name}
-          </h3>
-          <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border shrink-0 ${pStyle.badgeBg} ${pStyle.badgeText} ${pStyle.badgeBorder}`}>
-            {planName}
-          </span>
+      {/* Top Row: Identity + Ring */}
+      <div className="flex items-start justify-between gap-2 min-w-0 w-full">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <PlatformIcon id={id} className="w-6 h-6 phoneland:w-5 phoneland:h-5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h3 className="text-body font-bold text-ink-primary truncate">{name}</h3>
+              <span className="sm:hidden text-xs text-ink-muted truncate">{planName}</span>
+              {level ? (
+                <span
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-bold shrink-0 ${
+                    isCritical
+                      ? 'bg-status-critical-bg text-status-critical'
+                      : 'bg-status-warning-bg text-status-warning'
+                  }`}
+                >
+                  <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+                  {level}
+                </span>
+              ) : (
+                <span className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-normal bg-status-healthy-bg text-status-healthy shrink-0">
+                  <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                  正常
+                </span>
+              )}
+            </div>
+            <p className="hidden sm:block phoneland:hidden text-xs text-ink-muted truncate">{planName}</p>
+          </div>
         </div>
 
-        {/* 剩餘百分比 */}
-        <div className="flex items-baseline gap-1">
-          <span
-            className={`tabular-nums font-mono font-black text-2xl tracking-tight ${
-              isCritical
-                ? 'text-rose-400 animate-pulse'
-                : isWarning
-                ? 'text-amber-400'
-                : pStyle.accentText
-            }`}
-          >
-            {remainingPercent}%
-          </span>
-          <span className="text-[10px] font-medium text-slate-500 uppercase">剩餘</span>
-        </div>
-      </div>
-
-      {/* 炫彩動態進度條 */}
-      <div className="w-full h-2 rounded-full bg-slate-950/90 overflow-hidden mb-2.5 border border-slate-800/60">
-        <div
-          className={`h-full transition-all duration-700 rounded-full ${
-            isCritical
-              ? 'bg-rose-500 animate-pulse'
-              : pStyle.gradient
-          }`}
-          style={{ width: `${Math.min(100, Math.max(2, remainingPercent))}%` }}
+        <MiniRingChart
+          value={remainingPercent}
+          gradientId={`ring-${id}`}
+          gradientColors={ringColors}
+          isCritical={isCritical}
+          compact={true}
+          label={name}
         />
       </div>
 
-      {/* 多配額池迷你膠囊標籤 (Mini-Chips) 或雙軌指標 */}
-      {tokenPools.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1.5 mb-2.5 text-[10px] font-mono">
-          {tokenPools.map((tp) => (
-            <span
-              key={tp.id}
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${
-                tp.isCritical
-                  ? 'bg-rose-950/70 text-rose-300 border-rose-500/50 shadow-[0_0_8px_rgba(244,63,94,0.25)] animate-pulse'
-                  : 'bg-slate-800/80 text-slate-300 border-slate-700/60'
-              }`}
-            >
-              <span className="text-slate-400 font-medium truncate max-w-[90px]">{tp.name}:</span>
-              <span className={`font-bold ${tp.isCritical ? 'text-rose-400' : 'text-slate-100'}`}>
-                {tp.effectiveRemaining}%
-              </span>
-              {tp.isCritical && <span>⚠️</span>}
-            </span>
-          ))}
-        </div>
-      ) : (
-        subMeters.length >= 2 && (
-          <div className="flex items-center gap-1.5 mb-2.5 text-[10px] font-mono">
-            {subMeters.map((sm, idx) => (
-              <span
-                key={idx}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${
-                  sm.isAlert
-                    ? 'bg-rose-950/60 text-rose-300 border-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.2)]'
-                    : 'bg-slate-800/80 text-slate-300 border-slate-700/60'
-                }`}
-              >
-                <span className="text-slate-400">{sm.label}:</span>
-                <span className={`font-bold ${sm.isAlert ? 'text-rose-400' : 'text-slate-200'}`}>
-                  {sm.used}%
-                </span>
-                {sm.isAlert && <span className="text-rose-400">⚠️</span>}
-              </span>
-            ))}
-          </div>
-        )
-      )}
-
-      {/* 底部輔助指標 */}
-      <div className="flex items-center justify-between text-xs text-slate-400">
-        <div className="flex items-center gap-1.5">
-          {isCritical ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-500/30">
-              <AlertTriangle className="w-3 h-3 text-rose-400" /> 配額耗盡 / 告警
-            </span>
-          ) : hasCriticalSubPool ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/30">
-              <AlertTriangle className="w-3 h-3 text-amber-400" /> 部分配額池耗盡
-            </span>
-          ) : (
-            <span className="tabular-nums text-slate-400">
-              用量: <span className="text-slate-200 font-mono">{usedQuota}%</span>
-            </span>
-          )}
+      {/* Middle: Model & Dual Window Meters */}
+      <div className="flex flex-col gap-0.5 sm:gap-1.5 phoneland:gap-0.5 min-w-0 w-full">
+        <div
+          className={`text-xs truncate ${
+            highlightKey === 'model' ? 'text-accent-primary font-bold' : 'text-ink-secondary font-normal'
+          }`}
+          title={`模型 ${modelLabel}`}
+        >
+          模型 {modelLabel}
         </div>
 
-        <div className="flex items-center gap-1.5 text-[11px]">
-          {(() => {
-            const win = extractResetWindowSummary({
-              id,
-              name,
-              planName,
-              remainingPercent,
-              usedQuota,
-              totalQuota,
-              resetTime,
-              status,
-              token_pools_json,
-              metrics_json,
-            });
-            return (
-              <>
-                <span className={`w-1.5 h-1.5 rounded-full ${isHealthy || (win.resetCredits ?? 0) > 0 ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
-                <span className="text-slate-400 font-mono">
-                  {win.sessionText !== '--' ? `5h ${win.sessionText} · ` : ''}
-                  {displayReset}
-                </span>
-                {(win.resetCredits ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 text-xs font-bold">
-                    <Sparkles className="w-3 h-3" aria-hidden="true" />
-                    免費重置 {win.resetCredits} 次
-                  </span>
-                )}
-              </>
-            );
-          })()}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs tabular-nums text-ink-secondary">
+          <span className={highlightKey === 'session' ? 'text-accent-primary font-bold' : ''}>
+            5小時 {percentText(sessionVal)}
+          </span>
+          <span className={highlightKey === 'week' ? 'text-accent-primary font-bold' : ''}>
+            每週 {percentText(weekVal)}
+          </span>
+          <span className={highlightKey === 'fee' ? 'text-accent-primary font-bold' : ''}>
+            費用 {feeLabel}
+          </span>
         </div>
       </div>
-    </div>
+
+      {/* Bottom: Reset & Free Credits (hidden in compact phoneland where ResetMonitorBar is visible above) */}
+      <div className="flex phoneland:hidden items-center justify-between gap-2 min-w-0 w-full pt-0.5 sm:pt-1 border-t border-border-hairline text-xs text-ink-muted">
+        <span className="truncate tabular-nums">
+          {win.sessionText !== '--' ? `5h ${win.sessionText}` : `週 ${win.weeklyText}`}
+        </span>
+        {(win.resetCredits ?? 0) > 0 ? (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-status-healthy-bg text-status-healthy text-xs font-bold shrink-0">
+            <Sparkles className="w-3 h-3" aria-hidden="true" />
+            免費重置 {win.resetCredits} 次
+          </span>
+        ) : (
+          <span className="shrink-0 tabular-nums">已用 {percentText(usedQuota)}</span>
+        )}
+      </div>
+    </button>
   );
 };
