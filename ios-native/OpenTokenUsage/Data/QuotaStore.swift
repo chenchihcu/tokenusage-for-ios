@@ -29,7 +29,9 @@ final class QuotaStore {
     private(set) var isUpdatingCatalog = false
     private(set) var catalogError: String?
 
-    var displayHistory: UsageHistory { history }
+    var displayHistory: UsageHistory {
+        UserDefaults.standard.bool(forKey: SettingsKey.sampleData) ? SampleData.history() : history
+    }
 
     /// The app's main pages (FR-39). One tab bar holds them, so any page is one tap away and
     /// each keeps its place; the system puts the bar beside the camera on iPhone Duo.
@@ -160,7 +162,7 @@ final class QuotaStore {
             ResetAlerts.check(result.items)
             await AlertCenter.sync(result.items)
             await ResetActivity.update(with: result.items)
-            if !result.asked.isEmpty {
+            if !result.asked.isEmpty, !UserDefaults.standard.bool(forKey: SettingsKey.sampleData) {
                 history.record(result.items)
                 UsageHistoryStore.save(history)
             }

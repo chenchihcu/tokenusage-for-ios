@@ -308,6 +308,15 @@ final class PaceEstimateTests: XCTestCase {
         XCTAssertNil(tier.windowSeconds)
         XCTAssertEqual(PaceEstimate(tier: tier, now: now).status, .unknown(.stale))
     }
+
+    func testCompactSummaryNeverExposesOver100PercentProjection() throws {
+        // Reproduces Antigravity weekly reading: 58.3% used at ~31.2% elapsed -> ~187% projected.
+        let p = pace(used: 58.3, resetIn: 4.81 * day, window: week)
+        XCTAssertEqual(p.status, .willRunOut)
+        XCTAssertGreaterThan(try XCTUnwrap(p.projected), 180)
+        XCTAssertEqual(p.compactSummary, "58% · 會用完")
+        XCTAssertFalse(p.compactSummary.contains("187"))
+    }
 }
 
 /// spec-vendor-badges-app-icon.md, FR-B1, FR-B3, FR-B6.
@@ -376,7 +385,6 @@ final class ProviderBadgeTests: XCTestCase {
             XCTAssertGreaterThan(image.size.height, 0, id)
         }
     }
-
     private func contrast(_ ink: UInt32, on ground: UInt32) -> Double {
         let lighter = max(luminance(ink), luminance(ground))
         let darker = min(luminance(ink), luminance(ground))

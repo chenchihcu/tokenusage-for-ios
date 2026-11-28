@@ -44,7 +44,6 @@ struct ProviderBadge: View {
         guard isBundledBrandLogo else { return style.background }
         return colorScheme == .dark ? ProviderStyle.Style.color(0x18181B) : .white
     }
-
     @ViewBuilder
     private func mark(_ style: ProviderStyle.Style, side: CGFloat) -> some View {
         switch style.mark {

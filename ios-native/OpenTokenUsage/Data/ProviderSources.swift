@@ -418,12 +418,14 @@ enum SampleData {
     /// Eight weeks of made-up daily use for the charts. Never stored.
     static func history(now: Date = Date(), calendar: Calendar = .current) -> UsageHistory {
         let series: [(key: String, provider: String, pool: String, base: Double, swing: Double)] = [
-            ("claude/claude_all", "Claude Code", "所有模型", 9, 4),
-            ("claude/claude_opus", "Claude Code", "Opus", 3, 2),
-            ("claude/claude_sonnet", "Claude Code", "Sonnet", 6, 3),
-            ("codex/codex_main", "Codex", "Codex 用量", 7, 3),
-            ("cursor/cursor_auto", "Cursor", "Auto + Composer", 4, 2),
-            ("cursor/cursor_api", "Cursor", "API 模型", 2, 1.5),
+            ("claude/claude_all/5h", "Claude Code", "所有模型", 22, 12),
+            ("claude/claude_all/weekly", "Claude Code", "所有模型", 9, 4),
+            ("claude/claude_opus/weekly_opus", "Claude Code", "Opus", 3, 2),
+            ("claude/claude_sonnet/weekly_sonnet", "Claude Code", "Sonnet", 6, 3),
+            ("codex/codex_main/primary_window", "Codex", "Codex 用量", 18, 9),
+            ("codex/codex_main/secondary_window", "Codex", "Codex 用量", 7, 3),
+            ("cursor/cursor_auto/auto", "Cursor", "Auto + Composer", 4, 2),
+            ("cursor/cursor_api/api", "Cursor", "API 模型", 2, 1.5),
         ]
         var history = UsageHistory()
         let today = calendar.startOfDay(for: now)

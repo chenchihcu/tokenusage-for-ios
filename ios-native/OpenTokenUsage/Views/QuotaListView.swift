@@ -87,6 +87,7 @@ private struct AgentGlanceRow: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private var quota: ProviderQuota? { store.displayItems.first { $0.id == provider.rawValue } }
+    private var hasAccess: Bool { provider.isSignedIn || quota != nil }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -98,7 +99,7 @@ private struct AgentGlanceRow: View {
 
     @ViewBuilder
     private var shortcut: some View {
-        if provider.isSignedIn {
+        if hasAccess {
             NavigationLink(value: provider.rawValue) {
                 ProviderBadge(id: provider.rawValue, name: provider.name, base: 28)
             }
@@ -122,13 +123,13 @@ private struct AgentGlanceRow: View {
 
     @ViewBuilder
     private var readout: some View {
-        if provider.isSignedIn, let quota, let window = Glance.bottleneck(quota) {
+        if hasAccess, let quota, let window = Glance.bottleneck(quota) {
             GlanceReadout(mark: window.mark, remaining: window.remaining, urgent: window.urgent)
-        } else if provider.isSignedIn, quota?.isUnsupportedPlan == true {
+        } else if hasAccess, quota?.isUnsupportedPlan == true {
             Text("這個方案目前無法顯示額度")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-        } else if provider.isSignedIn {
+        } else if hasAccess {
             Text("尚未更新")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
