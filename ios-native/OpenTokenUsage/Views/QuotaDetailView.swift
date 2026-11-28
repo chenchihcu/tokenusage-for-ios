@@ -78,7 +78,6 @@ struct QuotaDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollDisabled(!typeSize.isAccessibilitySize && openedID == nil)
         .alert("無法追蹤", isPresented: Binding(get: { trackMessage != nil }, set: { if !$0 { trackMessage = nil } })) {
             if trackMessage == ResetActivity.StartError.disabled.errorDescription {
                 Button("開啟設定") {

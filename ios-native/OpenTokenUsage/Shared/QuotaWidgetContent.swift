@@ -92,6 +92,11 @@ private struct WidgetGlanceRow: View {
             ProviderBadge(id: quota.providerId, name: quota.name, base: badge)
             if let window {
                 GlanceReadout(mark: window.mark, remaining: window.remaining, urgent: window.urgent)
+            } else if quota.isUnsupportedPlan {
+                Text("這個方案目前無法顯示額度")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -99,7 +104,9 @@ private struct WidgetGlanceRow: View {
     }
 
     private func label(_ window: GlanceWindow?) -> String {
-        guard let window else { return quota.name }
+        guard let window else {
+            return quota.isUnsupportedPlan ? "\(quota.name)，這個方案目前無法顯示額度" : quota.name
+        }
         let base = "\(quota.name)，\(window.mark)，剩餘 \(Int(window.remaining.rounded()))%，\(QuotaLevel(remaining: window.remaining).label)"
         return window.urgent ? base + "，重置前會用完" : base
     }
